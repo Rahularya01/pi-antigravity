@@ -1,0 +1,1272 @@
+{
+  "authEmail": "[redacted]",
+  "projectId": "valued-aviary-kfg2z",
+  "loadCodeAssist": {
+    "minimal": {
+      "status": 200,
+      "data": {
+        "currentTier": {
+          "id": "free-tier",
+          "name": "Antigravity",
+          "description": "Gemini-powered code suggestions and chat in multiple IDEs",
+          "privacyNotice": "[redacted]",
+          "upgradeSubscriptionUri": "https://accounts.google.com/AccountChooser?Email=aryarahul556%40gmail.com&continue=https%3A%2F%2Fone.google.com%2Fai",
+          "upgradeSubscriptionText": "Upgrade to get 1,500 model requests per day with Gemini CLI and Gemini Code Assist's agent mode with Google AI Pro.",
+          "upgradeSubscriptionType": "GOOGLE_ONE"
+        },
+        "allowedTiers": [
+          {
+            "id": "free-tier",
+            "name": "Antigravity",
+            "description": "Gemini-powered code suggestions and chat in multiple IDEs",
+            "privacyNotice": "[redacted]",
+            "isDefault": true
+          },
+          {
+            "id": "standard-tier",
+            "name": "Antigravity",
+            "description": "Unlimited coding assistant with the most powerful Gemini models",
+            "userDefinedCloudaicompanionProject": true,
+            "privacyNotice": "[redacted]",
+            "usesGcpTos": true
+          }
+        ],
+        "cloudaicompanionProject": "valued-aviary-kfg2z",
+        "gcpManaged": false,
+        "upgradeSubscriptionUri": "https://codeassist.google.com/upgrade",
+        "paidTier": {
+          "id": "g1-pro-tier",
+          "name": "Google AI Pro",
+          "description": "Google AI Pro",
+          "upgradeSubscriptionUri": "https://antigravity.google/g1-upgrade",
+          "upgradeSubscriptionText": "You can upgrade to a Google AI Ultra plan to receive higher rate limits."
+        }
+      }
+    },
+    "full": {
+      "status": 200,
+      "data": {
+        "currentTier": {
+          "id": "free-tier",
+          "name": "Antigravity",
+          "description": "Gemini-powered code suggestions and chat in multiple IDEs",
+          "privacyNotice": "[redacted]",
+          "upgradeSubscriptionUri": "https://accounts.google.com/AccountChooser?Email=aryarahul556%40gmail.com&continue=https%3A%2F%2Fone.google.com%2Fai",
+          "upgradeSubscriptionText": "Upgrade to get 1,500 model requests per day with Gemini CLI and Gemini Code Assist's agent mode with Google AI Pro.",
+          "upgradeSubscriptionType": "GOOGLE_ONE"
+        },
+        "allowedTiers": [
+          {
+            "id": "free-tier",
+            "name": "Antigravity",
+            "description": "Gemini-powered code suggestions and chat in multiple IDEs",
+            "privacyNotice": "[redacted]",
+            "isDefault": true
+          },
+          {
+            "id": "standard-tier",
+            "name": "Antigravity",
+            "description": "Unlimited coding assistant with the most powerful Gemini models",
+            "userDefinedCloudaicompanionProject": true,
+            "privacyNotice": "[redacted]",
+            "usesGcpTos": true
+          }
+        ],
+        "cloudaicompanionProject": "valued-aviary-kfg2z",
+        "gcpManaged": false,
+        "upgradeSubscriptionUri": "https://codeassist.google.com/upgrade",
+        "paidTier": {
+          "id": "g1-pro-tier",
+          "name": "Google AI Pro",
+          "description": "Google AI Pro",
+          "upgradeSubscriptionUri": "https://antigravity.google/g1-upgrade",
+          "upgradeSubscriptionText": "You can upgrade to a Google AI Ultra plan to receive higher rate limits."
+        }
+      }
+    },
+    "geminiCli": {
+      "status": 200,
+      "data": {
+        "currentTier": {
+          "id": "free-tier",
+          "name": "Antigravity",
+          "description": "Gemini-powered code suggestions and chat in multiple IDEs",
+          "privacyNotice": "[redacted]",
+          "upgradeSubscriptionUri": "https://accounts.google.com/AccountChooser?Email=aryarahul556%40gmail.com&continue=https%3A%2F%2Fone.google.com%2Fai%3Futm_campaign%3Dhydrogen_cli%26utm_source%3DGEMINI_CLI",
+          "upgradeSubscriptionText": "Upgrade to get 1,500 model requests per day with Gemini CLI and Gemini Code Assist's agent mode with Google AI Pro.",
+          "upgradeSubscriptionType": "GOOGLE_ONE"
+        },
+        "allowedTiers": [
+          {
+            "id": "free-tier",
+            "name": "Antigravity",
+            "description": "Gemini-powered code suggestions and chat in multiple IDEs",
+            "privacyNotice": "[redacted]",
+            "isDefault": true
+          },
+          {
+            "id": "standard-tier",
+            "name": "Antigravity",
+            "description": "Unlimited coding assistant with the most powerful Gemini models",
+            "userDefinedCloudaicompanionProject": true,
+            "privacyNotice": "[redacted]",
+            "usesGcpTos": true
+          }
+        ],
+        "cloudaicompanionProject": "valued-aviary-kfg2z",
+        "gcpManaged": false,
+        "upgradeSubscriptionUri": "https://codeassist.google.com/upgrade",
+        "paidTier": {
+          "id": "g1-pro-tier",
+          "name": "Google AI Pro",
+          "description": "Google AI Pro",
+          "upgradeSubscriptionUri": "https://antigravity.google/g1-upgrade",
+          "upgradeSubscriptionText": "You can upgrade to a Google AI Ultra plan to receive higher rate limits."
+        }
+      }
+    },
+    "vscode": {
+      "status": 400,
+      "data": {
+        "error": {
+          "code": 400,
+          "message": "Invalid value at 'metadata.platform' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.Platform), \"DARWIN\"",
+          "status": "INVALID_ARGUMENT",
+          "details": [
+            {
+              "@type": "type.googleapis.com/google.rpc.BadRequest",
+              "fieldViolations": [
+                {
+                  "field": "metadata.platform",
+                  "description": "Invalid value at 'metadata.platform' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.Platform), \"DARWIN\""
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "cloudCode": {
+      "status": 400,
+      "data": {
+        "error": {
+          "code": 400,
+          "message": "Invalid value at 'metadata.ide_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.IdeType), \"CLOUD_CODE\"",
+          "status": "INVALID_ARGUMENT",
+          "details": [
+            {
+              "@type": "type.googleapis.com/google.rpc.BadRequest",
+              "fieldViolations": [
+                {
+                  "field": "metadata.ide_type",
+                  "description": "Invalid value at 'metadata.ide_type' (type.googleapis.com/google.internal.cloud.code.v1internal.ClientMetadata.IdeType), \"CLOUD_CODE\""
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "retrieveUserQuotaSummary": {
+    "status": 200,
+    "data": {
+      "groups": [
+        {
+          "buckets": [
+            {
+              "bucketId": "gemini-weekly",
+              "displayName": "Weekly Limit",
+              "window": "weekly",
+              "resetTime": "2026-07-19T07:00:03Z",
+              "description": "You have used some of your weekly limit, it will fully refresh in 20 hours, 20 minutes.",
+              "remainingFraction": 0.999658
+            },
+            {
+              "bucketId": "gemini-5h",
+              "displayName": "Five Hour Limit",
+              "window": "5h",
+              "resetTime": "2026-07-18T15:39:35Z",
+              "remainingFraction": 1
+            }
+          ],
+          "displayName": "Gemini Models",
+          "description": "Models within this group: Gemini Flash, Gemini Pro"
+        },
+        {
+          "buckets": [
+            {
+              "bucketId": "3p-weekly",
+              "displayName": "Weekly Limit",
+              "window": "weekly",
+              "resetTime": "2026-07-25T10:39:35Z",
+              "remainingFraction": 1
+            },
+            {
+              "bucketId": "3p-5h",
+              "displayName": "Five Hour Limit",
+              "window": "5h",
+              "resetTime": "2026-07-18T15:39:35Z",
+              "remainingFraction": 1
+            }
+          ],
+          "displayName": "Claude and GPT models",
+          "description": "Models within this group: Claude Opus, Claude Sonnet, GPT-OSS"
+        }
+      ],
+      "description": "Within each group, models share a weekly limit and a 5-hour limit. Quota is consumed proportionally to the cost of the tokens. Thus, limits will last longer with shorter tasks or using more cost-effective models. The 5-hour limit smooths out aggregate demand to fairly distribute global capacity across all users, while your weekly limit is tied directly to your individual tier."
+    }
+  },
+  "retrieveUserQuota": {
+    "status": 200,
+    "data": {
+      "buckets": [
+        {
+          "tokenType": "[redacted]",
+          "modelId": "chat_20706",
+          "remainingFraction": 1
+        },
+        {
+          "tokenType": "[redacted]",
+          "modelId": "chat_23310",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "claude-opus-4-6-thinking",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "claude-sonnet-4-6",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gemini-2.5-flash",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gemini-2.5-flash-lite",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gemini-2.5-flash-thinking",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gemini-2.5-pro",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gemini-3-flash",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gemini-3-flash-agent",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gemini-3.1-flash-image",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gemini-3.1-flash-lite",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gemini-3.1-pro-high",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gemini-3.1-pro-low",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gemini-3.5-flash-extra-low",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gemini-3.5-flash-low",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gemini-pro-agent",
+          "remainingFraction": 1
+        },
+        {
+          "resetTime": "2026-07-18T15:39:36Z",
+          "tokenType": "[redacted]",
+          "modelId": "gpt-oss-120b-medium",
+          "remainingFraction": 1
+        },
+        {
+          "tokenType": "[redacted]",
+          "modelId": "tab_flash_lite_preview",
+          "remainingFraction": 1
+        },
+        {
+          "tokenType": "[redacted]",
+          "modelId": "tab_jump_flash_lite_preview",
+          "remainingFraction": 1
+        }
+      ]
+    }
+  },
+  "fetchAvailableModels": {
+    "status": 200,
+    "data": {
+      "models": {
+        "gemini-2.5-flash": {
+          "displayName": "Gemini 3.1 Flash Lite",
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_GOOGLE_GEMINI_2_5_FLASH",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "modelExperiments": {
+            "experiments": {
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_SINGLE_PROMPT\",\n    \"max_token_limit\": \"128000\",\n    \"token_threshold\": \"50000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": false,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              }
+            }
+          }
+        },
+        "chat_23310": {
+          "maxTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1
+          },
+          "model": "MODEL_CHAT_23310",
+          "apiProvider": "API_PROVIDER_INTERNAL",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "supportsCumulativeContext": true,
+          "supportsEstimateTokenCounter": "[redacted]",
+          "isInternal": true,
+          "promptTemplaterType": "PROMPT_TEMPLATER_TYPE_CHATML",
+          "toolFormatterType": "TOOL_FORMATTER_TYPE_XML",
+          "requiresLeadInGeneration": true
+        },
+        "tab_jump_flash_lite_preview": {
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1
+          },
+          "model": "MODEL_PLACEHOLDER_M28",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "supportsCumulativeContext": true,
+          "tabJumpPrintLineRange": true,
+          "supportsEstimateTokenCounter": "[redacted]",
+          "addCursorToFindReplaceTarget": true,
+          "toolFormatterType": "TOOL_FORMATTER_TYPE_XML",
+          "requiresLeadInGeneration": true,
+          "requiresNoXmlToolExamples": true
+        },
+        "claude-sonnet-4-6": {
+          "displayName": "Claude Sonnet 4.6 (Thinking)",
+          "supportsImages": true,
+          "supportsThinking": true,
+          "thinkingBudget": 1024,
+          "recommended": true,
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_PLACEHOLDER_M35",
+          "apiProvider": "API_PROVIDER_ANTHROPIC_VERTEX",
+          "modelProvider": "MODEL_PROVIDER_ANTHROPIC",
+          "supportedMimeTypes": {
+            "image/heic": true,
+            "image/heif": true,
+            "image/jpeg": true,
+            "image/png": true,
+            "image/webp": true,
+            "video/jpeg2000": true,
+            "video/videoframe/jpeg2000": true
+          },
+          "modelExperiments": {
+            "experiments": {
+              "template__system_prompts__planning_mode_artifacts": {
+                "stringValue": "When in planning mode, you will work with three special artifacts.\n\n# Tasks\nPath: {{ArtifactDirectoryPath}}/task.md\n\n**Purpose**: A TODO list to organize your work during execution. Create this artifact after receiving user approval on your implementation plan. Break down complex tasks into component-level items and track progress as a living document.\n\n**Format**:\n```markdown\n- `[ ]` uncompleted tasks\n- `[/]` in progress tasks (custom notation)\n- `[x]` completed tasks\n- Use indented lists for sub-items\n```\n\n**Updating task.md**: Mark items as `[/]` when starting work on them, and `[x]` when completed. Update task.md as you make progress through your checklist.\n\n# Implementation Plan\nPath: {{ArtifactDirectoryPath}}/implementation_plan.md\n\n**Purpose**: A detailed design document to present your technical implementation plan to the user for feedback and approval.\nAfter reading the document, the user should understand the key technical details of your plan, and be able to make an informed decision on whether to approve it.\n\n**Format**: Use the following format, omitting any irrelevant sections.\n```markdown\n# [Goal Description]\n\nProvide a brief description of the problem, any background context, and what the change accomplishes.\n\n## User Review Required\n\nDocument anything that requires user review or feedback, for example, breaking changes or significant design decisions. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Open Questions\n\nAny clarifying or design questions for the user that will impact the implementation plan. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Proposed Changes\n\nGroup files by component (e.g., package, feature area, dependency layer) and order logically (dependencies first). Separate components with horizontal rules for visual clarity.\n\n### [Component Name]\n\nSummary of what will change in this component, separated by files. For specific files, Use [NEW] and [DELETE] to demarcate new and deleted files, for example:\n\n#### [MODIFY] [file basename](file:///absolute/path/to/modifiedfile)\n#### [NEW] [file basename](file:///absolute/path/to/newfile)\n#### [DELETE] [file basename](file:///absolute/path/to/deletedfile)\n\n## Verification Plan\n\nSummary of how you will verify that your changes have the desired effects.\n\n### Automated Tests\n- The commands of any automated tests you'll run.\n\n### Manual Verification\n- Asking the user to deploy to staging and testing, verifying UI changes on an iOS app etc.\n```\n\n# Walkthrough\nPath: {{ArtifactDirectoryPath}}/walkthrough.md\n\n**Purpose**: After completing work, summarize what you accomplished. Update an existing walkthrough for related follow-up work rather than creating a new one.\n\n**Document**:\n- Changes made\n- What was tested\n- Validation results\n\nEmbed screenshots and recordings to visually demonstrate UI changes and user flows.\n"
+              },
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_UNSPECIFIED\",\n    \"max_token_limit\": \"160000\",\n    \"token_threshold\": \"50000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": false,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              }
+            }
+          },
+          "vertexModelId": "claude-sonnet-4-6@default"
+        },
+        "gemini-3.1-flash-lite": {
+          "displayName": "Gemini 3.1 Flash Lite",
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_PLACEHOLDER_M50",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "modelExperiments": {
+            "experiments": {
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_SINGLE_PROMPT\",\n    \"max_token_limit\": \"128000\",\n    \"token_threshold\": \"50000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": false,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              }
+            }
+          }
+        },
+        "gemini-3.5-flash-extra-low": {
+          "displayName": "Gemini 3.5 Flash (Low)",
+          "supportsImages": true,
+          "supportsThinking": true,
+          "thinkingBudget": 1000,
+          "minThinkingBudget": 32,
+          "recommended": true,
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_PLACEHOLDER_M187",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "supportsVideo": true,
+          "tagTitle": "Fast",
+          "tagDescription": "Limited time",
+          "supportedMimeTypes": {
+            "text/rtf": true,
+            "application/rtf": true,
+            "image/heic": true,
+            "application/x-python-code": true,
+            "application/pdf": true,
+            "text/plain": true,
+            "image/webp": true,
+            "text/javascript": true,
+            "video/audio/wav": true,
+            "video/audio/s16le": true,
+            "text/css": true,
+            "application/x-ipynb+json": true,
+            "video/jpeg2000": true,
+            "audio/webm;codecs=opus": true,
+            "text/html": true,
+            "application/json": true,
+            "video/webm": true,
+            "text/xml": true,
+            "text/csv": true,
+            "video/text/timestamp": true,
+            "application/x-typescript": true,
+            "text/markdown": true,
+            "image/heif": true,
+            "image/png": true,
+            "text/x-typescript": true,
+            "image/jpeg": true,
+            "text/x-python-script": true,
+            "video/mp4": true,
+            "text/x-python": true,
+            "video/videoframe/jpeg2000": true,
+            "application/x-javascript": true
+          },
+          "modelExperiments": {
+            "experiments": {
+              "template__system_prompts__planning_mode_artifacts": {
+                "stringValue": "When in planning mode, you will work with three special artifacts.\n\n# Tasks\nPath: {{ArtifactDirectoryPath}}/task.md\n\n**Purpose**: A TODO list to organize your work during execution. Create this artifact after receiving user approval on your implementation plan. Break down complex tasks into component-level items and track progress as a living document.\n\n**Format**:\n```markdown\n- `[ ]` uncompleted tasks\n- `[/]` in progress tasks (custom notation)\n- `[x]` completed tasks\n- Use indented lists for sub-items\n```\n\n**Updating task.md**: Mark items as `[/]` when starting work on them, and `[x]` when completed. Update task.md as you make progress through your checklist.\n\n# Implementation Plan\nPath: {{ArtifactDirectoryPath}}/implementation_plan.md\n\n**Purpose**: A detailed design document to present your technical implementation plan to the user for feedback and approval.\nAfter reading the document, the user should understand the key technical details of your plan, and be able to make an informed decision on whether to approve it.\n\n**Format**: Use the following format, omitting any irrelevant sections.\n```markdown\n# [Goal Description]\n\nProvide a brief description of the problem, any background context, and what the change accomplishes.\n\n## User Review Required\n\nDocument anything that requires user review or feedback, for example, breaking changes or significant design decisions. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Open Questions\n\nAny clarifying or design questions for the user that will impact the implementation plan. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Proposed Changes\n\nGroup files by component (e.g., package, feature area, dependency layer) and order logically (dependencies first). Separate components with horizontal rules for visual clarity.\n\n### [Component Name]\n\nSummary of what will change in this component, separated by files. For specific files, Use [NEW] and [DELETE] to demarcate new and deleted files, for example:\n\n#### [MODIFY] [file basename](file:///absolute/path/to/modifiedfile)\n#### [NEW] [file basename](file:///absolute/path/to/newfile)\n#### [DELETE] [file basename](file:///absolute/path/to/deletedfile)\n\n## Verification Plan\n\nSummary of how you will verify that your changes have the desired effects.\n\n### Automated Tests\n- The commands of any automated tests you'll run.\n\n### Manual Verification\n- Asking the user to deploy to staging and testing, verifying UI changes on an iOS app etc.\n```\n\n# Walkthrough\nPath: {{ArtifactDirectoryPath}}/walkthrough.md\n\n**Purpose**: After completing work, summarize what you accomplished. Update an existing walkthrough for related follow-up work rather than creating a new one.\n\n**Document**:\n- Changes made\n- What was tested\n- Validation results\n\nEmbed screenshots and recordings to visually demonstrate UI changes and user flows.\n"
+              },
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_SAME_MODEL\",\n    \"max_token_limit\": \"256000\",\n    \"token_threshold\": \"140000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": true,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              }
+            }
+          }
+        },
+        "gemini-2.5-pro": {
+          "displayName": "Gemini 2.5 Pro",
+          "supportsImages": true,
+          "supportsThinking": true,
+          "thinkingBudget": 1024,
+          "minThinkingBudget": 128,
+          "recommended": true,
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_GOOGLE_GEMINI_2_5_PRO",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "supportedMimeTypes": {
+            "text/markdown": true,
+            "text/css": true,
+            "video/mp4": true,
+            "text/x-python-script": true,
+            "application/rtf": true,
+            "text/x-typescript": true,
+            "image/heic": true,
+            "text/csv": true,
+            "image/png": true,
+            "application/x-javascript": true,
+            "application/json": true,
+            "application/x-ipynb+json": true,
+            "image/jpeg": true,
+            "application/x-typescript": true,
+            "text/rtf": true,
+            "video/audio/wav": true,
+            "text/x-python": true,
+            "text/plain": true,
+            "text/html": true,
+            "application/pdf": true,
+            "video/webm": true,
+            "video/audio/s16le": true,
+            "video/videoframe/jpeg2000": true,
+            "video/jpeg2000": true,
+            "image/heif": true,
+            "text/javascript": true,
+            "audio/webm;codecs=opus": true,
+            "application/x-python-code": true,
+            "image/webp": true,
+            "video/text/timestamp": true,
+            "text/xml": true
+          },
+          "requiresImageOutputOutsideFunctionResponses": true,
+          "modelExperiments": {
+            "experiments": {
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_SINGLE_PROMPT\",\n    \"max_token_limit\": \"128000\",\n    \"token_threshold\": \"50000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": false,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              }
+            }
+          }
+        },
+        "gemini-3.5-flash-low": {
+          "displayName": "Gemini 3.5 Flash (Medium)",
+          "supportsImages": true,
+          "supportsThinking": true,
+          "thinkingBudget": 4000,
+          "minThinkingBudget": 32,
+          "recommended": true,
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_PLACEHOLDER_M20",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "supportsVideo": true,
+          "tagTitle": "Fast",
+          "tagDescription": "Limited time",
+          "supportedMimeTypes": {
+            "video/webm": true,
+            "audio/webm;codecs=opus": true,
+            "text/plain": true,
+            "application/json": true,
+            "application/x-javascript": true,
+            "video/videoframe/jpeg2000": true,
+            "image/heif": true,
+            "image/png": true,
+            "application/pdf": true,
+            "video/jpeg2000": true,
+            "image/webp": true,
+            "video/audio/s16le": true,
+            "application/x-ipynb+json": true,
+            "video/mp4": true,
+            "text/x-python": true,
+            "text/csv": true,
+            "text/rtf": true,
+            "text/x-python-script": true,
+            "text/css": true,
+            "text/html": true,
+            "text/xml": true,
+            "application/x-python-code": true,
+            "text/javascript": true,
+            "image/heic": true,
+            "text/markdown": true,
+            "text/x-typescript": true,
+            "application/x-typescript": true,
+            "video/text/timestamp": true,
+            "image/jpeg": true,
+            "video/audio/wav": true,
+            "application/rtf": true
+          },
+          "modelExperiments": {
+            "experiments": {
+              "template__system_prompts__planning_mode_artifacts": {
+                "stringValue": "When in planning mode, you will work with three special artifacts.\n\n# Tasks\nPath: {{ArtifactDirectoryPath}}/task.md\n\n**Purpose**: A TODO list to organize your work during execution. Create this artifact after receiving user approval on your implementation plan. Break down complex tasks into component-level items and track progress as a living document.\n\n**Format**:\n```markdown\n- `[ ]` uncompleted tasks\n- `[/]` in progress tasks (custom notation)\n- `[x]` completed tasks\n- Use indented lists for sub-items\n```\n\n**Updating task.md**: Mark items as `[/]` when starting work on them, and `[x]` when completed. Update task.md as you make progress through your checklist.\n\n# Implementation Plan\nPath: {{ArtifactDirectoryPath}}/implementation_plan.md\n\n**Purpose**: A detailed design document to present your technical implementation plan to the user for feedback and approval.\nAfter reading the document, the user should understand the key technical details of your plan, and be able to make an informed decision on whether to approve it.\n\n**Format**: Use the following format, omitting any irrelevant sections.\n```markdown\n# [Goal Description]\n\nProvide a brief description of the problem, any background context, and what the change accomplishes.\n\n## User Review Required\n\nDocument anything that requires user review or feedback, for example, breaking changes or significant design decisions. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Open Questions\n\nAny clarifying or design questions for the user that will impact the implementation plan. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Proposed Changes\n\nGroup files by component (e.g., package, feature area, dependency layer) and order logically (dependencies first). Separate components with horizontal rules for visual clarity.\n\n### [Component Name]\n\nSummary of what will change in this component, separated by files. For specific files, Use [NEW] and [DELETE] to demarcate new and deleted files, for example:\n\n#### [MODIFY] [file basename](file:///absolute/path/to/modifiedfile)\n#### [NEW] [file basename](file:///absolute/path/to/newfile)\n#### [DELETE] [file basename](file:///absolute/path/to/deletedfile)\n\n## Verification Plan\n\nSummary of how you will verify that your changes have the desired effects.\n\n### Automated Tests\n- The commands of any automated tests you'll run.\n\n### Manual Verification\n- Asking the user to deploy to staging and testing, verifying UI changes on an iOS app etc.\n```\n\n# Walkthrough\nPath: {{ArtifactDirectoryPath}}/walkthrough.md\n\n**Purpose**: After completing work, summarize what you accomplished. Update an existing walkthrough for related follow-up work rather than creating a new one.\n\n**Document**:\n- Changes made\n- What was tested\n- Validation results\n\nEmbed screenshots and recordings to visually demonstrate UI changes and user flows.\n"
+              },
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_SAME_MODEL\",\n    \"max_token_limit\": \"256000\",\n    \"token_threshold\": \"140000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": true,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              }
+            }
+          }
+        },
+        "tab_flash_lite_preview": {
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1
+          },
+          "model": "MODEL_PLACEHOLDER_M19",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "supportsCumulativeContext": true,
+          "supportsEstimateTokenCounter": "[redacted]",
+          "toolFormatterType": "TOOL_FORMATTER_TYPE_XML",
+          "requiresLeadInGeneration": true
+        },
+        "gemini-pro-agent": {
+          "displayName": "Gemini 3.1 Pro (High)",
+          "supportsImages": true,
+          "supportsThinking": true,
+          "thinkingBudget": 10001,
+          "minThinkingBudget": 128,
+          "recommended": true,
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_PLACEHOLDER_M16",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "supportsVideo": true,
+          "supportedMimeTypes": {
+            "video/webm": true,
+            "video/audio/wav": true,
+            "application/rtf": true,
+            "text/plain": true,
+            "application/json": true,
+            "video/videoframe/jpeg2000": true,
+            "text/markdown": true,
+            "text/html": true,
+            "application/pdf": true,
+            "application/x-typescript": true,
+            "image/heif": true,
+            "video/jpeg2000": true,
+            "text/x-python-script": true,
+            "text/x-python": true,
+            "text/csv": true,
+            "text/css": true,
+            "video/audio/s16le": true,
+            "application/x-ipynb+json": true,
+            "image/jpeg": true,
+            "image/webp": true,
+            "image/png": true,
+            "text/javascript": true,
+            "image/heic": true,
+            "video/text/timestamp": true,
+            "text/x-typescript": true,
+            "text/xml": true,
+            "text/rtf": true,
+            "video/mp4": true,
+            "application/x-python-code": true,
+            "application/x-javascript": true,
+            "audio/webm;codecs=opus": true
+          },
+          "modelExperiments": {
+            "experiments": {
+              "template__system_prompts__planning_mode_artifacts": {
+                "stringValue": "When in planning mode, you will work with three special artifacts.\n\n# Tasks\nPath: {{ArtifactDirectoryPath}}/task.md\n\n**Purpose**: A TODO list to organize your work during execution. Create this artifact after receiving user approval on your implementation plan. Break down complex tasks into component-level items and track progress as a living document.\n\n**Format**:\n```markdown\n- `[ ]` uncompleted tasks\n- `[/]` in progress tasks (custom notation)\n- `[x]` completed tasks\n- Use indented lists for sub-items\n```\n\n**Updating task.md**: Mark items as `[/]` when starting work on them, and `[x]` when completed. Update task.md as you make progress through your checklist.\n\n# Implementation Plan\nPath: {{ArtifactDirectoryPath}}/implementation_plan.md\n\n**Purpose**: A detailed design document to present your technical implementation plan to the user for feedback and approval.\nAfter reading the document, the user should understand the key technical details of your plan, and be able to make an informed decision on whether to approve it.\n\n**Format**: Use the following format, omitting any irrelevant sections.\n```markdown\n# [Goal Description]\n\nProvide a brief description of the problem, any background context, and what the change accomplishes.\n\n## User Review Required\n\nDocument anything that requires user review or feedback, for example, breaking changes or significant design decisions. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Open Questions\n\nAny clarifying or design questions for the user that will impact the implementation plan. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Proposed Changes\n\nGroup files by component (e.g., package, feature area, dependency layer) and order logically (dependencies first). Separate components with horizontal rules for visual clarity.\n\n### [Component Name]\n\nSummary of what will change in this component, separated by files. For specific files, Use [NEW] and [DELETE] to demarcate new and deleted files, for example:\n\n#### [MODIFY] [file basename](file:///absolute/path/to/modifiedfile)\n#### [NEW] [file basename](file:///absolute/path/to/newfile)\n#### [DELETE] [file basename](file:///absolute/path/to/deletedfile)\n\n## Verification Plan\n\nSummary of how you will verify that your changes have the desired effects.\n\n### Automated Tests\n- The commands of any automated tests you'll run.\n\n### Manual Verification\n- Asking the user to deploy to staging and testing, verifying UI changes on an iOS app etc.\n```\n\n# Walkthrough\nPath: {{ArtifactDirectoryPath}}/walkthrough.md\n\n**Purpose**: After completing work, summarize what you accomplished. Update an existing walkthrough for related follow-up work rather than creating a new one.\n\n**Document**:\n- Changes made\n- What was tested\n- Validation results\n\nEmbed screenshots and recordings to visually demonstrate UI changes and user flows.\n"
+              },
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_SINGLE_PROMPT\",\n    \"max_token_limit\": \"128000\",\n    \"token_threshold\": \"50000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": false,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              },
+              "cascade-include-ephemeral-message": {
+                "stringValue": "{\n    \"enabled\": true,\n    \"disabledHeuristics\": [\"running_tasks_reminder\"],\n    \"staticMessages\": [],\n    \"useAllowlist\": false,\n    \"enabledHeuristics\": []\n}"
+              },
+              "template__system_prompts__communication_style": {
+                "stringValue": "- Keep your responses concise.\n- Provide a summary of your work when you end your turn.\n- Format your responses in github-style markdown.\n- If you're unsure about the user's intent, ask for clarification rather than making assumptions.\n- You MUST create clickable links for all files and code symbols (classes, types, functions, structs). Use github style markdown links with the `file://` scheme (e.g., [filename](file:///path/to/file) or [ClassName](file:///path/to/file#L10-L20)`). For Windows, use forward slashes for paths.\n\nCRITICAL INSTRUCTION 1: You may have access to a variety of tools at your disposal. Some tools may be for a specific task such as 'view_file' (for viewing contents of a file). Others may be very broadly applicable such as the ability to run a command on a terminal. Always prioritize using the most specific tool you can for the task at hand. Here are some rules: (a) NEVER run cat inside a bash command to create a new file or append to an existing file. (b) ALWAYS use grep_search instead of running grep inside a bash command unless absolutely needed. (c) DO NOT use ls for listing, cat for viewing, grep for finding, sed for replacing.\nCRITICAL INSTRUCTION 2: Before making tool calls T, think and explicitly list out any related tools for the task at hand. You can only execute a set of tools T if all other tools in the list are either more generic or cannot be used for the task at hand. ALWAYS START your thought with recalling critical instructions 1 and 2. In particular, the format for the start of your thought block must be '...94>thought\\nCRITICAL INSTRUCTION 1: ...\\nCRITICAL INSTRUCTION 2: ...'."
+              }
+            }
+          }
+        },
+        "chat_20706": {
+          "maxTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1
+          },
+          "model": "MODEL_CHAT_20706",
+          "apiProvider": "API_PROVIDER_INTERNAL",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "supportsCumulativeContext": true,
+          "tabJumpPrintLineRange": true,
+          "supportsEstimateTokenCounter": "[redacted]",
+          "isInternal": true,
+          "addCursorToFindReplaceTarget": true,
+          "promptTemplaterType": "PROMPT_TEMPLATER_TYPE_CHATML",
+          "toolFormatterType": "TOOL_FORMATTER_TYPE_XML",
+          "requiresLeadInGeneration": true
+        },
+        "claude-opus-4-6-thinking": {
+          "displayName": "Claude Opus 4.6 (Thinking)",
+          "supportsImages": true,
+          "supportsThinking": true,
+          "thinkingBudget": 1024,
+          "recommended": true,
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_PLACEHOLDER_M26",
+          "apiProvider": "API_PROVIDER_ANTHROPIC_VERTEX",
+          "modelProvider": "MODEL_PROVIDER_ANTHROPIC",
+          "supportedMimeTypes": {
+            "image/webp": true,
+            "video/jpeg2000": true,
+            "video/videoframe/jpeg2000": true,
+            "image/heic": true,
+            "image/heif": true,
+            "image/jpeg": true,
+            "image/png": true
+          },
+          "modelExperiments": {
+            "experiments": {
+              "template__system_prompts__planning_mode_artifacts": {
+                "stringValue": "When in planning mode, you will work with three special artifacts.\n\n# Tasks\nPath: {{ArtifactDirectoryPath}}/task.md\n\n**Purpose**: A TODO list to organize your work during execution. Create this artifact after receiving user approval on your implementation plan. Break down complex tasks into component-level items and track progress as a living document.\n\n**Format**:\n```markdown\n- `[ ]` uncompleted tasks\n- `[/]` in progress tasks (custom notation)\n- `[x]` completed tasks\n- Use indented lists for sub-items\n```\n\n**Updating task.md**: Mark items as `[/]` when starting work on them, and `[x]` when completed. Update task.md as you make progress through your checklist.\n\n# Implementation Plan\nPath: {{ArtifactDirectoryPath}}/implementation_plan.md\n\n**Purpose**: A detailed design document to present your technical implementation plan to the user for feedback and approval.\nAfter reading the document, the user should understand the key technical details of your plan, and be able to make an informed decision on whether to approve it.\n\n**Format**: Use the following format, omitting any irrelevant sections.\n```markdown\n# [Goal Description]\n\nProvide a brief description of the problem, any background context, and what the change accomplishes.\n\n## User Review Required\n\nDocument anything that requires user review or feedback, for example, breaking changes or significant design decisions. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Open Questions\n\nAny clarifying or design questions for the user that will impact the implementation plan. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Proposed Changes\n\nGroup files by component (e.g., package, feature area, dependency layer) and order logically (dependencies first). Separate components with horizontal rules for visual clarity.\n\n### [Component Name]\n\nSummary of what will change in this component, separated by files. For specific files, Use [NEW] and [DELETE] to demarcate new and deleted files, for example:\n\n#### [MODIFY] [file basename](file:///absolute/path/to/modifiedfile)\n#### [NEW] [file basename](file:///absolute/path/to/newfile)\n#### [DELETE] [file basename](file:///absolute/path/to/deletedfile)\n\n## Verification Plan\n\nSummary of how you will verify that your changes have the desired effects.\n\n### Automated Tests\n- The commands of any automated tests you'll run.\n\n### Manual Verification\n- Asking the user to deploy to staging and testing, verifying UI changes on an iOS app etc.\n```\n\n# Walkthrough\nPath: {{ArtifactDirectoryPath}}/walkthrough.md\n\n**Purpose**: After completing work, summarize what you accomplished. Update an existing walkthrough for related follow-up work rather than creating a new one.\n\n**Document**:\n- Changes made\n- What was tested\n- Validation results\n\nEmbed screenshots and recordings to visually demonstrate UI changes and user flows.\n"
+              },
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_UNSPECIFIED\",\n    \"max_token_limit\": \"160000\",\n    \"token_threshold\": \"50000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": false,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              }
+            }
+          },
+          "vertexModelId": "claude-opus-4-6@default"
+        },
+        "gemini-3.1-pro-low": {
+          "displayName": "Gemini 3.1 Pro (Low)",
+          "supportsImages": true,
+          "supportsThinking": true,
+          "thinkingBudget": 1001,
+          "minThinkingBudget": 128,
+          "recommended": true,
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_PLACEHOLDER_M36",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "supportsVideo": true,
+          "supportedMimeTypes": {
+            "text/css": true,
+            "video/audio/wav": true,
+            "application/x-typescript": true,
+            "application/x-python-code": true,
+            "image/heic": true,
+            "video/audio/s16le": true,
+            "application/x-javascript": true,
+            "image/jpeg": true,
+            "image/webp": true,
+            "application/json": true,
+            "application/rtf": true,
+            "audio/webm;codecs=opus": true,
+            "text/html": true,
+            "video/jpeg2000": true,
+            "text/javascript": true,
+            "application/pdf": true,
+            "video/videoframe/jpeg2000": true,
+            "text/x-python-script": true,
+            "video/mp4": true,
+            "text/rtf": true,
+            "video/text/timestamp": true,
+            "text/markdown": true,
+            "text/xml": true,
+            "image/png": true,
+            "text/x-python": true,
+            "video/webm": true,
+            "application/x-ipynb+json": true,
+            "text/x-typescript": true,
+            "image/heif": true,
+            "text/plain": true,
+            "text/csv": true
+          },
+          "modelExperiments": {
+            "experiments": {
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_SINGLE_PROMPT\",\n    \"max_token_limit\": \"128000\",\n    \"token_threshold\": \"50000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": false,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              },
+              "cascade-include-ephemeral-message": {
+                "stringValue": "{\n    \"enabled\": true,\n    \"disabledHeuristics\": [\"running_tasks_reminder\"],\n    \"staticMessages\": [],\n    \"useAllowlist\": false,\n    \"enabledHeuristics\": []\n}"
+              },
+              "template__system_prompts__communication_style": {
+                "stringValue": "- Keep your responses concise.\n- Provide a summary of your work when you end your turn.\n- Format your responses in github-style markdown.\n- If you're unsure about the user's intent, ask for clarification rather than making assumptions.\n- You MUST create clickable links for all files and code symbols (classes, types, functions, structs). Use github style markdown links with the `file://` scheme (e.g., [filename](file:///path/to/file) or [ClassName](file:///path/to/file#L10-L20)`). For Windows, use forward slashes for paths.\n\nCRITICAL INSTRUCTION 1: You may have access to a variety of tools at your disposal. Some tools may be for a specific task such as 'view_file' (for viewing contents of a file). Others may be very broadly applicable such as the ability to run a command on a terminal. Always prioritize using the most specific tool you can for the task at hand. Here are some rules: (a) NEVER run cat inside a bash command to create a new file or append to an existing file. (b) ALWAYS use grep_search instead of running grep inside a bash command unless absolutely needed. (c) DO NOT use ls for listing, cat for viewing, grep for finding, sed for replacing.\nCRITICAL INSTRUCTION 2: Before making tool calls T, think and explicitly list out any related tools for the task at hand. You can only execute a set of tools T if all other tools in the list are either more generic or cannot be used for the task at hand. ALWAYS START your thought with recalling critical instructions 1 and 2. In particular, the format for the start of your thought block must be '...94>thought\\nCRITICAL INSTRUCTION 1: ...\\nCRITICAL INSTRUCTION 2: ...'."
+              },
+              "template__system_prompts__planning_mode_artifacts": {
+                "stringValue": "When in planning mode, you will work with three special artifacts.\n\n# Tasks\nPath: {{ArtifactDirectoryPath}}/task.md\n\n**Purpose**: A TODO list to organize your work during execution. Create this artifact after receiving user approval on your implementation plan. Break down complex tasks into component-level items and track progress as a living document.\n\n**Format**:\n```markdown\n- `[ ]` uncompleted tasks\n- `[/]` in progress tasks (custom notation)\n- `[x]` completed tasks\n- Use indented lists for sub-items\n```\n\n**Updating task.md**: Mark items as `[/]` when starting work on them, and `[x]` when completed. Update task.md as you make progress through your checklist.\n\n# Implementation Plan\nPath: {{ArtifactDirectoryPath}}/implementation_plan.md\n\n**Purpose**: A detailed design document to present your technical implementation plan to the user for feedback and approval.\nAfter reading the document, the user should understand the key technical details of your plan, and be able to make an informed decision on whether to approve it.\n\n**Format**: Use the following format, omitting any irrelevant sections.\n```markdown\n# [Goal Description]\n\nProvide a brief description of the problem, any background context, and what the change accomplishes.\n\n## User Review Required\n\nDocument anything that requires user review or feedback, for example, breaking changes or significant design decisions. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Open Questions\n\nAny clarifying or design questions for the user that will impact the implementation plan. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Proposed Changes\n\nGroup files by component (e.g., package, feature area, dependency layer) and order logically (dependencies first). Separate components with horizontal rules for visual clarity.\n\n### [Component Name]\n\nSummary of what will change in this component, separated by files. For specific files, Use [NEW] and [DELETE] to demarcate new and deleted files, for example:\n\n#### [MODIFY] [file basename](file:///absolute/path/to/modifiedfile)\n#### [NEW] [file basename](file:///absolute/path/to/newfile)\n#### [DELETE] [file basename](file:///absolute/path/to/deletedfile)\n\n## Verification Plan\n\nSummary of how you will verify that your changes have the desired effects.\n\n### Automated Tests\n- The commands of any automated tests you'll run.\n\n### Manual Verification\n- Asking the user to deploy to staging and testing, verifying UI changes on an iOS app etc.\n```\n\n# Walkthrough\nPath: {{ArtifactDirectoryPath}}/walkthrough.md\n\n**Purpose**: After completing work, summarize what you accomplished. Update an existing walkthrough for related follow-up work rather than creating a new one.\n\n**Document**:\n- Changes made\n- What was tested\n- Validation results\n\nEmbed screenshots and recordings to visually demonstrate UI changes and user flows.\n"
+              }
+            }
+          }
+        },
+        "gemini-3-flash-agent": {
+          "displayName": "Gemini 3.5 Flash (High)",
+          "supportsImages": true,
+          "supportsThinking": true,
+          "thinkingBudget": 10000,
+          "minThinkingBudget": 32,
+          "recommended": true,
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_PLACEHOLDER_M84",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "supportsVideo": true,
+          "tagTitle": "Fast",
+          "tagDescription": "Limited time",
+          "supportedMimeTypes": {
+            "text/rtf": true,
+            "application/x-javascript": true,
+            "application/x-typescript": true,
+            "video/audio/s16le": true,
+            "application/json": true,
+            "video/mp4": true,
+            "text/plain": true,
+            "text/x-typescript": true,
+            "image/png": true,
+            "application/rtf": true,
+            "text/csv": true,
+            "text/x-python": true,
+            "application/x-python-code": true,
+            "image/jpeg": true,
+            "application/x-ipynb+json": true,
+            "text/xml": true,
+            "text/html": true,
+            "video/text/timestamp": true,
+            "text/javascript": true,
+            "application/pdf": true,
+            "image/webp": true,
+            "video/jpeg2000": true,
+            "text/css": true,
+            "image/heic": true,
+            "video/videoframe/jpeg2000": true,
+            "text/markdown": true,
+            "video/webm": true,
+            "image/heif": true,
+            "audio/webm;codecs=opus": true,
+            "video/audio/wav": true,
+            "text/x-python-script": true
+          },
+          "modelExperiments": {
+            "experiments": {
+              "template__system_prompts__planning_mode_artifacts": {
+                "stringValue": "When in planning mode, you will work with three special artifacts.\n\n# Tasks\nPath: {{ArtifactDirectoryPath}}/task.md\n\n**Purpose**: A TODO list to organize your work during execution. Create this artifact after receiving user approval on your implementation plan. Break down complex tasks into component-level items and track progress as a living document.\n\n**Format**:\n```markdown\n- `[ ]` uncompleted tasks\n- `[/]` in progress tasks (custom notation)\n- `[x]` completed tasks\n- Use indented lists for sub-items\n```\n\n**Updating task.md**: Mark items as `[/]` when starting work on them, and `[x]` when completed. Update task.md as you make progress through your checklist.\n\n# Implementation Plan\nPath: {{ArtifactDirectoryPath}}/implementation_plan.md\n\n**Purpose**: A detailed design document to present your technical implementation plan to the user for feedback and approval.\nAfter reading the document, the user should understand the key technical details of your plan, and be able to make an informed decision on whether to approve it.\n\n**Format**: Use the following format, omitting any irrelevant sections.\n```markdown\n# [Goal Description]\n\nProvide a brief description of the problem, any background context, and what the change accomplishes.\n\n## User Review Required\n\nDocument anything that requires user review or feedback, for example, breaking changes or significant design decisions. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Open Questions\n\nAny clarifying or design questions for the user that will impact the implementation plan. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Proposed Changes\n\nGroup files by component (e.g., package, feature area, dependency layer) and order logically (dependencies first). Separate components with horizontal rules for visual clarity.\n\n### [Component Name]\n\nSummary of what will change in this component, separated by files. For specific files, Use [NEW] and [DELETE] to demarcate new and deleted files, for example:\n\n#### [MODIFY] [file basename](file:///absolute/path/to/modifiedfile)\n#### [NEW] [file basename](file:///absolute/path/to/newfile)\n#### [DELETE] [file basename](file:///absolute/path/to/deletedfile)\n\n## Verification Plan\n\nSummary of how you will verify that your changes have the desired effects.\n\n### Automated Tests\n- The commands of any automated tests you'll run.\n\n### Manual Verification\n- Asking the user to deploy to staging and testing, verifying UI changes on an iOS app etc.\n```\n\n# Walkthrough\nPath: {{ArtifactDirectoryPath}}/walkthrough.md\n\n**Purpose**: After completing work, summarize what you accomplished. Update an existing walkthrough for related follow-up work rather than creating a new one.\n\n**Document**:\n- Changes made\n- What was tested\n- Validation results\n\nEmbed screenshots and recordings to visually demonstrate UI changes and user flows.\n"
+              },
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_SAME_MODEL\",\n    \"max_token_limit\": \"256000\",\n    \"token_threshold\": \"140000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": true,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              }
+            }
+          }
+        },
+        "gemini-3.1-pro-high": {
+          "displayName": "Gemini 3.1 Pro (High)",
+          "supportsImages": true,
+          "supportsThinking": true,
+          "thinkingBudget": 10001,
+          "minThinkingBudget": 128,
+          "recommended": true,
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_PLACEHOLDER_M37",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "supportsVideo": true,
+          "tagTitle": "New",
+          "supportedMimeTypes": {
+            "video/audio/wav": true,
+            "audio/webm;codecs=opus": true,
+            "video/text/timestamp": true,
+            "application/json": true,
+            "text/html": true,
+            "image/png": true,
+            "application/x-ipynb+json": true,
+            "text/x-python-script": true,
+            "image/heic": true,
+            "text/markdown": true,
+            "application/x-python-code": true,
+            "text/x-python": true,
+            "text/rtf": true,
+            "text/css": true,
+            "video/videoframe/jpeg2000": true,
+            "text/csv": true,
+            "text/plain": true,
+            "text/javascript": true,
+            "application/pdf": true,
+            "application/x-typescript": true,
+            "video/audio/s16le": true,
+            "image/jpeg": true,
+            "application/x-javascript": true,
+            "image/heif": true,
+            "image/webp": true,
+            "video/webm": true,
+            "video/jpeg2000": true,
+            "video/mp4": true,
+            "text/xml": true,
+            "text/x-typescript": true,
+            "application/rtf": true
+          },
+          "modelExperiments": {
+            "experiments": {
+              "cascade-include-ephemeral-message": {
+                "stringValue": "{\n    \"enabled\": true,\n    \"disabledHeuristics\": [\"running_tasks_reminder\"],\n    \"staticMessages\": [],\n    \"useAllowlist\": false,\n    \"enabledHeuristics\": []\n}"
+              },
+              "template__system_prompts__communication_style": {
+                "stringValue": "- Keep your responses concise.\n- Provide a summary of your work when you end your turn.\n- Format your responses in github-style markdown.\n- If you're unsure about the user's intent, ask for clarification rather than making assumptions.\n- You MUST create clickable links for all files and code symbols (classes, types, functions, structs). Use github style markdown links with the `file://` scheme (e.g., [filename](file:///path/to/file) or [ClassName](file:///path/to/file#L10-L20)`). For Windows, use forward slashes for paths.\n\nCRITICAL INSTRUCTION 1: You may have access to a variety of tools at your disposal. Some tools may be for a specific task such as 'view_file' (for viewing contents of a file). Others may be very broadly applicable such as the ability to run a command on a terminal. Always prioritize using the most specific tool you can for the task at hand. Here are some rules: (a) NEVER run cat inside a bash command to create a new file or append to an existing file. (b) ALWAYS use grep_search instead of running grep inside a bash command unless absolutely needed. (c) DO NOT use ls for listing, cat for viewing, grep for finding, sed for replacing.\nCRITICAL INSTRUCTION 2: Before making tool calls T, think and explicitly list out any related tools for the task at hand. You can only execute a set of tools T if all other tools in the list are either more generic or cannot be used for the task at hand. ALWAYS START your thought with recalling critical instructions 1 and 2. In particular, the format for the start of your thought block must be '...94>thought\\nCRITICAL INSTRUCTION 1: ...\\nCRITICAL INSTRUCTION 2: ...'."
+              },
+              "template__system_prompts__planning_mode_artifacts": {
+                "stringValue": "When in planning mode, you will work with three special artifacts.\n\n# Tasks\nPath: {{ArtifactDirectoryPath}}/task.md\n\n**Purpose**: A TODO list to organize your work during execution. Create this artifact after receiving user approval on your implementation plan. Break down complex tasks into component-level items and track progress as a living document.\n\n**Format**:\n```markdown\n- `[ ]` uncompleted tasks\n- `[/]` in progress tasks (custom notation)\n- `[x]` completed tasks\n- Use indented lists for sub-items\n```\n\n**Updating task.md**: Mark items as `[/]` when starting work on them, and `[x]` when completed. Update task.md as you make progress through your checklist.\n\n# Implementation Plan\nPath: {{ArtifactDirectoryPath}}/implementation_plan.md\n\n**Purpose**: A detailed design document to present your technical implementation plan to the user for feedback and approval.\nAfter reading the document, the user should understand the key technical details of your plan, and be able to make an informed decision on whether to approve it.\n\n**Format**: Use the following format, omitting any irrelevant sections.\n```markdown\n# [Goal Description]\n\nProvide a brief description of the problem, any background context, and what the change accomplishes.\n\n## User Review Required\n\nDocument anything that requires user review or feedback, for example, breaking changes or significant design decisions. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Open Questions\n\nAny clarifying or design questions for the user that will impact the implementation plan. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Proposed Changes\n\nGroup files by component (e.g., package, feature area, dependency layer) and order logically (dependencies first). Separate components with horizontal rules for visual clarity.\n\n### [Component Name]\n\nSummary of what will change in this component, separated by files. For specific files, Use [NEW] and [DELETE] to demarcate new and deleted files, for example:\n\n#### [MODIFY] [file basename](file:///absolute/path/to/modifiedfile)\n#### [NEW] [file basename](file:///absolute/path/to/newfile)\n#### [DELETE] [file basename](file:///absolute/path/to/deletedfile)\n\n## Verification Plan\n\nSummary of how you will verify that your changes have the desired effects.\n\n### Automated Tests\n- The commands of any automated tests you'll run.\n\n### Manual Verification\n- Asking the user to deploy to staging and testing, verifying UI changes on an iOS app etc.\n```\n\n# Walkthrough\nPath: {{ArtifactDirectoryPath}}/walkthrough.md\n\n**Purpose**: After completing work, summarize what you accomplished. Update an existing walkthrough for related follow-up work rather than creating a new one.\n\n**Document**:\n- Changes made\n- What was tested\n- Validation results\n\nEmbed screenshots and recordings to visually demonstrate UI changes and user flows.\n"
+              },
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_SINGLE_PROMPT\",\n    \"max_token_limit\": \"128000\",\n    \"token_threshold\": \"50000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": false,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              }
+            }
+          }
+        },
+        "gemini-3.1-flash-image": {
+          "displayName": "Gemini 3.1 Flash Image",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_PLACEHOLDER_M21",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE"
+        },
+        "gemini-2.5-flash-thinking": {
+          "displayName": "Gemini 3.1 Flash Lite",
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_GOOGLE_GEMINI_2_5_FLASH_THINKING",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "modelExperiments": {
+            "experiments": {
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_SINGLE_PROMPT\",\n    \"max_token_limit\": \"128000\",\n    \"token_threshold\": \"50000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": false,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              }
+            }
+          }
+        },
+        "gemini-3-flash": {
+          "displayName": "Gemini 3 Flash",
+          "supportsImages": true,
+          "supportsThinking": true,
+          "thinkingBudget": -1,
+          "minThinkingBudget": 32,
+          "recommended": true,
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_PLACEHOLDER_M18",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "supportsVideo": true,
+          "supportedMimeTypes": {
+            "text/css": true,
+            "application/x-typescript": true,
+            "text/plain": true,
+            "image/heic": true,
+            "video/webm": true,
+            "application/x-ipynb+json": true,
+            "image/webp": true,
+            "text/javascript": true,
+            "text/x-typescript": true,
+            "application/json": true,
+            "video/mp4": true,
+            "application/x-python-code": true,
+            "video/videoframe/jpeg2000": true,
+            "text/x-python": true,
+            "video/text/timestamp": true,
+            "image/jpeg": true,
+            "application/pdf": true,
+            "audio/webm;codecs=opus": true,
+            "application/rtf": true,
+            "application/x-javascript": true,
+            "video/audio/wav": true,
+            "text/html": true,
+            "image/heif": true,
+            "text/markdown": true,
+            "video/audio/s16le": true,
+            "video/jpeg2000": true,
+            "text/rtf": true,
+            "text/csv": true,
+            "image/png": true,
+            "text/x-python-script": true,
+            "text/xml": true
+          },
+          "modelExperiments": {
+            "experiments": {
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_SINGLE_PROMPT\",\n    \"max_token_limit\": \"128000\",\n    \"token_threshold\": \"50000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": false,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              },
+              "template__system_prompts__communication_style": {
+                "stringValue": "- Keep your responses concise.\n- Provide a summary of your work when you end your turn. Ground your response in the work you did. Keep your tone professional and avoid overconfident language, bragging, or overclaiming success.\n- AVOID using superlatives such as \"perfectly\", \"flawlessly\", \"100% correct\", \"Summary of Accomplishments\" etc. to summarize your work for the user. Be humble.\n- AVOID over-the-top politeness or complimenting the user excessively.\n- Format your responses in github-style markdown."
+              }
+            }
+          }
+        },
+        "gpt-oss-120b-medium": {
+          "displayName": "GPT-OSS 120B (Medium)",
+          "supportsThinking": true,
+          "thinkingBudget": 8192,
+          "recommended": true,
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_OPENAI_GPT_OSS_120B_MEDIUM",
+          "apiProvider": "API_PROVIDER_OPENAI_VERTEX",
+          "modelProvider": "MODEL_PROVIDER_OPENAI",
+          "modelExperiments": {
+            "experiments": {
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_UNSPECIFIED\",\n    \"max_token_limit\": \"80000\",\n    \"token_threshold\": \"50000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"8192\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": false,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              }
+            }
+          },
+          "vertexModelId": "openai/gpt-oss-120b-maas"
+        },
+        "gemini-2.5-flash-lite": {
+          "displayName": "Gemini 3.1 Flash Lite",
+          "maxTokens": "[redacted]",
+          "maxOutputTokens": "[redacted]",
+          "tokenizerType": "[redacted]",
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-07-18T15:39:38Z"
+          },
+          "model": "MODEL_GOOGLE_GEMINI_2_5_FLASH_LITE",
+          "apiProvider": "API_PROVIDER_GOOGLE_GEMINI",
+          "modelProvider": "MODEL_PROVIDER_GOOGLE",
+          "modelExperiments": {
+            "experiments": {
+              "CASCADE_USE_EXPERIMENT_CHECKPOINTER": {
+                "stringValue": "{\n    \"strategy\": \"CHECKPOINT_STRATEGY_SINGLE_PROMPT\",\n    \"max_token_limit\": \"128000\",\n    \"token_threshold\": \"50000\",\n    \"max_overhead_ratio\": \"0.15\",\n    \"moving_window_size\": \"1\",\n    \"enabled\": true,\n    \"max_output_tokens\": \"16384\",\n    \"checkpoint_model\": \"MODEL_PLACEHOLDER_M50\",\n    \"use_last_planner_model\": false,\n    \"is_sync\": false,\n    \"max_user_requests\": 10,\n    \"include_last_user_message\": false,\n    \"include_conversation_log\": true,\n    \"include_running_task_snapshots\": true,\n    \"include_subagent_snapshots\": true,\n    \"include_artifact_snapshots\": true,\n    \"retry_config\": {\n        \"max_retries\": 0,\n        \"initial_sleep_duration_ms\": 1000,\n        \"exponential_multiplier\": 2,\n        \"include_error_feedback\": false\n    }\n}"
+              }
+            }
+          }
+        }
+      },
+      "defaultAgentModelId": "gemini-3.5-flash-low",
+      "agentModelSorts": [
+        {
+          "displayName": "Recommended",
+          "groups": [
+            {
+              "modelIds": [
+                "gemini-3.5-flash-low",
+                "gemini-3-flash-agent",
+                "gemini-3.5-flash-extra-low",
+                "gemini-3.1-pro-low",
+                "gemini-pro-agent",
+                "claude-sonnet-4-6",
+                "claude-opus-4-6-thinking",
+                "gpt-oss-120b-medium"
+              ]
+            }
+          ]
+        }
+      ],
+      "commandModelIds": [
+        "gemini-3-flash"
+      ],
+      "tabModelIds": [
+        "chat_20706",
+        "chat_23310"
+      ],
+      "imageGenerationModelIds": [
+        "gemini-3.1-flash-image"
+      ],
+      "mqueryModelIds": [
+        "gemini-3.1-flash-lite"
+      ],
+      "webSearchModelIds": [
+        "gemini-3.1-flash-lite"
+      ],
+      "deprecatedModelIds": {
+        "gemini-3.1-pro-high": {
+          "newModelId": "gemini-pro-agent",
+          "oldModelEnum": "MODEL_PLACEHOLDER_M37",
+          "newModelEnum": "MODEL_PLACEHOLDER_M16"
+        }
+      },
+      "commitMessageModelIds": [
+        "gemini-3.1-flash-lite"
+      ],
+      "audioTranscriptionModelIds": [
+        "models/proactive-observer"
+      ],
+      "experimentIds": [
+        106140402,
+        105979552,
+        105979574,
+        106015333,
+        105979579,
+        105867471,
+        106121401,
+        106100625,
+        106143956,
+        105879567,
+        105856899,
+        106312323,
+        106064030,
+        106396309,
+        105757908,
+        106240758,
+        106106762,
+        106057393,
+        106106760,
+        106021688,
+        106014288,
+        105887299,
+        106378471,
+        106283618,
+        106278607,
+        106380926,
+        106212376,
+        106281951,
+        106264532,
+        106222835,
+        106044947,
+        106032303,
+        106228452,
+        106121607,
+        105979531,
+        105979553,
+        106015328,
+        105867469,
+        106121399,
+        106100654,
+        106064028,
+        106396303,
+        106240748,
+        106057389,
+        106283614,
+        106038164,
+        106032301,
+        106121604
+      ],
+      "tieredModelIds": {
+        "flashLite": [
+          "gemini-3.1-flash-lite"
+        ],
+        "flash": [
+          "gemini-3-flash-agent"
+        ],
+        "pro": [
+          "gemini-3.1-pro-low"
+        ]
+      }
+    }
+  },
+  "onboardUserVariants": {
+    "tierId-free": {
+      "status": 200,
+      "data": {
+        "done": true,
+        "response": {
+          "@type": "type.googleapis.com/google.internal.cloud.code.v1internal.OnboardUserResponse",
+          "cloudaicompanionProject": {
+            "id": "valued-aviary-kfg2z"
+          },
+          "releaseChannel": {
+            "type": "EXPERIMENTAL",
+            "name": "Preview Channel"
+          }
+        }
+      }
+    },
+    "tierId-legacy-standard": {
+      "status": 400,
+      "data": {
+        "error": {
+          "code": 400,
+          "message": "Request contains an invalid argument.",
+          "status": "INVALID_ARGUMENT"
+        }
+      }
+    },
+    "empty": {
+      "status": 400,
+      "data": {
+        "error": {
+          "code": 400,
+          "message": "Request contains an invalid argument.",
+          "status": "INVALID_ARGUMENT"
+        }
+      }
+    }
+  }
+}
