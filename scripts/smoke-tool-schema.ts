@@ -38,44 +38,65 @@ const schemaProbeTool = {
     type: "object",
     properties: {
       value: {
-        anyOf: [{ type: "string", enum: ["auto"] }, { type: "boolean", enum: [false] }],
+        anyOf: [
+          { type: "string", enum: ["auto"] },
+          { type: "boolean", enum: [false] },
+        ],
       },
     },
     required: ["value"],
   },
 } as Tool;
 
-for (const modelId of ["claude-sonnet-4-6", "gpt-oss-120b"]) {
-  const runtimeModel = getAntigravityRequestModelId(modelId, "high");
-  const tools = convertTools([schemaProbeTool], true);
-  const response = await fetch(`${endpointCandidates()[0]}/v1internal:streamGenerateContent?alt=sse`, {
-    method: "POST",
-    headers: {
-      ...antigravityHeaders(refreshed.access),
-      ...(modelId.startsWith("claude-")
-        ? { "anthropic-beta": "interleaved-thinking-2025-05-14" }
-        : {}),
-    },
-    body: JSON.stringify({
-      project: projectId,
-      model: runtimeModel,
-      request: {
-        contents: [{ role: "user", parts: [{ text: "Call schema_probe with value false." }] }],
-        tools,
+const modelCases = [
+  { label: "Gemini 3.5 Flash (Low)", modelId: "gemini-3.5-flash", effort: "minimal" },
+  { label: "Gemini 3.5 Flash (Medium)", modelId: "gemini-3.5-flash", effort: "low" },
+  { label: "Gemini 3.5 Flash (High)", modelId: "gemini-3.5-flash", effort: "high" },
+  { label: "Gemini 3.1 Pro (Low)", modelId: "gemini-3.1-pro", effort: "low" },
+  // High routes to gemini-pro-agent (gemini-3.1-pro-high currently 400s on streamGenerateContent).
+  { label: "Gemini 3.1 Pro (High)", modelId: "gemini-3.1-pro", effort: "high" },
+  { label: "Claude Sonnet 4.6 (Thinking)", modelId: "claude-sonnet-4-6", effort: "high" },
+  { label: "Claude Opus 4.6 (Thinking)", modelId: "claude-opus-4-6", effort: "high" },
+  { label: "GPT-OSS 120B (Medium)", modelId: "gpt-oss-120b", effort: "high" },
+] as const;
+
+for (const { label, modelId, effort } of modelCases) {
+  const runtimeModel = getAntigravityRequestModelId(modelId, effort);
+  const isCustomBackend = modelId.startsWith("claude-") || modelId.startsWith("gpt-oss-");
+  const tools = convertTools([schemaProbeTool], isCustomBackend);
+  const response = await fetch(
+    `${endpointCandidates()[0]}/v1internal:streamGenerateContent?alt=sse`,
+    {
+      method: "POST",
+      headers: {
+        ...antigravityHeaders(refreshed.access),
         ...(modelId.startsWith("claude-")
-          ? { toolConfig: { functionCallingConfig: { mode: "AUTO" } } }
+          ? { "anthropic-beta": "interleaved-thinking-2025-05-14" }
           : {}),
-        generationConfig: { maxOutputTokens: 128 },
       },
-      requestType: "agent",
-      userAgent: "antigravity",
-      requestId: nowRequestId(),
-    }),
-  });
+      body: JSON.stringify({
+        project: projectId,
+        model: runtimeModel,
+        request: {
+          contents: [{ role: "user", parts: [{ text: "Call schema_probe with value false." }] }],
+          tools,
+          ...(modelId.startsWith("claude-")
+            ? { toolConfig: { functionCallingConfig: { mode: "AUTO" } } }
+            : {}),
+          generationConfig: { maxOutputTokens: 128 },
+        },
+        requestType: "agent",
+        userAgent: "antigravity",
+        requestId: nowRequestId(),
+      }),
+    },
+  );
 
   if (!response.ok) {
     const detail = (await response.text()).replace(/ya29\.[A-Za-z0-9._~+/-]+=*/g, "[redacted]");
-    throw new Error(`${modelId} rejected the tool schema (${response.status}): ${detail.slice(0, 500)}`);
+    throw new Error(
+      `${label} rejected the tool schema (${response.status}): ${detail.slice(0, 500)}`,
+    );
   }
-  console.log(`${modelId}: tool schema accepted (${response.status})`);
+  console.log(`${label}: ${runtimeModel} accepted the tool schema (${response.status})`);
 }

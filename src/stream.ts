@@ -190,18 +190,86 @@ function stripMetaSchema(schema: unknown): unknown {
   return out;
 }
 
+/**
+ * Keywords that Cloud Code Assist's protobuf `Schema` rejects with
+ * `Unknown name "..."` when tools are sent via the Claude/GPT custom-tool bridge
+ * (`parameters` field). Keep this list aggressive: Pi still validates tool args
+ * after the model calls them, so a slightly looser declaration is preferable to
+ * a hard 400 on every Claude/GPT request.
+ */
+const CUSTOM_TOOL_SCHEMA_OMIT = new Set([
+  // JSON Schema composition / meta not in protobuf Schema
+  "anyOf",
+  "oneOf",
+  "allOf",
+  "not",
+  "if",
+  "then",
+  "else",
+  "$schema",
+  "$id",
+  "$anchor",
+  "$dynamicAnchor",
+  "$vocabulary",
+  "$comment",
+  "$defs",
+  "$ref",
+  "$dynamicRef",
+  "definitions",
+  // Object keywords not present on protobuf Schema
+  "patternProperties",
+  "additionalProperties",
+  "unevaluatedProperties",
+  "propertyNames",
+  "dependentSchemas",
+  "dependentRequired",
+  // Array keywords not present / unstable
+  "prefixItems",
+  "unevaluatedItems",
+  "contains",
+  "minContains",
+  "maxContains",
+  "uniqueItems",
+  // Misc JSON Schema extensions that commonly appear in Pi tool defs
+  "const",
+  "default",
+  "examples",
+  "example",
+  "title",
+  "readOnly",
+  "writeOnly",
+  "deprecated",
+  "contentMediaType",
+  "contentEncoding",
+  "contentSchema",
+  // GPT-OSS Draft-2020-12 validation has rejected numeric constraints that
+  // arrive through the protobuf bridge (e.g. maxLength: 60 → "'60' is not of
+  // type 'integer'"). Drop them for custom backends; Pi still enforces limits.
+  "maxLength",
+  "minLength",
+  "maxItems",
+  "minItems",
+  "maximum",
+  "minimum",
+  "exclusiveMaximum",
+  "exclusiveMinimum",
+  "multipleOf",
+  "maxProperties",
+  "minProperties",
+  "pattern",
+  "format",
+]);
+
 function normalizeCustomToolSchema(schema: unknown): unknown {
   if (!schema || typeof schema !== "object") return schema;
   if (Array.isArray(schema)) return schema.map(normalizeCustomToolSchema);
 
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(schema)) {
+    if (CUSTOM_TOOL_SCHEMA_OMIT.has(key) || key.startsWith("$")) continue;
     // Cloud Code Assist parses the legacy declaration through a protobuf Schema
     // (where enum is string-only) before handing it to Claude/GPT's Draft 2020-12
-    // custom-tool validator. A general union cannot satisfy both formats, so
-    // omit it rather than rejecting the entire request; Pi still validates tool
-    // arguments after the model calls the tool.
-    if (["anyOf", "oneOf", "allOf"].includes(key)) continue;
+    // custom-tool validator. Non-string enums cannot satisfy both formats.
     if (
       key === "enum" &&
       Array.isArray(value) &&
@@ -638,6 +706,33 @@ export function streamAntigravity(
         }
 
         if (!response || !response.ok) {
+          // Optional debug dump: ANTIGRAVITY_DEBUG_DUMP=1 writes last failing request body.
+          if (antigravityEnv("DEBUG_DUMP") === "1") {
+            try {
+              const { writeFileSync } = await import("node:fs");
+              let parsedBody: unknown = body;
+              try {
+                parsedBody = JSON.parse(body) as unknown;
+              } catch {
+                parsedBody = body;
+              }
+              writeFileSync(
+                "/tmp/antigravity-last-request.json",
+                JSON.stringify(
+                  {
+                    status: response?.status,
+                    runtimeModel,
+                    lastText: lastText.slice(0, 4000),
+                    body: parsedBody,
+                  },
+                  null,
+                  2,
+                ),
+              );
+            } catch {
+              // ignore dump failures
+            }
+          }
           const friendly = friendlyAntigravityError(response?.status, lastText);
           if (response?.status === 429 && /Quota reached\./i.test(friendly)) {
             throw new Error(friendly);

@@ -1,6 +1,6 @@
 {
   "name": "pi-antigravity",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Personal Antigravity / Cloud Code Assist provider for Pi Coding Agent",
   "author": "Rahul Arya",
   "license": "MIT",
@@ -37,6 +37,7 @@
     "security-check": "tsx scripts/security-check.ts",
     "test": "tsx scripts/test-model-routing.ts",
     "smoke:tools": "tsx scripts/smoke-tool-schema.ts",
+    "smoke:models": "node --import tsx scripts/smoke-all-models.mjs",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run security-check && npm test"
   },
   "pi": {

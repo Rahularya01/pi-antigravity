@@ -374,9 +374,8 @@ function findDynamicModel(value: unknown, requestedId: string): DynamicModelInfo
   else if (req.includes("claude-sonnet-4-6")) targetRegex = /claude.*sonnet.*4\.6/i;
   else if (req.includes("gpt-oss-120b")) targetRegex = /gpt.*oss.*120b/i;
   else if (req === "gemini-3.1-pro-low") targetRegex = /gemini[- ]3\.1[- ]pro \(low\)/i;
-  else if (req === "gemini-3.1-pro-high") targetRegex = /gemini[- ]3\.1[- ]pro \(high\)/i;
-  else if (req.includes("gemini-2.5-pro")) targetRegex = /gemini[- ]2\.5[- ]pro/i;
-  else if (req.includes("gemini-2.5-flash")) targetRegex = /gemini[- ]2\.5[- ]flash/i;
+  else if (req === "gemini-3.1-pro-high" || req === "gemini-pro-agent")
+    targetRegex = /gemini[- ]3\.1[- ]pro \(high\)/i;
   else {
     // Escape user/model input so it cannot inject ReDoS or unintended regex syntax.
     const escaped = escapeRegExp(req).replace(/\\-/g, "[- ]");

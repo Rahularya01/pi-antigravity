@@ -2,3 +2,9 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# Local live-probe dumps (may include email/projectId/quota)
+scripts/probe-results.json
+scripts/probe-tier-results.json
+scripts/smoke-all-models-results.json
+*.tgz

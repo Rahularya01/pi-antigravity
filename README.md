@@ -75,7 +75,9 @@ Model availability, entitlement, quota groups, and resets are returned by the se
 
 ## Models and routing
 
-These are the static model IDs registered by the extension. Use `/antigravity.models` to see what is currently available to your account.
+The static model IDs registered by this extension match the Antigravity CLI catalog (`agy models`). Use `/antigravity.models` to see live availability and quota for your account.
+
+`agy models` currently lists eight display entries (Flash Low/Medium/High, Pro Low/High, Claude Sonnet/Opus Thinking, GPT-OSS Medium). Pi collapses those into five public model IDs and maps Low/Medium/High through thinking effort.
 
 ### Why Claude and GPT-OSS appear
 
@@ -83,21 +85,13 @@ Antigravity / Cloud Code Assist exposes a multi-provider catalog. Depending on y
 
 The backend's display labels do not always match its runtime IDs. For example, `gemini-3.5-flash-extra-low`, `gemini-3.5-flash-low`, and `gemini-3-flash-agent` can be displayed as Gemini 3.5 Flash Low, Medium, and High. The routing below uses the runtime IDs returned by the service.
 
-| Public model ID               | Input       | Thinking | Request routing                                                                                                      |
-| ----------------------------- | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
-| `gemini-3.5-flash`            | Text, image | Yes      | Off/minimal → `gemini-3.5-flash-extra-low`; low/medium → `gemini-3.5-flash-low`; high/xhigh → `gemini-3-flash-agent` |
-| `gemini-3.1-pro`              | Text, image | Yes      | Off/minimal/low/medium → `gemini-3.1-pro-low`; high/xhigh → `gemini-3.1-pro-high`                                    |
-| `gemini-3-flash`              | Text, image | Yes      | `gemini-3-flash`                                                                                                     |
-| `gemini-2.5-pro`              | Text, image | Yes      | `gemini-2.5-pro`                                                                                                     |
-| `gemini-2.5-flash`            | Text, image | Yes      | `MODEL_GOOGLE_GEMINI_2_5_FLASH`                                                                                      |
-| `gemini-2.5-flash-lite`       | Text        | No       | `gemini-2.5-flash-lite`                                                                                              |
-| `gemini-3.1-flash-image`      | Text        | No       | `gemini-3.1-flash-image`                                                                                             |
-| `gemini-3.1-flash-lite`       | Text        | No       | `gemini-3.1-flash-lite`                                                                                              |
-| `claude-sonnet-4-6`           | Text, image | Yes      | `claude-sonnet-4-6` for every effort level                                                                           |
-| `claude-opus-4-6`             | Text, image | Yes      | `claude-opus-4-6-thinking`                                                                                           |
-| `gpt-oss-120b`                | Text        | Yes      | `gpt-oss-120b-medium`                                                                                                |
-| `tab_flash_lite_preview`      | Text        | No       | `tab_flash_lite_preview`                                                                                             |
-| `tab_jump_flash_lite_preview` | Text        | No       | `tab_jump_flash_lite_preview`                                                                                        |
+| Public model ID     | Input       | Thinking | Request routing                                                                                                      |
+| ------------------- | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
+| `gemini-3.5-flash`  | Text, image | Yes      | Off/minimal → `gemini-3.5-flash-extra-low`; low/medium → `gemini-3.5-flash-low`; high/xhigh → `gemini-3-flash-agent` |
+| `gemini-3.1-pro`    | Text, image | Yes      | Off/minimal/low/medium → `gemini-3.1-pro-low`; high/xhigh → `gemini-pro-agent`                                       |
+| `claude-sonnet-4-6` | Text, image | Yes      | `claude-sonnet-4-6` for every effort level                                                                           |
+| `claude-opus-4-6`   | Text, image | Yes      | `claude-opus-4-6-thinking`                                                                                           |
+| `gpt-oss-120b`      | Text        | Yes      | `gpt-oss-120b-medium`                                                                                                |
 
 To limit which models Pi cycles through, enable specific entries in `~/.pi/agent/settings.json`:
 
