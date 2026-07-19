@@ -1,0 +1,53 @@
+name: Bug report
+description: Report reproducible unexpected behavior.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include tokens, credentials, or private account data.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the observed and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Install version ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: input
+    id: package-version
+    attributes:
+      label: pi-antigravity version
+      placeholder: 0.1.5
+    validations:
+      required: true
+  - type: input
+    id: pi-version
+    attributes:
+      label: Pi version
+      placeholder: pi --version
+    validations:
+      required: true
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options: [macOS, Linux, Windows, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Include sanitized output from /antigravity.doctor.
+      render: text
