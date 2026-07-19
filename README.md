@@ -1,79 +1,99 @@
 # pi-antigravity
 
-Personal Pi Coding Agent provider for Google Antigravity / Cloud Code Assist models.
+[![npm version](https://img.shields.io/npm/v/pi-antigravity?logo=npm)](https://www.npmjs.com/package/pi-antigravity)
+[![license](https://img.shields.io/npm/l/pi-antigravity)](LICENSE)
 
-- **Provider id**: `antigravity`
-- **Auth**: `/login antigravity` (OAuth credentials stored securely in `~/.pi/agent/auth.json`)
-- **Transport**: Native `streamSimple` → Cloud Code Assist SSE
-- **No external CLI dependencies**: Does **not** require shell execution of the Antigravity CLI.
+A Pi Coding Agent provider for Google Antigravity / Cloud Code Assist models. It adds provider `antigravity`, Google OAuth login, native streaming, model routing, and quota diagnostics—without invoking an external Antigravity CLI.
 
----
+> **Unofficial integration.** This project is not affiliated with or endorsed by Google. Use it only with an account and services you are authorized to access, and review its source before granting OAuth permissions.
 
-## Table of Contents
+## Requirements
 
-- [Features](#features)
-- [Install](#install)
-- [Authentication](#authentication)
-- [Usage & Commands](#usage--commands)
-- [Preferred Models](#preferred-models)
-- [How Model Quotas and Routing Work](#how-model-quotas-and-routing-work)
-- [Configuration and Env Overrides](#configuration-and-env-overrides)
-- [Diagnostics & Troubleshooting](#diagnostics--troubleshooting)
-
----
-
-## Features
-
-- **Direct Native Streaming**: Translates request formats into Gemini-style (`contents` / `parts`) messages directly on the fly.
-- **Interactive OAuth flow**: Logs you in securely inside Pi using your Google account and configures local OAuth callback capture.
-- **Intelligent Thinking Support**: Implements `ThinkingEffort` configuration, mapping to correct backend thinking models depending on model capabilities.
-- **Quota Pool Analytics**: Tracks pool usage across models to avoid unexpected depletion.
-
----
+- Pi Coding Agent and Pi AI version **0.80.0 or later**
+- A Google account that can use the relevant Cloud Code Assist / Antigravity services
+- A browser on the same machine as Pi for the OAuth sign-in flow
 
 ## Install
 
-Run the following command inside your Pi terminal to install:
+Install from npm:
 
 ```bash
-# Install via npm (when published)
 pi install npm:pi-antigravity
-
-# Or install directly from GitHub
-pi install git:github.com/username/pi-antigravity
 ```
 
----
+Or install the latest repository version:
 
-## Authentication
+```bash
+pi install git:github.com/Rahularya01/pi-antigravity
+```
 
-Authentication uses Google OAuth 2.0 PKCE.
+Restart Pi (or run `/reload`) after installation. To update the npm package later, use `pi update npm:pi-antigravity`.
 
-1. Run `/login antigravity` in Pi.
-2. Pi starts a temporary callback server on `http://localhost:51121/oauth-callback` and opens your browser to the Google Sign-In page.
-3. Complete the authentication flow and approve the requested Google Cloud/experiments scopes.
-4. Pi captures the authorization code, exchanges it for access and refresh tokens, and saves them to `~/.pi/agent/auth.json`.
-5. Access tokens are automatically refreshed in the background when they expire.
+## Quick start
 
----
+1. Start Pi and run `/login antigravity`.
+2. Complete Google sign-in in your browser.
+3. Select a model, for example:
 
-## Usage & Commands
+   ```text
+   /model antigravity/gemini-3.5-flash
+   ```
 
-Once installed, use the following commands in the Pi chat interface:
+4. Start working. Use `/antigravity.doctor` if a request fails.
 
-| Command                         | Description                                                                                    | Example                               |
-| :------------------------------ | :--------------------------------------------------------------------------------------------- | :------------------------------------ |
-| `/login antigravity`            | Authenticates with Google Cloud and initializes the provider.                                  | `/login antigravity`                  |
-| `/model antigravity/<model-id>` | Selects a model hosted by the Antigravity provider.                                            | `/model antigravity/gemini-3.5-flash` |
-| `/antigravity.usage`            | Renders shared pool usage metrics (weekly + 5-hour pools) using visual progress bars.          | `/antigravity.usage`                  |
-| `/antigravity.models`           | Lists available runtime models, remaining pool fraction, and flags like `thinking` / `images`. | `/antigravity.models`                 |
-| `/antigravity.doctor`           | Shows connection diagnostics (last endpoint, last status code, last resolved model).           | `/antigravity.doctor`                 |
+## Authentication and credential safety
 
----
+The provider uses OAuth 2.0 Authorization Code flow with PKCE.
 
-## Preferred Models
+1. `/login antigravity` opens Google sign-in and starts a temporary callback listener at `http://localhost:51121/oauth-callback`.
+2. After approval, Pi exchanges the callback code for tokens and stores the provider credentials in Pi's auth store (normally `~/.pi/agent/auth.json`).
+3. Pi refreshes access tokens when needed.
 
-Enable selected models in your Pi settings file (`~/.pi/agent/settings.json`):
+The callback listener binds only to a loopback host. The auth file contains sensitive access and refresh tokens: do not commit it, paste it into issues, or share its contents.
+
+The login requests these Google OAuth scopes:
+
+- `cloud-platform`
+- `userinfo.email` and `userinfo.profile`
+- `cclog`
+- `experimentsandconfigs`
+
+Review these permissions before approving access. Re-run `/login antigravity` to replace expired or revoked credentials.
+
+## Commands
+
+| Command                         | Description                                                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `/login antigravity`            | Sign in to Google and configure the provider.                                                    |
+| `/model antigravity/<model-id>` | Choose a registered Antigravity model.                                                           |
+| `/antigravity.usage`            | Show the server-reported shared quota groups and reset times.                                    |
+| `/antigravity.models`           | List available runtime models, remaining shared-pool quota, and capabilities.                    |
+| `/antigravity.models all`       | Include tab/chat models normally hidden from the model list.                                     |
+| `/antigravity.doctor`           | Show sanitized provider diagnostics, including the endpoint, status, and resolved runtime model. |
+
+Model availability, entitlement, quota groups, and resets are returned by the service and can differ by account. The quota percentage shown for a model can represent a shared pool, not a private per-model allowance.
+
+## Models and routing
+
+These are the static model IDs registered by the extension. Use `/antigravity.models` to see what is currently available to your account.
+
+| Public model ID               | Input       | Thinking | Request routing                                                                                                      |
+| ----------------------------- | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
+| `gemini-3.5-flash`            | Text, image | Yes      | Off/minimal → `gemini-3.5-flash-extra-low`; low/medium → `gemini-3.5-flash-low`; high/xhigh → `gemini-3-flash-agent` |
+| `gemini-3.1-pro`              | Text, image | Yes      | Off/minimal/low/medium → `gemini-3.1-pro-low`; high/xhigh → `gemini-3.1-pro-high`                                    |
+| `gemini-3-flash`              | Text, image | Yes      | `gemini-3-flash`                                                                                                     |
+| `gemini-2.5-pro`              | Text, image | Yes      | `gemini-2.5-pro`                                                                                                     |
+| `gemini-2.5-flash`            | Text, image | Yes      | `MODEL_GOOGLE_GEMINI_2_5_FLASH`                                                                                      |
+| `gemini-2.5-flash-lite`       | Text        | No       | `gemini-2.5-flash-lite`                                                                                              |
+| `gemini-3.1-flash-image`      | Text        | No       | `gemini-3.1-flash-image`                                                                                             |
+| `gemini-3.1-flash-lite`       | Text        | No       | `gemini-3.1-flash-lite`                                                                                              |
+| `claude-sonnet-4-6`           | Text, image | Yes      | `claude-sonnet-4-6` for every effort level                                                                           |
+| `claude-opus-4-6`             | Text, image | Yes      | `claude-opus-4-6-thinking`                                                                                           |
+| `gpt-oss-120b`                | Text        | Yes      | `gpt-oss-120b-medium`                                                                                                |
+| `tab_flash_lite_preview`      | Text        | No       | `tab_flash_lite_preview`                                                                                             |
+| `tab_jump_flash_lite_preview` | Text        | No       | `tab_jump_flash_lite_preview`                                                                                        |
+
+To limit which models Pi cycles through, enable specific entries in `~/.pi/agent/settings.json`:
 
 ```json
 {
@@ -85,56 +105,39 @@ Enable selected models in your Pi settings file (`~/.pi/agent/settings.json`):
 }
 ```
 
-### Full Model Routing Matrix
+## Configuration
 
-| Public id           | Capabilities             | Notes / Fallbacks                                         |
-| :------------------ | :----------------------- | :-------------------------------------------------------- |
-| `gemini-3.5-flash`  | Text + Images + Thinking | Effort routes to `extra-low` / `low` / `agent`            |
-| `gemini-3.1-pro`    | Text + Images + Thinking | Effort routes to `low` / `high`                           |
-| `gemini-3-flash`    | Text + Images + Thinking | Routes to `gemini-3-flash`                                |
-| `gemini-2.5-pro`    | Text + Images + Thinking | Routes to `gemini-2.5-pro`                                |
-| `gemini-2.5-flash`  | Text + Images + Thinking | Routes to `MODEL_GOOGLE_GEMINI_2_5_FLASH`                 |
-| `claude-sonnet-4-6` | Text + Images + Thinking | Default direct; `high`/`xhigh` routes to thinking variant |
-| `claude-opus-4-6`   | Text + Images + Thinking | Routes to `claude-opus-4-6-thinking`                      |
-| `gpt-oss-120b`      | Text + Thinking          | Routes to `gpt-oss-120b-medium`                           |
+All primary environment variables start with `ANTIGRAVITY_`. The legacy `NOAGY_` prefix is also accepted for compatibility.
 
----
+| Variable                    | Purpose                                                                                                          |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `ANTIGRAVITY_BASE_URL`      | Override the API base URL. It must be HTTPS, contain no URL credentials, and target an allowed Google APIs host. |
+| `ANTIGRAVITY_PROJECT_ID`    | Use a specific Cloud Code Assist project ID instead of discovery or the local stable fallback.                   |
+| `ANTIGRAVITY_CALLBACK_HOST` | Bind OAuth callback to `127.0.0.1`, `::1`, or `localhost` only. Defaults to `127.0.0.1`.                         |
+| `ANTIGRAVITY_USER_AGENT`    | Override the request user-agent.                                                                                 |
+| `ANTIGRAVITY_RUNTIME_MODEL` | Pin requests to a runtime model ID, bypassing normal static routing.                                             |
+| `ANTIGRAVITY_CLIENT_ID`     | Use a custom Google OAuth client ID.                                                                             |
+| `ANTIGRAVITY_CLIENT_SECRET` | Use a custom Google OAuth client secret. Keep it out of source control and shell history.                        |
 
-## How Model Quotas and Routing Work
+By default, the provider tries `https://cloudcode-pa.googleapis.com` and then its Google sandbox fallback if necessary. Prefer the built-in OAuth client unless you have a reason to use your own credentials.
 
-### Quota Pools (Shared Budgets)
+## Troubleshooting
 
-Google Antigravity allocates quotas to shared pools rather than per-model limits.
+- **No credentials / 401 / 403:** Run `/login antigravity` again, then check `/antigravity.doctor`.
+- **OAuth callback will not start:** Ensure port `51121` is free and `ANTIGRAVITY_CALLBACK_HOST` is a permitted loopback address.
+- **Model is unavailable:** Run `/antigravity.models`; availability is account- and service-dependent.
+- **Quota or rate limit:** Run `/antigravity.usage`. A `429` response usually indicates quota or rate limiting; changing models may still draw from the same shared pool.
+- **Need a safe diagnostic:** `/antigravity.doctor` redacts recognized secrets from its error output. Still review output before sharing it publicly.
 
-1. **Gemini Pool**: Contains `gemini-3.5-flash`, `gemini-3.1-pro`, `gemini-2.5-pro`, and other Gemini models.
-2. **Claude & GPT Pool**: Contains `claude-sonnet-4-6`, `claude-opus-4-6`, and `gpt-oss-120b`.
+## Development
 
-> **Note**: Quota is consumed proportionally to token cost. High-resource models (like Opus or Pro) will deplete your shared pool significantly faster than lower-cost models (like Flash or Sonnet).
+```bash
+npm install
+npm run check
+```
 
----
+The package declares its Pi extension in `package.json` under `pi.extensions`. See the [Pi package documentation](https://pi.dev/docs/latest/packages) for package installation, manifest, and gallery conventions.
 
-## Configuration and Env Overrides
+## License
 
-You can configure several variables to override default endpoint behaviors or client properties. Prefix them with `ANTIGRAVITY_`:
-
-- `ANTIGRAVITY_BASE_URL`: Custom backend endpoint (must be `https` on a `*.googleapis.com` host; defaults to `https://cloudcode-pa.googleapis.com`).
-- `ANTIGRAVITY_PROJECT_ID`: Force a specific Google Cloud Project ID (defaults to automatic discovery or stable hash of CWD).
-- `ANTIGRAVITY_CALLBACK_HOST`: Host to bind the callback server to (loopback only: `127.0.0.1`, `::1`, or `localhost`; defaults to `127.0.0.1`).
-- `ANTIGRAVITY_USER_AGENT`: Custom user-agent string for headers.
-- `ANTIGRAVITY_RUNTIME_MODEL`: Pin requests to a specific model ID instead of dynamic routing.
-- `ANTIGRAVITY_CLIENT_ID` / `ANTIGRAVITY_CLIENT_SECRET`: Custom Google OAuth app credentials.
-
----
-
-## Diagnostics & Troubleshooting
-
-Run `/antigravity.doctor` to check diagnostics:
-
-- **`lastStatus`**: Check if Google returned `200` (OK), `401`/`403` (auth/permission error), or `429` (rate/quota limit).
-- **`lastError`**: Raw error messages returned from the backend.
-- **`lastResolvedRuntimeModel`**: The actual model ID used in the final HTTP request.
-
-### Common Solutions:
-
-1. **Invalid API Key/Credentials**: Run `/login antigravity` again to refresh tokens.
-2. **Permission Denied**: Make sure your Google Account has Google Cloud Platform developer access or companion project entitlements enabled.
+[MIT](LICENSE)

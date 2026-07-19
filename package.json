@@ -1,7 +1,17 @@
 {
   "name": "pi-antigravity",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Personal Antigravity / Cloud Code Assist provider for Pi Coding Agent",
+  "author": "Rahul Arya",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rahularya01/pi-antigravity.git"
+  },
+  "homepage": "https://github.com/Rahularya01/pi-antigravity#readme",
+  "bugs": {
+    "url": "https://github.com/Rahularya01/pi-antigravity/issues"
+  },
   "type": "module",
   "main": "./src/index.ts",
   "keywords": [
@@ -12,8 +22,8 @@
     "oauth",
     "provider"
   ],
-  "license": "MIT",
   "files": [
+    "LICENSE",
     "README.md",
     "src",
     "tsconfig.json"
