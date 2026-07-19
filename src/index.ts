@@ -11,6 +11,7 @@ import {
   lastResolvedRuntimeModel,
   lastStatus,
   loginAntigravity,
+  redactSecrets,
   refreshAntigravityToken,
 } from "./oauth.js";
 import { ANTIGRAVITY_API, streamAntigravity } from "./stream.js";
@@ -86,7 +87,7 @@ export default function (pi: ExtensionAPI): void {
         `lastEndpoint=${lastEndpoint || "none"}`,
         `lastStatus=${lastStatus ?? "none"}`,
         `lastProjectId=${lastProjectId || "none"}`,
-        `lastError=${lastError || "none"}`,
+        `lastError=${lastError ? redactSecrets(lastError) : "none"}`,
         "transport=native-streamSimple",
         "runtimeCli=not-used",
         "commands=/antigravity.usage /antigravity.models /antigravity.doctor",

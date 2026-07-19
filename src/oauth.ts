@@ -17,6 +17,7 @@ export const ENDPOINT_FALLBACKS = [
 export const REDIRECT_URI = "http://localhost:51121/oauth-callback";
 export const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 export const TOKEN_URL = "https://oauth2.googleapis.com/token";
+export const OAUTH_CALLBACK_TIMEOUT_MS = 5 * 60 * 1000;
 export const SCOPES = [
   "https://www.googleapis.com/auth/cloud-platform",
   "https://www.googleapis.com/auth/userinfo.email",
@@ -24,6 +25,9 @@ export const SCOPES = [
   "https://www.googleapis.com/auth/cclog",
   "https://www.googleapis.com/auth/experimentsandconfigs",
 ];
+
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+const ALLOWED_API_HOST_SUFFIXES = [".googleapis.com", ".sandbox.googleapis.com"];
 
 export function antigravityEnv(name: string): string | undefined {
   return process.env[`ANTIGRAVITY_${name}`] || process.env[`NOAGY_${name}`];
@@ -37,7 +41,45 @@ export function stableProjectId(seed: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export const CALLBACK_HOST = antigravityEnv("CALLBACK_HOST") || "127.0.0.1";
+/** Only loopback binds are allowed so OAuth codes cannot be stolen off-machine. */
+export function resolveCallbackHost(raw = antigravityEnv("CALLBACK_HOST")): string {
+  const host = (raw || "127.0.0.1").trim().toLowerCase();
+  if (!LOOPBACK_HOSTS.has(host)) {
+    throw new Error(
+      `Unsafe ANTIGRAVITY_CALLBACK_HOST="${host}". Only loopback hosts are allowed: 127.0.0.1, ::1, localhost.`,
+    );
+  }
+  return host === "localhost" ? "127.0.0.1" : host;
+}
+
+/** Prevent token exfiltration via poisoned BASE_URL (SSRF / credential leak). */
+export function assertSafeApiBaseUrl(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`Invalid ANTIGRAVITY_BASE_URL: ${raw}`);
+  }
+  if (url.protocol !== "https:") {
+    throw new Error(`ANTIGRAVITY_BASE_URL must use https (got ${url.protocol})`);
+  }
+  if (url.username || url.password) {
+    throw new Error("ANTIGRAVITY_BASE_URL must not include credentials");
+  }
+  const host = url.hostname.toLowerCase();
+  const allowed =
+    host === "googleapis.com" || ALLOWED_API_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+  if (!allowed) {
+    throw new Error(
+      `ANTIGRAVITY_BASE_URL host "${host}" is not allowed. Use a *.googleapis.com endpoint.`,
+    );
+  }
+  // Normalize: drop trailing slash, keep origin + pathname without search/hash.
+  const path = url.pathname.replace(/\/+$/, "");
+  return `${url.origin}${path === "/" ? "" : path}`;
+}
+
+export const CALLBACK_HOST = resolveCallbackHost();
 export const DEFAULT_PROJECT_ID = antigravityEnv("PROJECT_ID") || stableProjectId(process.cwd());
 export const CLIENT_ID =
   antigravityEnv("CLIENT_ID") ||
@@ -59,6 +101,22 @@ export let lastResolvedRuntimeModel: string | undefined;
 export let lastAvailableModels: string | undefined;
 export let lastMatchedModelDebug: string | undefined;
 
+/** Redact bearer tokens, refresh tokens, and similar secrets from diagnostics/errors. */
+export function redactSecrets(text: string): string {
+  return text
+    .replace(/\bya29\.[A-Za-z0-9._~+/-]+=*/g, "[redacted-access-token]")
+    .replace(/\b1\/[A-Za-z0-9_-]{20,}/g, "[redacted-refresh-token]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [redacted]")
+    .replace(
+      /("?(?:access_token|refresh_token|id_token|token|client_secret|code_verifier|authorization)"?\s*[:=]\s*")[^"]*(")/gi,
+      "$1[redacted]$2",
+    )
+    .replace(
+      /("?(?:access_token|refresh_token|id_token|token|client_secret|code_verifier|authorization)"?\s*[:=]\s*)[^\s&,}]+/gi,
+      "$1[redacted]",
+    );
+}
+
 export function setLastStatus(status: number | undefined): void {
   lastStatus = status;
 }
@@ -66,7 +124,7 @@ export function setLastEndpoint(endpoint: string | undefined): void {
   lastEndpoint = endpoint;
 }
 export function setLastError(error: string | undefined): void {
-  lastError = error;
+  lastError = error === undefined ? undefined : redactSecrets(error).slice(0, 800);
 }
 export function setLastProjectId(projectId: string | undefined): void {
   lastProjectId = projectId;
@@ -78,24 +136,66 @@ export function setLastAvailableModels(models: string | undefined): void {
   lastAvailableModels = models;
 }
 export function setLastMatchedModelDebug(debug: string | undefined): void {
-  lastMatchedModelDebug = debug;
+  lastMatchedModelDebug = debug === undefined ? undefined : redactSecrets(debug).slice(0, 1200);
 }
 
 export function nowRequestId(): string {
-  return `antigravity-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  return `antigravity-${Date.now()}-${randomBytes(6).toString("hex")}`;
 }
 
 export function endpointCandidates(): string[] {
   const explicit = antigravityEnv("BASE_URL")?.trim();
-  return explicit ? [explicit] : ENDPOINT_FALLBACKS;
+  return explicit ? [assertSafeApiBaseUrl(explicit)] : ENDPOINT_FALLBACKS;
 }
 
 export function safeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  const raw = error instanceof Error ? error.message : String(error);
+  return redactSecrets(raw);
 }
 
 export function sanitizeText(text: unknown): string {
   return String(text ?? "").replace(/[\uD800-\uDFFF]/g, "\uFFFD");
+}
+
+export function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function oauthCallbackHeaders(contentType = "text/html; charset=utf-8"): Record<string, string> {
+  return {
+    "Content-Type": contentType,
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy":
+      "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
+    "Referrer-Policy": "no-referrer",
+  };
+}
+
+function sanitizeOAuthProviderError(text: string): string {
+  const redacted = redactSecrets(text).trim();
+  try {
+    const parsed = JSON.parse(redacted) as {
+      error?: string;
+      error_description?: string;
+    };
+    const parts = [parsed.error, parsed.error_description].filter(
+      (part): part is string => typeof part === "string" && part.length > 0,
+    );
+    if (parts.length) return parts.join(": ").slice(0, 300);
+  } catch {
+    // not JSON
+  }
+  return redacted.slice(0, 300) || "unknown OAuth provider error";
 }
 
 export function parseApiKey(apiKeyRaw: string | undefined): AntigravityApiKey {
@@ -216,12 +316,12 @@ async function listCloudAICompanionProjects(token: string): Promise<string | und
         headers: antigravityHeaders(token),
         body: JSON.stringify({}),
       });
-      lastStatus = res.status;
-      lastEndpoint = endpoint;
+      setLastStatus(res.status);
+      setLastEndpoint(endpoint);
       if (!res.ok) continue;
       return extractProjectId(await res.json());
     } catch (error) {
-      lastError = safeError(error);
+      setLastError(safeError(error));
     }
   }
   return undefined;
@@ -277,7 +377,11 @@ function findDynamicModel(value: unknown, requestedId: string): DynamicModelInfo
   else if (req === "gemini-3.1-pro-high") targetRegex = /gemini[- ]3\.1[- ]pro \(high\)/i;
   else if (req.includes("gemini-2.5-pro")) targetRegex = /gemini[- ]2\.5[- ]pro/i;
   else if (req.includes("gemini-2.5-flash")) targetRegex = /gemini[- ]2\.5[- ]flash/i;
-  else targetRegex = new RegExp(req.replace(/-/g, ".*"), "i");
+  else {
+    // Escape user/model input so it cannot inject ReDoS or unintended regex syntax.
+    const escaped = escapeRegExp(req).replace(/\\-/g, "[- ]");
+    targetRegex = new RegExp(escaped, "i");
+  }
 
   if (typeof value === "string") return targetRegex.test(value) ? { id: value } : undefined;
   if (Array.isArray(value)) {
@@ -291,7 +395,7 @@ function findDynamicModel(value: unknown, requestedId: string): DynamicModelInfo
     const label =
       value.label ?? value.displayName ?? value.name ?? value.modelId ?? value.id ?? value.model;
     if (typeof label === "string" && targetRegex.test(label)) {
-      lastMatchedModelDebug = summarizeModelCandidate(value);
+      setLastMatchedModelDebug(summarizeModelCandidate(value));
       const experiments = Array.isArray(value.modelExperiments)
         ? value.modelExperiments.filter((item): item is string => typeof item === "string")
         : undefined;
@@ -326,15 +430,15 @@ export async function fetchAvailableRuntimeModel(
           headers: antigravityHeaders(token),
           body: JSON.stringify(candidateBody),
         });
-        lastStatus = res.status;
-        lastEndpoint = endpoint;
+        setLastStatus(res.status);
+        setLastEndpoint(endpoint);
         if (!res.ok) continue;
         const data: unknown = await res.json();
         const labels = [...new Set(collectModelLabels(data))].slice(0, 12);
-        lastAvailableModels = labels.join(",");
+        setLastAvailableModels(labels.join(","));
         return findDynamicModel(data, requestedRuntimeModel);
       } catch (error) {
-        lastError = safeError(error);
+        setLastError(safeError(error));
       }
     }
   }
@@ -357,21 +461,23 @@ export async function loadCodeAssist(token: string): Promise<string | undefined>
         headers: antigravityHeaders(token),
         body,
       });
-      lastStatus = res.status;
-      lastEndpoint = endpoint;
+      setLastStatus(res.status);
+      setLastEndpoint(endpoint);
       if (!res.ok) continue;
       const project = extractProjectId(await res.json());
       if (project) return project;
       return await listCloudAICompanionProjects(token);
     } catch (error) {
-      lastError = safeError(error);
+      setLastError(safeError(error));
     }
   }
   return undefined;
 }
 
-function startCallbackServer(): Promise<CallbackServer> {
+function startCallbackServer(expectedState: string): Promise<CallbackServer> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     let resolveCode!: (value: { code: string; state: string }) => void;
     let rejectCode!: (error: Error) => void;
     const codePromise = new Promise<{ code: string; state: string }>((res, rej) => {
@@ -379,10 +485,23 @@ function startCallbackServer(): Promise<CallbackServer> {
       rejectCode = rej;
     });
 
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      fn();
+    };
+
     const server = createServer((req, res) => {
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        res.writeHead(405, oauthCallbackHeaders("text/plain; charset=utf-8"));
+        res.end("Method Not Allowed");
+        return;
+      }
+
       const url = new URL(req.url || "", REDIRECT_URI);
       if (url.pathname !== "/oauth-callback") {
-        res.writeHead(404, { "Content-Type": "text/html; charset=utf-8" });
+        res.writeHead(404, oauthCallbackHeaders());
         res.end("Antigravity OAuth callback route not found.");
         return;
       }
@@ -391,25 +510,38 @@ function startCallbackServer(): Promise<CallbackServer> {
       const code = url.searchParams.get("code");
       const state = url.searchParams.get("state");
       if (error) {
-        res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(`Antigravity authentication failed: ${error}`);
-        rejectCode(new Error(`OAuth error: ${error}`));
+        const safe = escapeHtml(error.slice(0, 200));
+        res.writeHead(400, oauthCallbackHeaders());
+        res.end(`Antigravity authentication failed: ${safe}`);
+        finish(() => rejectCode(new Error(`OAuth error: ${error.slice(0, 200)}`)));
         return;
       }
       if (!code || !state) {
-        res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+        res.writeHead(400, oauthCallbackHeaders());
         res.end("Antigravity authentication failed: missing code or state.");
-        rejectCode(new Error("Missing code or state in OAuth callback"));
+        finish(() => rejectCode(new Error("Missing code or state in OAuth callback")));
+        return;
+      }
+      if (state !== expectedState) {
+        res.writeHead(400, oauthCallbackHeaders());
+        res.end("Antigravity authentication failed: invalid state.");
+        finish(() => rejectCode(new Error("OAuth state mismatch")));
         return;
       }
 
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.writeHead(200, oauthCallbackHeaders());
       res.end("Antigravity authentication complete. You can close this window and return to Pi.");
-      resolveCode({ code, state });
+      finish(() => resolveCode({ code, state }));
     });
 
     server.on("error", reject);
-    server.listen(51121, CALLBACK_HOST, () => resolve({ server, waitForCode: () => codePromise }));
+    server.listen(51121, CALLBACK_HOST, () => {
+      timeout = setTimeout(() => {
+        finish(() => rejectCode(new Error("OAuth callback timed out waiting for browser login")));
+        server.close();
+      }, OAUTH_CALLBACK_TIMEOUT_MS);
+      resolve({ server, waitForCode: () => codePromise });
+    });
   });
 }
 
@@ -421,7 +553,10 @@ export async function loginAntigravity(
   callbacks: OAuthLoginCallbacks,
 ): Promise<AntigravityOAuthCredentials> {
   const { verifier, challenge } = generatePKCE();
-  const { server, waitForCode } = await startCallbackServer();
+  // State must be independent of the PKCE verifier so a leaked callback URL
+  // cannot also disclose the code_verifier needed to mint tokens.
+  const state = base64Url(randomBytes(32));
+  const { server, waitForCode } = await startCallbackServer(state);
   try {
     const authParams = new URLSearchParams({
       client_id: CLIENT_ID,
@@ -430,7 +565,7 @@ export async function loginAntigravity(
       scope: SCOPES.join(" "),
       code_challenge: challenge,
       code_challenge_method: "S256",
-      state: verifier,
+      state,
       access_type: "offline",
       prompt: "consent",
     });
@@ -439,8 +574,8 @@ export async function loginAntigravity(
       instructions: "Complete Google sign-in. Pi will capture the local callback.",
     });
 
-    const { code, state } = await waitForCode();
-    if (state !== verifier) throw new Error("OAuth state mismatch");
+    const { code, state: returnedState } = await waitForCode();
+    if (returnedState !== state) throw new Error("OAuth state mismatch");
 
     const tokenResponse = await fetch(TOKEN_URL, {
       method: "POST",
@@ -455,7 +590,9 @@ export async function loginAntigravity(
       }).toString(),
     });
     if (!tokenResponse.ok) {
-      throw new Error(`Token exchange failed: ${await tokenResponse.text()}`);
+      throw new Error(
+        `Token exchange failed: ${sanitizeOAuthProviderError(await tokenResponse.text())}`,
+      );
     }
     const tokenData = (await tokenResponse.json()) as {
       access_token: string;
@@ -498,7 +635,9 @@ export async function refreshAntigravityToken(
     }).toString(),
   });
   if (!response.ok) {
-    throw new Error(`Antigravity token refresh failed: ${await response.text()}`);
+    throw new Error(
+      `Antigravity token refresh failed: ${sanitizeOAuthProviderError(await response.text())}`,
+    );
   }
   const data = (await response.json()) as {
     access_token: string;

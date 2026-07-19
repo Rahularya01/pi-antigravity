@@ -53,6 +53,7 @@ import {
   setLastProjectId,
   setLastResolvedRuntimeModel,
   setLastStatus,
+  redactSecrets,
 } from "./oauth.js";
 
 export const ANTIGRAVITY_API = "antigravity-api" as const;
@@ -299,7 +300,7 @@ function mapStopReason(reason: string | undefined): StopReason {
 }
 
 function friendlyAntigravityError(status: number | undefined, text: string): string {
-  const msg = jsonOrTextError(text);
+  const msg = redactSecrets(jsonOrTextError(text)).slice(0, 500);
   if (status === 400) {
     if (/API key not valid|API_KEY_INVALID/i.test(msg)) {
       return "Antigravity login expired or credentials are invalid. Next: run /login antigravity, then retry.";
