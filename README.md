@@ -117,9 +117,9 @@ Google Antigravity allocates quotas to shared pools rather than per-model limits
 
 You can configure several variables to override default endpoint behaviors or client properties. Prefix them with `ANTIGRAVITY_`:
 
-- `ANTIGRAVITY_BASE_URL`: Custom backend endpoint (defaults to `https://cloudcode-pa.googleapis.com`).
+- `ANTIGRAVITY_BASE_URL`: Custom backend endpoint (must be `https` on a `*.googleapis.com` host; defaults to `https://cloudcode-pa.googleapis.com`).
 - `ANTIGRAVITY_PROJECT_ID`: Force a specific Google Cloud Project ID (defaults to automatic discovery or stable hash of CWD).
-- `ANTIGRAVITY_CALLBACK_HOST`: Host to bind the callback server to (defaults to `127.0.0.1`).
+- `ANTIGRAVITY_CALLBACK_HOST`: Host to bind the callback server to (loopback only: `127.0.0.1`, `::1`, or `localhost`; defaults to `127.0.0.1`).
 - `ANTIGRAVITY_USER_AGENT`: Custom user-agent string for headers.
 - `ANTIGRAVITY_RUNTIME_MODEL`: Pin requests to a specific model ID instead of dynamic routing.
 - `ANTIGRAVITY_CLIENT_ID` / `ANTIGRAVITY_CLIENT_SECRET`: Custom Google OAuth app credentials.
