@@ -13,18 +13,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        # v4
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        # v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        # v4
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        # v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: 20
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Run checks (typecheck, lint, format)
         run: npm run check
