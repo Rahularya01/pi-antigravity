@@ -77,6 +77,12 @@ Model availability, entitlement, quota groups, and resets are returned by the se
 
 These are the static model IDs registered by the extension. Use `/antigravity.models` to see what is currently available to your account.
 
+### Why Claude and GPT-OSS appear
+
+Antigravity / Cloud Code Assist exposes a multi-provider catalog. Depending on your account, its Google-authenticated API can advertise Google Gemini models alongside Claude models served through Anthropic Vertex and GPT-OSS served through OpenAI Vertex. This extension intentionally exposes those advertised Claude and GPT-OSS models through the single `antigravity` provider; they are not separate Pi providers and do not use a separate Anthropic or OpenAI login.
+
+The backend's display labels do not always match its runtime IDs. For example, `gemini-3.5-flash-extra-low`, `gemini-3.5-flash-low`, and `gemini-3-flash-agent` can be displayed as Gemini 3.5 Flash Low, Medium, and High. The routing below uses the runtime IDs returned by the service.
+
 | Public model ID               | Input       | Thinking | Request routing                                                                                                      |
 | ----------------------------- | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
 | `gemini-3.5-flash`            | Text, image | Yes      | Off/minimal → `gemini-3.5-flash-extra-low`; low/medium → `gemini-3.5-flash-low`; high/xhigh → `gemini-3-flash-agent` |
@@ -126,6 +132,7 @@ By default, the provider tries `https://cloudcode-pa.googleapis.com` and then it
 - **No credentials / 401 / 403:** Run `/login antigravity` again, then check `/antigravity.doctor`.
 - **OAuth callback will not start:** Ensure port `51121` is free and `ANTIGRAVITY_CALLBACK_HOST` is a permitted loopback address.
 - **Model is unavailable:** Run `/antigravity.models`; availability is account- and service-dependent.
+- **Claude/GPT tool-call schema error:** Upgrade to the latest package release. The provider adapts Pi's JSON Schema tool definitions for the Cloud Code Assist custom-tool bridge.
 - **Quota or rate limit:** Run `/antigravity.usage`. A `429` response usually indicates quota or rate limiting; changing models may still draw from the same shared pool.
 - **Need a safe diagnostic:** `/antigravity.doctor` redacts recognized secrets from its error output. Still review output before sharing it publicly.
 

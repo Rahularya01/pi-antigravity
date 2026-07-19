@@ -190,18 +190,36 @@ function stripMetaSchema(schema: unknown): unknown {
   return out;
 }
 
-function normalizeGoogleSchema(schema: unknown): unknown {
+function normalizeCustomToolSchema(schema: unknown): unknown {
   if (!schema || typeof schema !== "object") return schema;
-  if (Array.isArray(schema)) return schema.map(normalizeGoogleSchema);
+  if (Array.isArray(schema)) return schema.map(normalizeCustomToolSchema);
+
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(schema)) {
-    if (key === "type" && typeof value === "string") out[key] = value.toUpperCase();
-    else out[key] = normalizeGoogleSchema(value);
+    // Cloud Code Assist parses the legacy declaration through a protobuf Schema
+    // (where enum is string-only) before handing it to Claude/GPT's Draft 2020-12
+    // custom-tool validator. A general union cannot satisfy both formats, so
+    // omit it rather than rejecting the entire request; Pi still validates tool
+    // arguments after the model calls the tool.
+    if (["anyOf", "oneOf", "allOf"].includes(key)) continue;
+    if (
+      key === "enum" &&
+      Array.isArray(value) &&
+      !value.every((entry) => typeof entry === "string")
+    ) {
+      continue;
+    }
+    out[key] = normalizeCustomToolSchema(value);
   }
   return out;
 }
 
-function convertTools(
+/**
+ * Gemini accepts JSON Schema through parametersJsonSchema. Claude and GPT-OSS
+ * use Cloud Code Assist's custom-tool bridge, which requires a compatible
+ * Draft 2020-12 subset in the legacy parameters field.
+ */
+export function convertTools(
   tools: Tool[] | undefined,
   useLegacyParameters = false,
 ): { functionDeclarations: GeminiFunctionDeclaration[] }[] | undefined {
@@ -209,13 +227,13 @@ function convertTools(
   return [
     {
       functionDeclarations: tools.map((tool) => {
-        const parameters = stripMetaSchema(tool.parameters);
+        const schema = stripMetaSchema(tool.parameters);
         return {
           name: tool.name,
           description: tool.description,
           ...(useLegacyParameters
-            ? { parameters: normalizeGoogleSchema(parameters) }
-            : { parametersJsonSchema: parameters }),
+            ? { parameters: normalizeCustomToolSchema(schema) }
+            : { parametersJsonSchema: schema }),
         };
       }),
     },
@@ -257,7 +275,10 @@ function buildRequest(
   else generationConfig.maxOutputTokens = Math.min(8192, model.maxTokens || 8192);
   if (Object.keys(generationConfig).length) request.generationConfig = generationConfig;
 
-  const tools = convertTools(context.tools, model.id.startsWith("claude-"));
+  const tools = convertTools(
+    context.tools,
+    model.id.startsWith("claude-") || model.id.startsWith("gpt-oss-"),
+  );
   if (tools) {
     request.tools = tools;
     if (model.id.startsWith("claude-")) {
