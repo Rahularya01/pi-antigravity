@@ -112,7 +112,7 @@ All primary environment variables start with `ANTIGRAVITY_`. The legacy `NOAGY_`
 | Variable                    | Purpose                                                                                                          |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `ANTIGRAVITY_BASE_URL`      | Override the API base URL. It must be HTTPS, contain no URL credentials, and target an allowed Google APIs host. |
-| `ANTIGRAVITY_PROJECT_ID`    | Use a specific Cloud Code Assist project ID instead of discovery or the local stable fallback.                   |
+| `ANTIGRAVITY_PROJECT_ID`    | Use a specific Cloud Code Assist project ID instead of discovery or the stable account fallback.                 |
 | `ANTIGRAVITY_CALLBACK_HOST` | Bind OAuth callback to `127.0.0.1`, `::1`, or `localhost` only. Defaults to `127.0.0.1`.                         |
 | `ANTIGRAVITY_USER_AGENT`    | Override the request user-agent.                                                                                 |
 | `ANTIGRAVITY_RUNTIME_MODEL` | Pin requests to a runtime model ID, bypassing normal static routing.                                             |

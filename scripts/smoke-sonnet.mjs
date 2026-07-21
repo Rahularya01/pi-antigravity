@@ -1,16 +1,14 @@
 import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
+import { homedir } from "node:os";
 
-const auth = JSON.parse(readFileSync("/Users/rahularya/.pi/agent/auth.json", "utf8"));
+const auth = JSON.parse(readFileSync(`${homedir()}/.pi/agent/auth.json`, "utf8"));
 const creds = auth.antigravity;
-const mod = await import(
-  pathToFileURL("/Users/rahularya/Projects/tools/pi-antigravity/src/oauth.ts").href
-);
-const models = await import(
-  pathToFileURL("/Users/rahularya/Projects/tools/pi-antigravity/src/models.ts").href
-);
+const authMod = await import(new URL("../src/auth/oauth.ts", import.meta.url).href);
+const client = await import(new URL("../src/client/client.ts", import.meta.url).href);
+const utils = await import(new URL("../src/utils/util.ts", import.meta.url).href);
+const models = await import(new URL("../src/models/models.ts", import.meta.url).href);
 
-const refreshed = await mod.refreshAntigravityToken({
+const refreshed = await authMod.refreshAntigravityToken({
   refresh: creds.refresh,
   access: creds.access,
   expires: creds.expires,
@@ -22,7 +20,7 @@ const runtimeModel = models.getAntigravityRequestModelId("claude-sonnet-4-6", "o
 console.log("runtimeModel=", runtimeModel);
 
 const body = {
-  project: refreshed.projectId || creds.projectId || mod.DEFAULT_PROJECT_ID,
+  project: refreshed.projectId || creds.projectId || client.DEFAULT_PROJECT_ID,
   model: runtimeModel,
   request: {
     contents: [{ role: "user", parts: [{ text: "Reply with exactly one word: pong" }] }],
@@ -30,14 +28,14 @@ const body = {
   },
   requestType: "agent",
   userAgent: "antigravity",
-  requestId: mod.nowRequestId(),
+  requestId: utils.nowRequestId(),
 };
 
-const endpoint = mod.endpointCandidates()[0];
+const endpoint = client.endpointCandidates()[0];
 const res = await fetch(`${endpoint}/v1internal:streamGenerateContent?alt=sse`, {
   method: "POST",
   headers: {
-    ...mod.antigravityHeaders(refreshed.access),
+    ...client.antigravityHeaders(refreshed.access),
     "anthropic-beta": "interleaved-thinking-2025-05-14",
   },
   body: JSON.stringify(body),

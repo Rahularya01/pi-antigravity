@@ -1,13 +1,13 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
+import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 
-const auth = JSON.parse(readFileSync("/Users/rahularya/.pi/agent/auth.json", "utf8"));
+const auth = JSON.parse(readFileSync(`${homedir()}/.pi/agent/auth.json`, "utf8"));
 const creds = auth.antigravity;
-const mod = await import(
-  pathToFileURL("/Users/rahularya/Projects/tools/pi-antigravity/src/oauth.ts").href
-);
+const authMod = await import(new URL("../src/auth/oauth.ts", import.meta.url).href);
+const client = await import(new URL("../src/client/client.ts", import.meta.url).href);
 
-const refreshed = await mod.refreshAntigravityToken({
+const refreshed = await authMod.refreshAntigravityToken({
   refresh: creds.refresh,
   access: creds.access,
   expires: creds.expires,
@@ -17,11 +17,11 @@ const refreshed = await mod.refreshAntigravityToken({
 
 const token = refreshed.access;
 const projectId = refreshed.projectId || creds.projectId;
-const endpoint = mod.endpointCandidates()[0];
+const endpoint = client.endpointCandidates()[0];
 
 function headers(extra = {}) {
   return {
-    ...mod.antigravityHeaders(token),
+    ...client.antigravityHeaders(token),
     Accept: "application/json",
     ...extra,
   };
@@ -125,7 +125,7 @@ const safe = results.map((r) => ({
 }));
 
 writeFileSync(
-  "/Users/rahularya/Projects/tools/pi-antigravity/scripts/probe-results.json",
+  fileURLToPath(new URL("./probe-results.json", import.meta.url)),
   JSON.stringify({ projectId, endpoint, results: safe }, null, 2),
 );
 console.log("\nWrote probe-results.json");

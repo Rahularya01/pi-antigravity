@@ -1,5 +1,3 @@
-import { pathToFileURL } from "node:url";
-
 const providers = [];
 const commands = [];
 const pi = {
@@ -18,9 +16,7 @@ const pi = {
   unregisterProvider() {},
 };
 
-const mod = await import(
-  pathToFileURL("/Users/rahularya/Projects/tools/pi-antigravity/src/index.ts").href
-);
+const mod = await import(new URL("../src/index.ts", import.meta.url).href);
 const ret = mod.default(pi);
 console.log("providers=", JSON.stringify(providers, null, 2));
 console.log("commands=", JSON.stringify(commands, null, 2));

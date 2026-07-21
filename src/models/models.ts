@@ -1,6 +1,6 @@
 import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
-import type { AntigravityRouting } from "./types.js";
-import { ThinkingEffort } from "./enums.js";
+import type { AntigravityRouting } from "../types/types.js";
+import { ThinkingEffort } from "../types/enums.js";
 
 export const PROVIDER_ID = "antigravity";
 export const PROVIDER_NAME = "Antigravity";

@@ -1,33 +1,31 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
-  antigravityEnv,
   antigravityHeaders,
-  DEFAULT_PROJECT_ID,
   endpointCandidates,
   loadCodeAssist,
   parseApiKey,
-  safeError,
+  resolveProjectId,
+} from "../client/client.js";
+import {
   setLastEndpoint,
   setLastError,
   setLastProjectId,
   setLastStatus,
-} from "./oauth.js";
+} from "../diagnostics/diagnostics.js";
+import { isRecord } from "../utils/util.js";
+import { safeError } from "../utils/security.js";
 import type {
-  QuotaBucket,
-  QuotaGroup,
-  ModelQuotaRow,
-  TierInfo,
   AccountUsage,
   ApiErrorBody,
-  QuotaSummaryRaw,
   AvailableModelsRaw,
   LoadCodeAssistRaw,
+  ModelQuotaRow,
+  QuotaBucket,
+  QuotaGroup,
+  QuotaSummaryRaw,
+  TierInfo,
   TierRaw,
-} from "./types.js";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+} from "../types/types.js";
 
 function clampFraction(value: unknown): number | undefined {
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
@@ -148,7 +146,6 @@ function parseModels(data: unknown): {
   const models: ModelQuotaRow[] = [];
   for (const [modelId, info] of Object.entries(modelsObj)) {
     if (!info || !isRecord(info)) continue;
-    // skip internal autocomplete-ish models unless useful later
     if (info.isInternal || String(modelId).startsWith("chat_")) continue;
     const qi = isRecord(info.quotaInfo) ? info.quotaInfo : {};
     models.push({
@@ -198,8 +195,11 @@ function parseTier(value: unknown): TierInfo | undefined {
 export async function fetchAccountUsage(apiKeyRaw?: string): Promise<AccountUsage> {
   const creds = parseApiKey(apiKeyRaw);
   const warmedProject = await loadCodeAssist(creds.token);
-  const projectId =
-    antigravityEnv("PROJECT_ID")?.trim() || warmedProject || creds.projectId || DEFAULT_PROJECT_ID;
+  const projectId = resolveProjectId({
+    token: creds.token,
+    warmedProject,
+    credentialProjectId: creds.projectId,
+  });
   setLastProjectId(projectId);
 
   const [assist, summary, available] = await Promise.all([
@@ -248,7 +248,6 @@ export async function fetchAccountUsage(apiKeyRaw?: string): Promise<AccountUsag
 export function formatUsageSummary(usage: AccountUsage): string {
   const lines: string[] = [];
 
-  // Keep it usage-only: one plan line, then the shared pool bars.
   if (usage.planLabel) lines.push(usage.planLabel);
 
   if (!usage.groups.length) {

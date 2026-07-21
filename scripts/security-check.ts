@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
 import {
+  getLastDiagnostics,
+  resetDiagnosticsForTests,
+  runWithDiagnostics,
+  setLastEndpoint,
+  setLastError,
+  setLastStatus,
+} from "../src/diagnostics/index.ts";
+import {
   assertSafeApiBaseUrl,
   escapeHtml,
   escapeRegExp,
   redactSecrets,
   resolveCallbackHost,
-} from "../src/oauth.ts";
+} from "../src/utils/index.ts";
 
 assert.equal(resolveCallbackHost("127.0.0.1"), "127.0.0.1");
 assert.equal(resolveCallbackHost("localhost"), "127.0.0.1");
@@ -33,5 +41,31 @@ const leaked = redactSecrets(
 assert.doesNotMatch(leaked, /ya29\./);
 assert.doesNotMatch(leaked, /1\/abcdefgh/);
 assert.match(leaked, /\[redacted/);
+
+resetDiagnosticsForTests();
+await Promise.all([
+  runWithDiagnostics(async () => {
+    setLastEndpoint("https://a.example");
+    setLastStatus(200);
+    await new Promise((r) => setTimeout(r, 20));
+    setLastError("error-a");
+  }),
+  runWithDiagnostics(async () => {
+    setLastEndpoint("https://b.example");
+    setLastStatus(429);
+    await new Promise((r) => setTimeout(r, 5));
+    setLastError("error-b");
+  }),
+]);
+
+const last = getLastDiagnostics();
+assert.ok(last.endpoint === "https://a.example" || last.endpoint === "https://b.example");
+if (last.endpoint === "https://a.example") {
+  assert.equal(last.status, 200);
+  assert.equal(last.error, "error-a");
+} else {
+  assert.equal(last.status, 429);
+  assert.equal(last.error, "error-b");
+}
 
 console.log("security-check: ok");

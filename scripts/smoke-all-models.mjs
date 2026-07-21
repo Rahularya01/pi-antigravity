@@ -25,8 +25,10 @@ if (!creds?.refresh) {
   process.exit(1);
 }
 
-const oauth = await import(pathToFileURL(join(root, "src/oauth.ts")).href);
-const models = await import(pathToFileURL(join(root, "src/models.ts")).href);
+const oauth = await import(pathToFileURL(join(root, "src/auth/oauth.ts")).href);
+const client = await import(pathToFileURL(join(root, "src/client/client.ts")).href);
+const utils = await import(pathToFileURL(join(root, "src/utils/util.ts")).href);
+const models = await import(pathToFileURL(join(root, "src/models/models.ts")).href);
 
 const CONCURRENCY = Math.max(1, Number(process.env.CONCURRENCY || 2));
 const TIMEOUT_MS = Math.max(5000, Number(process.env.TIMEOUT_MS || 60_000));
@@ -44,8 +46,8 @@ const refreshed = await oauth.refreshAntigravityToken({
 });
 console.log(`refresh=ok projectId(refreshed)=${refreshed.projectId || "none"}`);
 
-const projectId = refreshed.projectId || creds.projectId || oauth.DEFAULT_PROJECT_ID;
-const endpoint = oauth.endpointCandidates()[0];
+const projectId = refreshed.projectId || creds.projectId || client.DEFAULT_PROJECT_ID;
+const endpoint = client.endpointCandidates()[0];
 console.log(`endpoint=${endpoint}`);
 
 // Optional: list available runtime models for diagnostics
@@ -54,7 +56,7 @@ try {
   const availRes = await fetch(`${endpoint}/v1internal:fetchAvailableModels`, {
     method: "POST",
     headers: {
-      ...oauth.antigravityHeaders(refreshed.access),
+      ...client.antigravityHeaders(refreshed.access),
       Accept: "application/json",
     },
     body: JSON.stringify({ project: projectId }),
@@ -123,11 +125,11 @@ async function smokeOne(publicId) {
     },
     requestType: "agent",
     userAgent: "antigravity",
-    requestId: oauth.nowRequestId(),
+    requestId: utils.nowRequestId(),
   };
 
   const headers = {
-    ...oauth.antigravityHeaders(refreshed.access),
+    ...client.antigravityHeaders(refreshed.access),
     ...(isClaude ? { "anthropic-beta": "interleaved-thinking-2025-05-14" } : {}),
   };
 

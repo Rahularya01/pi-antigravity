@@ -1,26 +1,16 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { ANTIGRAVITY_MODELS, PROVIDER_ID, PROVIDER_NAME } from "./models.js";
-import {
-  DEFAULT_ENDPOINT,
-  getApiKey,
-  lastAvailableModels,
-  lastEndpoint,
-  lastError,
-  lastMatchedModelDebug,
-  lastProjectId,
-  lastResolvedRuntimeModel,
-  lastStatus,
-  loginAntigravity,
-  redactSecrets,
-  refreshAntigravityToken,
-} from "./oauth.js";
-import { ANTIGRAVITY_API, streamAntigravity } from "./stream.js";
+import { getApiKey, loginAntigravity, refreshAntigravityToken } from "./auth/index.js";
+import { DEFAULT_ENDPOINT } from "./client/index.js";
+import { getLastDiagnostics, runWithDiagnostics } from "./diagnostics/index.js";
+import { ANTIGRAVITY_MODELS, PROVIDER_ID, PROVIDER_NAME } from "./models/index.js";
+import { ANTIGRAVITY_API, streamAntigravity } from "./stream/index.js";
 import {
   fetchAccountUsage,
   formatModelsList,
   formatUsageSummary,
   resolveApiKeyFromContext,
-} from "./usage.js";
+} from "./usage/index.js";
+import { redactSecrets } from "./utils/index.js";
 
 async function withUsage(
   ctx: ExtensionCommandContext,
@@ -35,7 +25,7 @@ async function withUsage(
       return;
     }
     if (ctx.hasUI) ctx.ui.notify("Fetching Antigravity usage…", "info");
-    const usage = await fetchAccountUsage(apiKey);
+    const usage = await runWithDiagnostics(() => fetchAccountUsage(apiKey));
     const text = fn(usage);
     if (ctx.hasUI) ctx.ui.notify(text, "info");
     console.log(text);
@@ -79,15 +69,16 @@ export default function (pi: ExtensionAPI): void {
   pi.registerCommand("antigravity.doctor", {
     description: "Show sanitized Antigravity provider diagnostics",
     handler: async (_args, ctx) => {
+      const d = getLastDiagnostics();
       const lines = [
         `provider=${PROVIDER_ID}`,
-        `lastResolvedRuntimeModel=${lastResolvedRuntimeModel || "none"}`,
-        `availableModels=${lastAvailableModels || "none"}`,
-        `matchedModel=${lastMatchedModelDebug || "none"}`,
-        `lastEndpoint=${lastEndpoint || "none"}`,
-        `lastStatus=${lastStatus ?? "none"}`,
-        `lastProjectId=${lastProjectId || "none"}`,
-        `lastError=${lastError ? redactSecrets(lastError) : "none"}`,
+        `lastResolvedRuntimeModel=${d.resolvedRuntimeModel || "none"}`,
+        `availableModels=${d.availableModels || "none"}`,
+        `matchedModel=${d.matchedModelDebug || "none"}`,
+        `lastEndpoint=${d.endpoint || "none"}`,
+        `lastStatus=${d.status ?? "none"}`,
+        `lastProjectId=${d.projectId || "none"}`,
+        `lastError=${d.error ? redactSecrets(d.error) : "none"}`,
         "transport=native-streamSimple",
         "runtimeCli=not-used",
         "commands=/antigravity.usage /antigravity.models /antigravity.doctor",

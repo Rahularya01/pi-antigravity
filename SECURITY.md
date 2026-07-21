@@ -20,3 +20,9 @@ We will acknowledge valid reports, investigate them privately, and coordinate a 
 ## Scope
 
 This repository contains a Pi extension that handles OAuth credentials and sends requests to Cloud Code Assist endpoints. Reports involving credential exposure, unsafe endpoint handling, OAuth callback validation, request construction, dependency vulnerabilities, or release automation are in scope.
+
+## OAuth client credentials
+
+By default the extension uses Google's **public Antigravity desktop OAuth client** (the same client ID/secret embedded in the Antigravity app and other community tools). That value is not a private application secret: anyone with the package can extract it. Treat access and refresh tokens in `~/.pi/agent/auth.json` as the real secrets.
+
+To use your own Google Cloud OAuth client instead, set `ANTIGRAVITY_CLIENT_ID` and `ANTIGRAVITY_CLIENT_SECRET`. Keep those out of source control and shell history.

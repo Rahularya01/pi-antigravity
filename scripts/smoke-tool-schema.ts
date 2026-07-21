@@ -1,15 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import type { Tool } from "@earendil-works/pi-ai";
-import { convertTools } from "../src/stream.js";
+import { convertTools } from "../src/stream/index.js";
+import { refreshAntigravityToken } from "../src/auth/index.js";
 import {
   antigravityHeaders,
   DEFAULT_PROJECT_ID,
   endpointCandidates,
-  nowRequestId,
-  refreshAntigravityToken,
-} from "../src/oauth.js";
-import { getAntigravityRequestModelId } from "../src/models.js";
+} from "../src/client/index.js";
+import { nowRequestId } from "../src/utils/index.js";
+import { getAntigravityRequestModelId } from "../src/models/index.js";
 
 type StoredCredentials = {
   refresh: string;

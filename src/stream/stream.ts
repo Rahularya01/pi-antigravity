@@ -9,7 +9,25 @@ import {
   type Tool,
   type ToolCall,
 } from "@earendil-works/pi-ai";
-import { getAntigravityRequestModelId, PROVIDER_ID } from "./models.js";
+import {
+  antigravityHeaders,
+  endpointCandidates,
+  fetchAvailableRuntimeModel,
+  formatRequestDiagnostics,
+  jsonOrTextError,
+  loadCodeAssist,
+  parseApiKey,
+  resolveProjectId,
+} from "../client/client.js";
+import {
+  getCurrentEndpoint,
+  runWithDiagnostics,
+  setLastEndpoint,
+  setLastError,
+  setLastProjectId,
+  setLastResolvedRuntimeModel,
+  setLastStatus,
+} from "../diagnostics/diagnostics.js";
 import {
   AntigravityRequestType,
   AntigravityUserAgent,
@@ -17,46 +35,28 @@ import {
   GeminiToolCallingMode,
   StopReason,
   ToolChoice,
-} from "./enums.js";
-import type {
-  AntigravityStreamOptions,
-  GeminiPart,
-  GeminiContent,
-  GeminiFunctionResponsePart,
-  GeminiFunctionDeclaration,
-  GeminiGenerationConfig,
-  GeminiRequestBody,
-  AntigravityGenerateRequest,
-  StreamChunk,
-  ContentBlock,
-  ActiveBlock,
-  GeminiTextPart,
-  GeminiInlineDataPart,
-} from "./types.js";
+} from "../types/enums.js";
+import { getAntigravityRequestModelId, PROVIDER_ID } from "../models/models.js";
+import { redactSecrets, safeError } from "../utils/security.js";
 import {
-  antigravityEnv,
-  antigravityHeaders,
-  DEFAULT_PROJECT_ID,
-  endpointCandidates,
-  fetchAvailableRuntimeModel,
-  jsonOrTextError,
-  lastAvailableModels,
-  lastEndpoint,
-  lastMatchedModelDebug,
-  loadCodeAssist,
-  nowRequestId,
-  parseApiKey,
-  safeError,
-  sanitizeText,
-  setLastEndpoint,
-  setLastError,
-  setLastProjectId,
-  setLastResolvedRuntimeModel,
-  setLastStatus,
-  redactSecrets,
-} from "./oauth.js";
+  ANTIGRAVITY_API,
+  type ActiveBlock,
+  type AntigravityGenerateRequest,
+  type AntigravityStreamOptions,
+  type ContentBlock,
+  type GeminiContent,
+  type GeminiFunctionDeclaration,
+  type GeminiFunctionResponsePart,
+  type GeminiGenerationConfig,
+  type GeminiInlineDataPart,
+  type GeminiPart,
+  type GeminiRequestBody,
+  type GeminiTextPart,
+  type StreamChunk,
+} from "../types/types.js";
+import { antigravityEnv, isRecord, nowRequestId, sanitizeText } from "../utils/util.js";
 
-export const ANTIGRAVITY_API = "antigravity-api" as const;
+export { ANTIGRAVITY_API };
 
 const ANTIGRAVITY_SYSTEM_INSTRUCTION =
   "You are Antigravity, a powerful agentic AI coding assistant designed by Google DeepMind. " +
@@ -66,10 +66,6 @@ const ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION =
   'CRITICAL: NEVER output rule checks, formatting guidelines, constraint checklists (e.g. "No emdashes"), or your thinking/personality preambles in the final response. Output only the final response.';
 
 let toolCallCounter = 0;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function hasFunctionResponse(part: GeminiPart): part is GeminiFunctionResponsePart {
   return "functionResponse" in part;
@@ -106,7 +102,8 @@ function asTextParts(content: unknown): Array<GeminiTextPart | GeminiInlineDataP
   });
 }
 
-function convertMessages(
+/** Exported for unit tests. */
+export function convertMessages(
   model: Model<Api>,
   context: Context,
   runtimeModel: string,
@@ -198,7 +195,6 @@ function stripMetaSchema(schema: unknown): unknown {
  * a hard 400 on every Claude/GPT request.
  */
 const CUSTOM_TOOL_SCHEMA_OMIT = new Set([
-  // JSON Schema composition / meta not in protobuf Schema
   "anyOf",
   "oneOf",
   "allOf",
@@ -216,21 +212,18 @@ const CUSTOM_TOOL_SCHEMA_OMIT = new Set([
   "$ref",
   "$dynamicRef",
   "definitions",
-  // Object keywords not present on protobuf Schema
   "patternProperties",
   "additionalProperties",
   "unevaluatedProperties",
   "propertyNames",
   "dependentSchemas",
   "dependentRequired",
-  // Array keywords not present / unstable
   "prefixItems",
   "unevaluatedItems",
   "contains",
   "minContains",
   "maxContains",
   "uniqueItems",
-  // Misc JSON Schema extensions that commonly appear in Pi tool defs
   "const",
   "default",
   "examples",
@@ -242,9 +235,6 @@ const CUSTOM_TOOL_SCHEMA_OMIT = new Set([
   "contentMediaType",
   "contentEncoding",
   "contentSchema",
-  // GPT-OSS Draft-2020-12 validation has rejected numeric constraints that
-  // arrive through the protobuf bridge (e.g. maxLength: 60 → "'60' is not of
-  // type 'integer'"). Drop them for custom backends; Pi still enforces limits.
   "maxLength",
   "minLength",
   "maxItems",
@@ -267,9 +257,6 @@ function normalizeCustomToolSchema(schema: unknown): unknown {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(schema)) {
     if (CUSTOM_TOOL_SCHEMA_OMIT.has(key) || key.startsWith("$")) continue;
-    // Cloud Code Assist parses the legacy declaration through a protobuf Schema
-    // (where enum is string-only) before handing it to Claude/GPT's Draft 2020-12
-    // custom-tool validator. Non-string enums cannot satisfy both formats.
     if (
       key === "enum" &&
       Array.isArray(value) &&
@@ -382,13 +369,15 @@ function buildRequest(
   };
 }
 
-function mapStopReason(reason: string | undefined): StopReason {
+/** Exported for unit tests. */
+export function mapStopReason(reason: string | undefined): StopReason {
   if (reason === "STOP") return StopReason.Stop;
   if (reason === "MAX_TOKENS") return StopReason.Length;
   return reason ? StopReason.Error : StopReason.Stop;
 }
 
-function friendlyAntigravityError(status: number | undefined, text: string): string {
+/** Exported for unit tests. */
+export function friendlyAntigravityError(status: number | undefined, text: string): string {
   const msg = redactSecrets(jsonOrTextError(text)).slice(0, 500);
   if (status === 400) {
     if (/API key not valid|API_KEY_INVALID/i.test(msg)) {
@@ -458,24 +447,12 @@ function createOutput(model: Model<Api>): AssistantMessage {
       cacheRead: 0,
       cacheWrite: 0,
       totalTokens: 0,
+      // Antigravity is subscription-billed; keep reported $ costs at zero.
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "stop",
     timestamp: Date.now(),
   };
-}
-
-function applyUsageCost(output: AssistantMessage): void {
-  const m = String(output.model || "").toLowerCase();
-  const inCost = m.includes("pro") ? 1.25 : 0.075;
-  const outCost = m.includes("pro") ? 5.0 : 0.3;
-  const cacheCost = m.includes("pro") ? 0.31 : 0.018;
-  output.usage.cost.input = (output.usage.input * inCost) / 1_000_000;
-  output.usage.cost.output = (output.usage.output * outCost) / 1_000_000;
-  output.usage.cost.cacheRead = (output.usage.cacheRead * cacheCost) / 1_000_000;
-  output.usage.cost.cacheWrite = 0;
-  output.usage.cost.total =
-    output.usage.cost.input + output.usage.cost.output + output.usage.cost.cacheRead;
 }
 
 function asToolCallArguments(args: Record<string, unknown> | undefined): ToolCall["arguments"] {
@@ -634,7 +611,8 @@ async function streamResponse(
           (responseData.usageMetadata.thoughtsTokenCount || 0);
         output.usage.cacheRead = cacheRead;
         output.usage.totalTokens = responseData.usageMetadata.totalTokenCount || 0;
-        applyUsageCost(output);
+        // Keep subscription costs at zero (matches model catalog freeCost).
+        output.usage.cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
       }
     }
   }
@@ -651,24 +629,24 @@ export function streamAntigravity(
   const stream = createAssistantMessageEventStream();
   const opts = options ?? {};
 
-  void (async () => {
+  void runWithDiagnostics(async () => {
     const output = createOutput(model);
     try {
       const creds = parseApiKey(opts.apiKey);
       const warmedProject = await loadCodeAssist(creds.token);
-      const projectId =
-        antigravityEnv("PROJECT_ID")?.trim() ||
-        warmedProject ||
-        creds.projectId ||
-        DEFAULT_PROJECT_ID;
+      const projectId = resolveProjectId({
+        token: creds.token,
+        warmedProject,
+        credentialProjectId: creds.projectId,
+      });
       setLastProjectId(projectId);
 
       const effort = opts.reasoning ?? "off";
       const baseRuntimeModel =
         antigravityEnv("RUNTIME_MODEL")?.trim() || getAntigravityRequestModelId(model.id, effort);
 
-      await fetchAvailableRuntimeModel(creds.token, projectId, baseRuntimeModel);
-      const runtimeModel = baseRuntimeModel;
+      const dynamic = await fetchAvailableRuntimeModel(creds.token, projectId, baseRuntimeModel);
+      const runtimeModel = dynamic?.id || baseRuntimeModel;
       setLastResolvedRuntimeModel(runtimeModel);
 
       const body = JSON.stringify(buildRequest(model, context, projectId, opts, runtimeModel));
@@ -706,7 +684,6 @@ export function streamAntigravity(
         }
 
         if (!response || !response.ok) {
-          // Optional debug dump: ANTIGRAVITY_DEBUG_DUMP=1 writes last failing request body.
           if (antigravityEnv("DEBUG_DUMP") === "1") {
             try {
               const { writeFileSync } = await import("node:fs");
@@ -738,7 +715,7 @@ export function streamAntigravity(
             throw new Error(friendly);
           }
           throw new Error(
-            `Antigravity API error (${response?.status ?? "no response"}, endpoint=${lastEndpoint || "unknown"}, project=${projectId}, runtimeModel=${runtimeModel}, matched=${lastMatchedModelDebug || "none"}, available=${lastAvailableModels || "unknown"}): ${friendly}`,
+            `Antigravity API error (${response?.status ?? "no response"}, ${formatRequestDiagnostics({ projectId, runtimeModel })}): ${friendly}`,
           );
         }
 
@@ -768,10 +745,14 @@ export function streamAntigravity(
       output.stopReason = opts.signal?.aborted ? "aborted" : "error";
       output.errorMessage = safeError(error);
       setLastError(output.errorMessage);
+      // Ensure endpoint is recorded even if failure happened before setLastEndpoint.
+      if (!getCurrentEndpoint() && endpointCandidates()[0]) {
+        setLastEndpoint(endpointCandidates()[0]);
+      }
       stream.push({ type: "error", reason: output.stopReason, error: output });
       stream.end();
     }
-  })();
+  });
 
   return stream;
 }

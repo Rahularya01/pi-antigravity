@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
-import type { Tool } from "@earendil-works/pi-ai";
-import { convertTools } from "../src/stream.js";
-import { ANTIGRAVITY_MODELS, getAntigravityRequestModelId } from "../src/models.js";
+import type { Api, Context, Model, Tool } from "@earendil-works/pi-ai";
+import { defaultProjectId, stableProjectId } from "../src/client/index.js";
+import { StopReason } from "../src/types/enums.js";
+import { ANTIGRAVITY_MODELS, getAntigravityRequestModelId } from "../src/models/index.js";
+import {
+  convertMessages,
+  convertTools,
+  friendlyAntigravityError,
+  mapStopReason,
+} from "../src/stream/index.js";
 
 const route = (model: string, effort?: string) => getAntigravityRequestModelId(model, effort);
 
@@ -27,7 +34,6 @@ for (const [model, effort, expected] of routeCases) {
 }
 
 const modelIds = new Set(ANTIGRAVITY_MODELS.map((model) => model.id));
-// Catalog must match `agy models` (collapsed to public Pi IDs).
 const expectedModels = [
   "gemini-3.5-flash",
   "gemini-3.1-pro",
@@ -73,7 +79,6 @@ assert.ok(geminiDeclaration?.parametersJsonSchema, "Gemini must use parametersJs
 assert.equal(geminiDeclaration?.parameters, undefined);
 assert.deepEqual(geminiDeclaration?.parametersJsonSchema, booleanUnionTool.parameters);
 
-// Protobuf Schema rejects patternProperties/additionalProperties/default on Claude/GPT bridge.
 const openObjectTool = {
   name: "todo_like",
   description: "Open object fields",
@@ -102,4 +107,96 @@ assert.deepEqual(openObjectDecl?.parameters, {
   },
 });
 
-console.log(`model routing: ${routeCases.length} cases and tool schema conversion passed`);
+assert.equal(mapStopReason("STOP"), StopReason.Stop);
+assert.equal(mapStopReason("MAX_TOKENS"), StopReason.Length);
+assert.equal(mapStopReason("OTHER"), StopReason.Error);
+assert.equal(mapStopReason(undefined), StopReason.Stop);
+
+assert.match(friendlyAntigravityError(401, "nope"), /authentication failed/i);
+assert.match(
+  friendlyAntigravityError(429, "Individual quota reached. Resets in 1h"),
+  /Quota reached/,
+);
+assert.match(
+  friendlyAntigravityError(400, JSON.stringify({ error: { message: "Unknown name anyOf" } })),
+  /request format was rejected/i,
+);
+assert.match(
+  friendlyAntigravityError(404, "Requested entity was not found"),
+  /not available right now/i,
+);
+
+const seedA = stableProjectId("user@example.com");
+const seedB = stableProjectId("user@example.com");
+const seedC = stableProjectId("other@example.com");
+assert.equal(seedA, seedB);
+assert.notEqual(seedA, seedC);
+assert.notEqual(defaultProjectId("user@example.com"), defaultProjectId("other@example.com"));
+assert.match(seedA, /^[0-9a-f-]{36}$/);
+
+const model = {
+  id: "claude-sonnet-4-6",
+  name: "Claude",
+  api: "antigravity-api",
+  provider: "antigravity",
+  reasoning: true,
+  input: ["text"],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 200000,
+  maxTokens: 64000,
+} as Model<Api>;
+
+const context = {
+  messages: [
+    { role: "user", content: "hello", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        { type: "thinking", thinking: "plan" },
+        { type: "text", text: "hi" },
+        { type: "toolCall", id: "call-1", name: "read", arguments: { path: "a.ts" } },
+      ],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "claude-sonnet-4-6",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call-1",
+      toolName: "read",
+      content: [{ type: "text", text: "file contents" }],
+      isError: false,
+      timestamp: Date.now(),
+    },
+  ],
+} as Context;
+
+const contents = convertMessages(model, context, "claude-sonnet-4-6");
+assert.equal(contents.length, 3);
+assert.equal(contents[0]?.role, "user");
+assert.deepEqual(contents[1]?.parts[0], { thought: true, text: "plan" });
+assert.ok(
+  contents[1]?.parts.some((part) => "functionCall" in part && part.functionCall.id === "call-1"),
+);
+assert.ok(
+  contents[2]?.parts.some(
+    (part) =>
+      "functionResponse" in part &&
+      part.functionResponse.id === "call-1" &&
+      "output" in part.functionResponse.response,
+  ),
+);
+
+console.log(
+  `model routing: ${routeCases.length} cases, tool schema, errors, project ids, and message conversion passed`,
+);
