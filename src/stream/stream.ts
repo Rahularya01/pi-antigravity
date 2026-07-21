@@ -646,7 +646,12 @@ export function streamAntigravity(
         antigravityEnv("RUNTIME_MODEL")?.trim() || getAntigravityRequestModelId(model.id, effort);
 
       const dynamic = await fetchAvailableRuntimeModel(creds.token, projectId, baseRuntimeModel);
-      const runtimeModel = dynamic?.id || baseRuntimeModel;
+      // Catalog values often include MODEL_PLACEHOLDER_* enums that 404 on stream;
+      // only adopt dynamic ids that look like real runtime model ids.
+      const runtimeModel =
+        dynamic?.id && /^(gemini-|claude-|gpt-oss-)/i.test(dynamic.id)
+          ? dynamic.id
+          : baseRuntimeModel;
       setLastResolvedRuntimeModel(runtimeModel);
 
       const body = JSON.stringify(buildRequest(model, context, projectId, opts, runtimeModel));

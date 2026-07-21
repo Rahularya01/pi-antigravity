@@ -187,28 +187,78 @@ function summarizeModelCandidate(value: unknown): string {
   return JSON.stringify(out).slice(0, 1200);
 }
 
+/** Runtime ids look like gemini-*, claude-*, gpt-oss-*, never MODEL_PLACEHOLDER_* enums. */
+export function isUsableRuntimeModelId(id: string): boolean {
+  return /^(gemini-|claude-|gpt-oss-)/i.test(id) && !/\s/.test(id) && !/^MODEL_/i.test(id);
+}
+
+function buildModelMatchRegex(requestedId: string): RegExp {
+  const req = requestedId.toLowerCase();
+  // Display names from fetchAvailableModels (keys are the real runtime ids):
+  //   gemini-3.5-flash-extra-low → "Gemini 3.5 Flash (Low)"
+  //   gemini-3.5-flash-low       → "Gemini 3.5 Flash (Medium)"
+  //   gemini-3-flash-agent       → "Gemini 3.5 Flash (High)"
+  if (req === "gemini-3.5-flash-extra-low") return /gemini[- ]3\.5[- ]flash \(low\)/i;
+  if (req === "gemini-3.5-flash-low" || req === "gemini-3.5-flash-medium")
+    return /gemini[- ]3\.5[- ]flash \(medium\)/i;
+  if (req === "gemini-3.5-flash-high" || req === "gemini-3-flash-agent")
+    return /gemini[- ]3\.5[- ]flash \(high\)/i;
+  if (req.includes("claude-opus-4-6")) return /claude.*opus.*4\.6/i;
+  if (req.includes("claude-sonnet-4-6")) return /claude.*sonnet.*4\.6/i;
+  if (req.includes("gpt-oss-120b")) return /gpt.*oss.*120b/i;
+  if (req === "gemini-3.1-pro-low") return /gemini[- ]3\.1[- ]pro \(low\)/i;
+  if (req === "gemini-3.1-pro-high" || req === "gemini-pro-agent")
+    return /gemini[- ]3\.1[- ]pro \(high\)/i;
+  const escaped = escapeRegExp(req).replace(/\\-/g, "[- ]");
+  return new RegExp(escaped, "i");
+}
+
+function dynamicModelFromInfo(modelId: string, info: unknown): DynamicModelInfo {
+  if (!isRecord(info)) return { id: modelId };
+  setLastMatchedModelDebug(summarizeModelCandidate({ modelId, ...info }));
+  const experiments = Array.isArray(info.modelExperiments)
+    ? info.modelExperiments.filter((item): item is string => typeof item === "string")
+    : undefined;
+  return {
+    id: modelId,
+    experiments,
+    apiProvider: asString(info.apiProvider),
+    modelProvider: asString(info.modelProvider),
+  };
+}
+
+/**
+ * Resolve a requested runtime model against fetchAvailableModels payload.
+ * The real runtime ids are the keys of `data.models`; the nested `model` field is often
+ * a MODEL_PLACEHOLDER_* enum that 404s on streamGenerateContent.
+ */
 function findDynamicModel(value: unknown, requestedId: string): DynamicModelInfo | undefined {
   if (!value) return undefined;
 
-  let targetRegex: RegExp;
-  const req = requestedId.toLowerCase();
-  if (req === "gemini-3.5-flash-low") targetRegex = /gemini[- ]3\.5[- ]flash \(low\)/i;
-  else if (req === "gemini-3.5-flash-medium") targetRegex = /gemini[- ]3\.5[- ]flash \(medium\)/i;
-  else if (req === "gemini-3.5-flash-high") targetRegex = /gemini[- ]3\.5[- ]flash \(high\)/i;
-  else if (req.includes("claude-opus-4-6")) targetRegex = /claude.*opus.*4\.6/i;
-  else if (req.includes("claude-sonnet-4-6")) targetRegex = /claude.*sonnet.*4\.6/i;
-  else if (req.includes("gpt-oss-120b")) targetRegex = /gpt.*oss.*120b/i;
-  else if (req === "gemini-3.1-pro-low") targetRegex = /gemini[- ]3\.1[- ]pro \(low\)/i;
-  else if (req === "gemini-3.1-pro-high" || req === "gemini-pro-agent")
-    targetRegex = /gemini[- ]3\.1[- ]pro \(high\)/i;
-  else {
-    const escaped = escapeRegExp(req).replace(/\\-/g, "[- ]");
-    targetRegex = new RegExp(escaped, "i");
+  if (isRecord(value) && isRecord(value.models)) {
+    const modelsMap = value.models;
+    if (isUsableRuntimeModelId(requestedId) && requestedId in modelsMap) {
+      return dynamicModelFromInfo(requestedId, modelsMap[requestedId]);
+    }
+
+    const targetRegex = buildModelMatchRegex(requestedId);
+    for (const [modelId, info] of Object.entries(modelsMap)) {
+      if (!isUsableRuntimeModelId(modelId)) continue;
+      if (targetRegex.test(modelId)) return dynamicModelFromInfo(modelId, info);
+      if (isRecord(info)) {
+        const label = info.label ?? info.displayName ?? info.name;
+        if (typeof label === "string" && targetRegex.test(label)) {
+          return dynamicModelFromInfo(modelId, info);
+        }
+      }
+    }
+    return undefined;
   }
 
+  const targetRegex = buildModelMatchRegex(requestedId);
+
   if (typeof value === "string") {
-    // Prefer exact runtime ids over display labels (labels often contain spaces).
-    return targetRegex.test(value) && !/\s/.test(value) ? { id: value } : undefined;
+    return targetRegex.test(value) && isUsableRuntimeModelId(value) ? { id: value } : undefined;
   }
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -218,24 +268,6 @@ function findDynamicModel(value: unknown, requestedId: string): DynamicModelInfo
     return undefined;
   }
   if (isRecord(value)) {
-    const label =
-      value.label ?? value.displayName ?? value.name ?? value.modelId ?? value.id ?? value.model;
-    if (typeof label === "string" && targetRegex.test(label)) {
-      const runtimeId =
-        asString(value.modelId) ?? asString(value.id) ?? asString(value.model) ?? undefined;
-      // Only accept ids that look like runtime model ids (no spaces / display names).
-      if (!runtimeId || /\s/.test(runtimeId)) return undefined;
-      setLastMatchedModelDebug(summarizeModelCandidate(value));
-      const experiments = Array.isArray(value.modelExperiments)
-        ? value.modelExperiments.filter((item): item is string => typeof item === "string")
-        : undefined;
-      return {
-        id: runtimeId,
-        experiments,
-        apiProvider: asString(value.apiProvider),
-        modelProvider: asString(value.modelProvider),
-      };
-    }
     for (const nested of Object.values(value)) {
       if (nested && typeof nested === "object") {
         const found = findDynamicModel(nested, requestedId);
