@@ -107,6 +107,79 @@ async function postJson(
   throw new Error(`${path} failed: ${lastErrorText || "no endpoint available"}`);
 }
 
+/**
+ * Merge fetchAvailableModels across endpoint candidates so daily/sandbox-only
+ * models (e.g. Gemini 3.6 Flash) appear alongside production catalog entries.
+ */
+async function fetchMergedAvailableModels(
+  token: string,
+  projectId: string,
+): Promise<{ endpoint: string; status: number; data: AvailableModelsRaw }> {
+  const bodies: Array<Record<string, unknown>> = [{ project: projectId }, {}];
+  const mergedModels: Record<string, unknown> = {};
+  let defaultAgentModelId: string | undefined;
+  let lastEndpoint = "";
+  let lastStatus = 0;
+  let sawOk = false;
+  let lastErrorText = "";
+
+  for (const endpoint of endpointCandidates()) {
+    for (const body of bodies) {
+      try {
+        const res = await fetch(`${endpoint}/v1internal:fetchAvailableModels`, {
+          method: "POST",
+          headers: jsonHeaders(token),
+          body: JSON.stringify(body),
+        });
+        setLastEndpoint(endpoint);
+        setLastStatus(res.status);
+        const text = await res.text();
+        let data: unknown;
+        try {
+          data = JSON.parse(text) as unknown;
+        } catch {
+          data = { raw: text } satisfies ApiErrorBody;
+        }
+        if (!res.ok) {
+          const errorBody = isRecord(data) ? (data as ApiErrorBody) : undefined;
+          lastErrorText =
+            typeof errorBody?.error?.message === "string" ? errorBody.error.message : text;
+          continue;
+        }
+
+        sawOk = true;
+        lastEndpoint = endpoint;
+        lastStatus = res.status;
+        if (isRecord(data) && isRecord(data.models)) {
+          Object.assign(mergedModels, data.models);
+        }
+        if (isRecord(data) && typeof data.defaultAgentModelId === "string") {
+          defaultAgentModelId = data.defaultAgentModelId;
+        }
+        break; // next endpoint after first successful body for this host
+      } catch (error) {
+        lastErrorText = safeError(error);
+        setLastError(lastErrorText);
+      }
+    }
+  }
+
+  if (!sawOk) {
+    throw new Error(
+      `/v1internal:fetchAvailableModels failed: ${lastErrorText || "no endpoint available"}`,
+    );
+  }
+
+  return {
+    endpoint: lastEndpoint,
+    status: lastStatus,
+    data: {
+      models: mergedModels as AvailableModelsRaw["models"],
+      defaultAgentModelId,
+    },
+  };
+}
+
 function parseQuotaSummary(data: unknown): { groups: QuotaGroup[]; description?: string } {
   const summary = (isRecord(data) ? data : {}) as QuotaSummaryRaw;
   const groups: QuotaGroup[] = [];
@@ -211,9 +284,7 @@ export async function fetchAccountUsage(apiKeyRaw?: string): Promise<AccountUsag
       },
     }).catch(() => null),
     postJson("/v1internal:retrieveUserQuotaSummary", creds.token, {}),
-    postJson("/v1internal:fetchAvailableModels", creds.token, {
-      project: projectId,
-    }).catch(() => postJson("/v1internal:fetchAvailableModels", creds.token, {})),
+    fetchMergedAvailableModels(creds.token, projectId),
   ]);
 
   const { groups, description } = parseQuotaSummary(summary.data);

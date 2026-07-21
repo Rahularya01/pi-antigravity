@@ -3,11 +3,7 @@ import { homedir } from "node:os";
 import type { Tool } from "@earendil-works/pi-ai";
 import { convertTools } from "../src/stream/index.js";
 import { refreshAntigravityToken } from "../src/auth/index.js";
-import {
-  antigravityHeaders,
-  DEFAULT_PROJECT_ID,
-  endpointCandidates,
-} from "../src/client/index.js";
+import { antigravityHeaders, DEFAULT_PROJECT_ID, endpointCandidates } from "../src/client/index.js";
 import { nowRequestId } from "../src/utils/index.js";
 import { getAntigravityRequestModelId } from "../src/models/index.js";
 
@@ -49,6 +45,9 @@ const schemaProbeTool = {
 } as Tool;
 
 const modelCases = [
+  { label: "Gemini 3.6 Flash (Low)", modelId: "gemini-3.6-flash", effort: "low" },
+  { label: "Gemini 3.6 Flash (Medium)", modelId: "gemini-3.6-flash", effort: "medium" },
+  { label: "Gemini 3.6 Flash (High)", modelId: "gemini-3.6-flash", effort: "high" },
   { label: "Gemini 3.5 Flash (Low)", modelId: "gemini-3.5-flash", effort: "minimal" },
   { label: "Gemini 3.5 Flash (Medium)", modelId: "gemini-3.5-flash", effort: "low" },
   { label: "Gemini 3.5 Flash (High)", modelId: "gemini-3.5-flash", effort: "high" },

@@ -13,6 +13,13 @@ import {
 const route = (model: string, effort?: string) => getAntigravityRequestModelId(model, effort);
 
 const routeCases: Array<[string, string | undefined, string]> = [
+  ["gemini-3.6-flash", undefined, "gemini-3.6-flash-low"],
+  ["gemini-3.6-flash", "off", "gemini-3.6-flash-low"],
+  ["gemini-3.6-flash", "minimal", "gemini-3.6-flash-low"],
+  ["gemini-3.6-flash", "low", "gemini-3.6-flash-low"],
+  ["gemini-3.6-flash", "medium", "gemini-3.6-flash-medium"],
+  ["gemini-3.6-flash", "high", "gemini-3.6-flash-high"],
+  ["gemini-3.6-flash", "xhigh", "gemini-3.6-flash-high"],
   ["gemini-3.5-flash", undefined, "gemini-3.5-flash-extra-low"],
   ["gemini-3.5-flash", "off", "gemini-3.5-flash-extra-low"],
   ["gemini-3.5-flash", "minimal", "gemini-3.5-flash-extra-low"],
@@ -35,6 +42,7 @@ for (const [model, effort, expected] of routeCases) {
 
 const modelIds = new Set(ANTIGRAVITY_MODELS.map((model) => model.id));
 const expectedModels = [
+  "gemini-3.6-flash",
   "gemini-3.5-flash",
   "gemini-3.1-pro",
   "claude-sonnet-4-6",

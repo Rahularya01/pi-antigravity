@@ -402,7 +402,7 @@ export function friendlyAntigravityError(status: number | undefined, text: strin
   }
   if (status === 404) {
     if (/Requested entity was not found/i.test(msg)) {
-      return "This model is not available right now. Next: switch to gemini-3.5-flash, gemini-3.1-pro, or another working model.";
+      return "This model is not available right now. Next: switch to gemini-3.6-flash, gemini-3.5-flash, gemini-3.1-pro, or another working model.";
     }
     return `Antigravity could not find the requested resource. Next: retry or switch models. Backend said: ${msg}`;
   }

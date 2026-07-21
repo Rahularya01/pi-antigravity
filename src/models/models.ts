@@ -9,13 +9,17 @@ export const PROVIDER_NAME = "Antigravity";
  * Public selectable model IDs → backend request model IDs by thinking effort.
  *
  * Catalog mirrors `agy models` (Antigravity CLI), which currently advertises:
+ * - Gemini 3.6 Flash (Low / Medium / High)
  * - Gemini 3.5 Flash (Low / Medium / High)
  * - Gemini 3.1 Pro (Low / High)
  * - Claude Sonnet 4.6 (Thinking)
  * - Claude Opus 4.6 (Thinking)
  * - GPT-OSS 120B (Medium)
  *
- * Pi exposes those as 5 public model IDs; Low/Medium/High map through thinking effort.
+ * Pi exposes those as public model IDs; Low/Medium/High map through thinking effort.
+ *
+ * Note: Gemini 3.6 Flash runtime IDs are currently served on the daily/sandbox Cloud Code
+ * endpoint first; streamGenerateContent falls through on 404 from production.
  */
 export const ANTIGRAVITY_ROUTING: Record<string, AntigravityRouting> = {
   "claude-opus-4-6": {
@@ -52,7 +56,20 @@ export const ANTIGRAVITY_ROUTING: Record<string, AntigravityRouting> = {
     },
     defaultRequestId: "gemini-3.1-pro-low",
   },
+  "gemini-3.6-flash": {
+    // agy models: gemini-3.6-flash-low / -medium / -high
+    off: "gemini-3.6-flash-low",
+    routing: {
+      minimal: "gemini-3.6-flash-low",
+      low: "gemini-3.6-flash-low",
+      medium: "gemini-3.6-flash-medium",
+      high: "gemini-3.6-flash-high",
+      xhigh: "gemini-3.6-flash-high",
+    },
+    defaultRequestId: "gemini-3.6-flash-low",
+  },
   "gemini-3.5-flash": {
+    // Production still uses extra-low / low / gemini-3-flash-agent for Low/Medium/High.
     off: "gemini-3.5-flash-extra-low",
     routing: {
       minimal: "gemini-3.5-flash-extra-low",
@@ -80,6 +97,16 @@ const defaultThinkingMap = { off: null, xhigh: "HIGH" } as ProviderModelConfig["
 
 /** Same set as `agy models`, collapsed to public Pi model IDs. */
 export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
+  {
+    id: "gemini-3.6-flash",
+    name: "Gemini 3.6 Flash (Antigravity)",
+    reasoning: true,
+    thinkingLevelMap: defaultThinkingMap,
+    input: ["text", "image"],
+    cost: freeCost,
+    contextWindow: 1048576,
+    maxTokens: 65536,
+  },
   {
     id: "claude-opus-4-6",
     name: "Claude Opus 4.6 (Antigravity)",

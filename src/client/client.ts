@@ -195,9 +195,15 @@ export function isUsableRuntimeModelId(id: string): boolean {
 function buildModelMatchRegex(requestedId: string): RegExp {
   const req = requestedId.toLowerCase();
   // Display names from fetchAvailableModels (keys are the real runtime ids):
+  //   gemini-3.6-flash-low       → "Gemini 3.6 Flash (Low)"
+  //   gemini-3.6-flash-medium    → "Gemini 3.6 Flash (Medium)"
+  //   gemini-3.6-flash-high      → "Gemini 3.6 Flash (High)"
   //   gemini-3.5-flash-extra-low → "Gemini 3.5 Flash (Low)"
   //   gemini-3.5-flash-low       → "Gemini 3.5 Flash (Medium)"
   //   gemini-3-flash-agent       → "Gemini 3.5 Flash (High)"
+  if (req === "gemini-3.6-flash-low") return /gemini[- ]3\.6[- ]flash \(low\)/i;
+  if (req === "gemini-3.6-flash-medium") return /gemini[- ]3\.6[- ]flash \(medium\)/i;
+  if (req === "gemini-3.6-flash-high") return /gemini[- ]3\.6[- ]flash \(high\)/i;
   if (req === "gemini-3.5-flash-extra-low") return /gemini[- ]3\.5[- ]flash \(low\)/i;
   if (req === "gemini-3.5-flash-low" || req === "gemini-3.5-flash-medium")
     return /gemini[- ]3\.5[- ]flash \(medium\)/i;
@@ -284,6 +290,9 @@ export async function fetchAvailableRuntimeModel(
   requestedRuntimeModel: string,
 ): Promise<DynamicModelInfo | undefined> {
   const bodies = [{}, { cloudaicompanionProject: projectId }, { project: projectId }];
+  // New models (e.g. Gemini 3.6 Flash) may land on daily/sandbox before production.
+  // Keep searching endpoints until the requested runtime id is found.
+  let lastLabels = "";
   for (const endpoint of endpointCandidates()) {
     for (const candidateBody of bodies) {
       try {
@@ -296,14 +305,17 @@ export async function fetchAvailableRuntimeModel(
         setLastEndpoint(endpoint);
         if (!res.ok) continue;
         const data: unknown = await res.json();
-        const labels = [...new Set(collectModelLabels(data))].slice(0, 12);
-        setLastAvailableModels(labels.join(","));
-        return findDynamicModel(data, requestedRuntimeModel);
+        const labels = [...new Set(collectModelLabels(data))].slice(0, 16);
+        lastLabels = labels.join(",");
+        setLastAvailableModels(lastLabels);
+        const found = findDynamicModel(data, requestedRuntimeModel);
+        if (found) return found;
       } catch (error) {
         setLastError(safeError(error));
       }
     }
   }
+  if (lastLabels) setLastAvailableModels(lastLabels);
   return undefined;
 }
 

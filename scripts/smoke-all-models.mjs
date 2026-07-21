@@ -65,7 +65,9 @@ try {
   availableIds = Object.keys(availJson.models || {});
   console.log(`availableRuntimeModels=${availableIds.length} status=${availRes.status}`);
   if (availableIds.length) {
-    console.log(`  sample: ${availableIds.slice(0, 12).join(", ")}${availableIds.length > 12 ? " ..." : ""}`);
+    console.log(
+      `  sample: ${availableIds.slice(0, 12).join(", ")}${availableIds.length > 12 ? " ..." : ""}`,
+    );
   }
 } catch (err) {
   console.log(`fetchAvailableModels failed: ${err?.message || err}`);
@@ -81,7 +83,9 @@ if (!selected.length) {
   process.exit(1);
 }
 
-console.log(`\nTesting ${selected.length}/${allModels.length} models (concurrency=${CONCURRENCY})\n`);
+console.log(
+  `\nTesting ${selected.length}/${allModels.length} models (concurrency=${CONCURRENCY})\n`,
+);
 
 function parseSseText(text) {
   const parts = [];
@@ -137,24 +141,36 @@ async function smokeOne(publicId) {
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   const started = Date.now();
   try {
-    const res = await fetch(`${endpoint}/v1internal:streamGenerateContent?alt=sse`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    const text = await res.text();
+    // Mirror stream.ts: try production then daily/sandbox; fall through on 404/5xx.
+    let res;
+    let text = "";
+    let usedEndpoint = endpoint;
+    for (const ep of client.endpointCandidates()) {
+      usedEndpoint = ep;
+      res = await fetch(`${ep}/v1internal:streamGenerateContent?alt=sse`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (res.ok) break;
+      text = await res.text();
+      if (res.status === 429 && /Individual quota reached/i.test(text)) break;
+      if (![403, 404, 429, 500, 502, 503, 504].includes(res.status)) break;
+    }
     const ms = Date.now() - started;
-    if (!res.ok) {
+    if (!res || !res.ok) {
       return {
         publicId,
         runtimeModel,
+        endpoint: usedEndpoint,
         ok: false,
-        status: res.status,
+        status: res?.status ?? 0,
         ms,
         error: text.slice(0, 500),
       };
     }
+    text = await res.text();
     const { parts, finishReason, promptFeedback } = parseSseText(text);
     const joined = parts
       .filter((p) => !p.error)
@@ -166,6 +182,7 @@ async function smokeOne(publicId) {
     return {
       publicId,
       runtimeModel,
+      endpoint: usedEndpoint,
       ok: hasPong || hasText,
       status: res.status,
       ms,
@@ -183,7 +200,8 @@ async function smokeOne(publicId) {
       ok: false,
       status: 0,
       ms: Date.now() - started,
-      error: err?.name === "AbortError" ? `timeout after ${TIMEOUT_MS}ms` : String(err?.message || err),
+      error:
+        err?.name === "AbortError" ? `timeout after ${TIMEOUT_MS}ms` : String(err?.message || err),
     };
   } finally {
     clearTimeout(timer);
@@ -203,7 +221,9 @@ async function mapPool(items, limit, fn) {
       const mark = r.ok ? "OK " : "FAIL";
       console.log(
         `  ${mark} ${r.publicId} → ${r.runtimeModel} status=${r.status} ${r.ms}ms` +
-          (r.ok ? ` text=${JSON.stringify(r.joined)}` : ` err=${JSON.stringify(r.error || "").slice(0, 180)}`),
+          (r.ok
+            ? ` text=${JSON.stringify(r.joined)}`
+            : ` err=${JSON.stringify(r.error || "").slice(0, 180)}`),
       );
     }
   }
@@ -245,7 +265,9 @@ if (passed.length) {
 if (failed.length) {
   console.log("FAIL:");
   for (const r of failed) {
-    console.log(`  - ${r.publicId} → ${r.runtimeModel} status=${r.status} ${r.error?.slice?.(0, 160) || r.error || ""}`);
+    console.log(
+      `  - ${r.publicId} → ${r.runtimeModel} status=${r.status} ${r.error?.slice?.(0, 160) || r.error || ""}`,
+    );
   }
 }
 console.log(`wrote ${outPath}`);
