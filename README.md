@@ -77,7 +77,7 @@ Model availability, entitlement, quota groups, and resets are returned by the se
 
 The static model IDs registered by this extension match the Antigravity CLI catalog (`agy models`). Use `/antigravity.models` to see live availability and quota for your account.
 
-`agy models` currently lists eleven display entries (3.6 Flash Low/Medium/High, 3.5 Flash Low/Medium/High, Pro Low/High, Claude Sonnet/Opus Thinking, GPT-OSS Medium). Pi collapses those into six public model IDs and maps Low/Medium/High through thinking effort.
+`agy models` currently lists eleven display entries (3.6 Flash Low/Medium/High, 3.5 Flash Low/Medium/High, Pro Low/High, Claude Sonnet/Opus Thinking, GPT-OSS Medium). Pi collapses those into six public model IDs while only showing each model's advertised thinking level(s).
 
 ### Why Claude and GPT-OSS appear
 
@@ -85,14 +85,14 @@ Antigravity / Cloud Code Assist exposes a multi-provider catalog. Depending on y
 
 The backend's display labels do not always match its runtime IDs. For example, `gemini-3.5-flash-extra-low`, `gemini-3.5-flash-low`, and `gemini-3-flash-agent` can be displayed as Gemini 3.5 Flash Low, Medium, and High. Gemini 3.6 Flash uses explicit `gemini-3.6-flash-low|medium|high` runtime IDs (currently advertised on the daily/sandbox Cloud Code endpoint). The routing below uses the runtime IDs returned by the service.
 
-| Public model ID     | Input       | Thinking | Request routing                                                                                                      |
-| ------------------- | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
-| `gemini-3.6-flash`  | Text, image | Yes      | Off/minimal/low → `gemini-3.6-flash-low`; medium → `gemini-3.6-flash-medium`; high/xhigh → `gemini-3.6-flash-high`   |
-| `gemini-3.5-flash`  | Text, image | Yes      | Off/minimal → `gemini-3.5-flash-extra-low`; low/medium → `gemini-3.5-flash-low`; high/xhigh → `gemini-3-flash-agent` |
-| `gemini-3.1-pro`    | Text, image | Yes      | Off/minimal/low/medium → `gemini-3.1-pro-low`; high/xhigh → `gemini-pro-agent`                                       |
-| `claude-sonnet-4-6` | Text, image | Yes      | `claude-sonnet-4-6` for every effort level                                                                           |
-| `claude-opus-4-6`   | Text, image | Yes      | `claude-opus-4-6-thinking`                                                                                           |
-| `gpt-oss-120b`      | Text        | Yes      | `gpt-oss-120b-medium`                                                                                                |
+| Public model ID     | Input       | Thinking levels shown | Request routing                                                                                  |
+| ------------------- | ----------- | --------------------- | ------------------------------------------------------------------------------------------------ |
+| `gemini-3.6-flash`  | Text, image | Low, Medium, High     | low → `gemini-3.6-flash-low`; medium → `gemini-3.6-flash-medium`; high → `gemini-3.6-flash-high` |
+| `gemini-3.5-flash`  | Text, image | Low, Medium, High     | low → `gemini-3.5-flash-low`; medium → `gemini-3.5-flash-low`; high → `gemini-3-flash-agent`     |
+| `gemini-3.1-pro`    | Text, image | Low, High             | low → `gemini-3.1-pro-low`; high → `gemini-pro-agent`                                            |
+| `claude-sonnet-4-6` | Text, image | High                  | high → `claude-sonnet-4-6`                                                                       |
+| `claude-opus-4-6`   | Text, image | High                  | high → `claude-opus-4-6-thinking`                                                                |
+| `gpt-oss-120b`      | Text        | Medium                | medium → `gpt-oss-120b-medium`                                                                   |
 
 To limit which models Pi cycles through, enable specific entries in `~/.pi/agent/settings.json`:
 

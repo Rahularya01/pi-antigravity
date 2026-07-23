@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.3] - 2026-07-23
+
+### Fixed
+
+- Show only the thinking levels supported by each Antigravity model instead of every Pi level.
+
 ## [0.2.2] - 2026-07-21
 
 ### Added

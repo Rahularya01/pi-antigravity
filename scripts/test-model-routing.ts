@@ -58,6 +58,26 @@ for (const expected of expectedModels) {
   assert.ok(modelIds.has(expected), `missing selectable model: ${expected}`);
 }
 
+const expectedThinkingLevels: Record<string, string[]> = {
+  "gemini-3.6-flash": ["low", "medium", "high"],
+  "gemini-3.5-flash": ["low", "medium", "high"],
+  "gemini-3.1-pro": ["low", "high"],
+  "claude-opus-4-6": ["high"],
+  "claude-sonnet-4-6": ["high"],
+  "gpt-oss-120b": ["medium"],
+};
+for (const configuredModel of ANTIGRAVITY_MODELS) {
+  const map = configuredModel.thinkingLevelMap;
+  const supportedLevels = Object.entries(map ?? {})
+    .filter(([, value]) => value !== null)
+    .map(([level]) => level);
+  assert.deepEqual(
+    supportedLevels,
+    expectedThinkingLevels[configuredModel.id],
+    `${configuredModel.id} must only expose backend-supported thinking levels`,
+  );
+}
+
 const booleanUnionTool = {
   name: "boolean_union",
   description: "Exercises Pi's boolean enum schema shape.",

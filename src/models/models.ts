@@ -16,7 +16,8 @@ export const PROVIDER_NAME = "Antigravity";
  * - Claude Opus 4.6 (Thinking)
  * - GPT-OSS 120B (Medium)
  *
- * Pi exposes those as public model IDs; Low/Medium/High map through thinking effort.
+ * Pi exposes those as public model IDs and only surfaces the exact thinking levels
+ * advertised by the backend for each model.
  *
  * Note: Gemini 3.6 Flash runtime IDs are currently served on the daily/sandbox Cloud Code
  * endpoint first; streamGenerateContent falls through on 404 from production.
@@ -93,7 +94,47 @@ export const ANTIGRAVITY_ROUTING: Record<string, AntigravityRouting> = {
 };
 
 const freeCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-const defaultThinkingMap = { off: null, xhigh: "HIGH" } as ProviderModelConfig["thinkingLevelMap"];
+
+// A null entry is intentionally hidden by Pi. Do not collapse levels that happen to
+// route to the same runtime ID: the UI must reflect the levels the backend advertises.
+const thinkingLevelMaps = {
+  lowMediumHigh: {
+    off: null,
+    minimal: null,
+    low: "low",
+    medium: "medium",
+    high: "high",
+    xhigh: null,
+    max: null,
+  },
+  lowHigh: {
+    off: null,
+    minimal: null,
+    low: "low",
+    medium: null,
+    high: "high",
+    xhigh: null,
+    max: null,
+  },
+  thinking: {
+    off: null,
+    minimal: null,
+    low: null,
+    medium: null,
+    high: "high",
+    xhigh: null,
+    max: null,
+  },
+  medium: {
+    off: null,
+    minimal: null,
+    low: null,
+    medium: "medium",
+    high: null,
+    xhigh: null,
+    max: null,
+  },
+} satisfies Record<string, ProviderModelConfig["thinkingLevelMap"]>;
 
 /** Same set as `agy models`, collapsed to public Pi model IDs. */
 export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
@@ -101,7 +142,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     id: "gemini-3.6-flash",
     name: "Gemini 3.6 Flash (Antigravity)",
     reasoning: true,
-    thinkingLevelMap: defaultThinkingMap,
+    thinkingLevelMap: thinkingLevelMaps.lowMediumHigh,
     input: ["text", "image"],
     cost: freeCost,
     contextWindow: 1048576,
@@ -111,7 +152,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     id: "claude-opus-4-6",
     name: "Claude Opus 4.6 (Antigravity)",
     reasoning: true,
-    thinkingLevelMap: defaultThinkingMap,
+    thinkingLevelMap: thinkingLevelMaps.thinking,
     input: ["text", "image"],
     cost: freeCost,
     contextWindow: 250000,
@@ -121,7 +162,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     id: "claude-sonnet-4-6",
     name: "Claude Sonnet 4.6 (Antigravity)",
     reasoning: true,
-    thinkingLevelMap: defaultThinkingMap,
+    thinkingLevelMap: thinkingLevelMaps.thinking,
     input: ["text", "image"],
     cost: freeCost,
     contextWindow: 200000,
@@ -131,7 +172,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     id: "gemini-3.1-pro",
     name: "Gemini 3.1 Pro (Antigravity)",
     reasoning: true,
-    thinkingLevelMap: defaultThinkingMap,
+    thinkingLevelMap: thinkingLevelMaps.lowHigh,
     input: ["text", "image"],
     cost: freeCost,
     contextWindow: 1048576,
@@ -141,7 +182,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     id: "gemini-3.5-flash",
     name: "Gemini 3.5 Flash (Antigravity)",
     reasoning: true,
-    thinkingLevelMap: defaultThinkingMap,
+    thinkingLevelMap: thinkingLevelMaps.lowMediumHigh,
     input: ["text", "image"],
     cost: freeCost,
     contextWindow: 1048576,
@@ -151,7 +192,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     id: "gpt-oss-120b",
     name: "GPT-OSS 120B (Antigravity)",
     reasoning: true,
-    thinkingLevelMap: defaultThinkingMap,
+    thinkingLevelMap: thinkingLevelMaps.medium,
     input: ["text"],
     cost: freeCost,
     contextWindow: 131072,
