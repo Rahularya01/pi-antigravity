@@ -19,7 +19,7 @@ jobs:
         node: [20, 22]
     steps:
       # v5
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
       # v5
