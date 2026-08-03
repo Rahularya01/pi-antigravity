@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import type { Api, Context, Model, Tool } from "@earendil-works/pi-ai";
 import { defaultProjectId, stableProjectId } from "../src/client/index.js";
 import { StopReason } from "../src/types/enums.js";
-import { ANTIGRAVITY_MODELS, getMaxOutputTokens, getAntigravityRequestModelId } from "../src/models/index.js";
+import {
+  ANTIGRAVITY_MODELS,
+  getMaxOutputTokens,
+  getAntigravityRequestModelId,
+} from "../src/models/index.js";
 import {
   buildRequest,
   convertMessages,
@@ -134,6 +138,41 @@ assert.deepEqual(openObjectDecl?.parameters, {
     label: { type: "string" },
     limit: { type: "number" },
   },
+});
+
+const typeBoxOptionalTool = {
+  name: "mcp_like",
+  description: "TypeBox optional markers must not reach the custom backend.",
+  parameters: {
+    type: "object",
+    properties: {
+      query: { type: "string" },
+      limit: { type: "number", minimum: 1, "~optional": true },
+      options: {
+        type: "object",
+        properties: {
+          offset: { type: "number", minimum: 0, "~optional": true },
+        },
+        "~optional": true,
+      },
+    },
+    required: ["query"],
+  },
+} as Tool;
+const typeBoxOptionalDecl = convertTools([typeBoxOptionalTool], true)?.[0]?.functionDeclarations[0];
+assert.deepEqual(typeBoxOptionalDecl?.parameters, {
+  type: "object",
+  properties: {
+    query: { type: "string" },
+    limit: { type: "number" },
+    options: {
+      type: "object",
+      properties: {
+        offset: { type: "number" },
+      },
+    },
+  },
+  required: ["query"],
 });
 
 assert.equal(mapStopReason("STOP"), StopReason.Stop);

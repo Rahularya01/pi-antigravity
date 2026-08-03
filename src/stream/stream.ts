@@ -256,7 +256,7 @@ function normalizeCustomToolSchema(schema: unknown): unknown {
 
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(schema)) {
-    if (CUSTOM_TOOL_SCHEMA_OMIT.has(key) || key.startsWith("$")) continue;
+    if (CUSTOM_TOOL_SCHEMA_OMIT.has(key) || key.startsWith("$") || key.startsWith("~")) continue;
     if (
       key === "enum" &&
       Array.isArray(value) &&
