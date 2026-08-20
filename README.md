@@ -23,7 +23,7 @@
 
 - Pi Coding Agent and Pi AI version **0.80.0 or later**
 - A Google account that can use the relevant Cloud Code Assist / Antigravity services
-- A browser on the same machine as Pi, for the OAuth sign-in flow
+- A browser to complete the Google sign-in. Same-machine is best (the browser hits the local callback automatically); on a remote/headless machine, complete sign-in anywhere and paste the resulting callback URL back into Pi (see [Troubleshooting](#troubleshooting)).
 
 ## Install
 
@@ -143,6 +143,9 @@ By default, the provider tries `https://cloudcode-pa.googleapis.com` and then it
 ## Troubleshooting
 
 - **No credentials / 401 / 403:** Run `/login antigravity` again, then check `/antigravity.doctor`.
+- **Remote/headless machine — browser can't reach `localhost:51121`:** The callback binds to loopback only, so a browser on another machine can't hit it. You have two options:
+  - **Paste (no extra setup):** Run `/login antigravity`, open the shown URL and complete Google sign-in in _any_ browser. When it redirects to `http://localhost:51121/oauth-callback?…` and fails to load, copy that full URL from the address bar and paste it into the prompt Pi shows. The code is single-use and expires quickly, so paste promptly.
+  - **SSH tunnel (reusable):** From the machine with the browser, run `ssh -N -L 51121:127.0.0.1:51121 <user>@<server>` and keep it open, then run `/login antigravity` on the server. The redirect to `localhost:51121` tunnels through to the local callback automatically.
 - **OAuth callback will not start:** Ensure port `51121` is free and `ANTIGRAVITY_CALLBACK_HOST` is a permitted loopback address.
 - **Model is unavailable:** Run `/antigravity.models`; availability is account- and service-dependent.
 - **Claude/GPT tool-call schema error:** Upgrade to the latest package release. The provider adapts Pi's JSON Schema tool definitions for the Cloud Code Assist custom-tool bridge.

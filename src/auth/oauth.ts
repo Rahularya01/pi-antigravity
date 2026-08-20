@@ -186,6 +186,91 @@ function credentialEmail(credentials: OAuthCredentials): string | undefined {
   return typeof email === "string" ? email : undefined;
 }
 
+/**
+ * Parse a callback URL (or bare query string) pasted by the user from a
+ * remote/headless browser that could not reach the local callback server.
+ * Returns the validated {code, state} or throws a descriptive error. The checks
+ * mirror the local callback server so a pasted URL is accepted under the exact
+ * same rules as a same-machine browser redirect.
+ */
+function parsePastedCallback(raw: string, expectedState: string): { code: string; state: string } {
+  const text = (raw ?? "").trim();
+  if (!text) {
+    throw new Error(
+      "No callback pasted. Paste the full URL from your browser's address bar (http://localhost:51121/oauth-callback?…).",
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    // Bare query string: "state=…&code=…" or "?state=…&code=…"
+    const qs = text.startsWith("?") ? text.slice(1) : text;
+    url = new URL(`http://localhost:51121/oauth-callback?${qs}`);
+  }
+  const error = url.searchParams.get("error");
+  if (error) throw new Error(`OAuth error from browser: ${error.slice(0, 200)}`);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  if (!code || !state) {
+    throw new Error(
+      "Pasted text is missing 'code' or 'state'. Paste the FULL callback URL from your browser's address bar (http://localhost:51121/oauth-callback?…).",
+    );
+  }
+  if (state !== expectedState) {
+    throw new Error(
+      "State mismatch: that callback is from a different sign-in. Re-run /login antigravity, sign in again, and paste the new URL.",
+    );
+  }
+  return { code, state };
+}
+
+/**
+ * Resolve the authorization code from either the local callback server (browser
+ * on the same machine) or a pasted callback URL (browser on a remote/headless
+ * machine that cannot reach localhost:51121). Whichever provides a valid code
+ * first wins; the losing path is discarded. Honors callbacks.signal for cancel.
+ */
+async function acquireAuthCode(
+  expectedState: string,
+  opts: {
+    waitForCode: () => Promise<{ code: string; state: string }>;
+    callbacks: OAuthLoginCallbacks;
+  },
+): Promise<{ code: string; state: string }> {
+  const { waitForCode, callbacks } = opts;
+  const candidates: Promise<{ code: string; state: string }>[] = [waitForCode()];
+
+  // Manual paste path: offered whenever the callback surface can prompt.
+  if (typeof callbacks.onPrompt === "function") {
+    candidates.push(
+      callbacks
+        .onPrompt({
+          message:
+            "Remote/headless machine (your browser can't reach localhost:51121)? " +
+            "After signing in, paste the full callback URL shown in your browser's address bar.",
+          placeholder: "http://localhost:51121/oauth-callback?state=…&code=…",
+        })
+        .then((text) => parsePastedCallback(text, expectedState)),
+    );
+  }
+
+  // Flow cancellation (escape) aborts the whole login when a signal is provided.
+  if (callbacks.signal) {
+    candidates.push(
+      new Promise<never>((_resolve, reject) => {
+        const signal = callbacks.signal as AbortSignal;
+        if (signal.aborted) return reject(new Error("Login cancelled"));
+        signal.addEventListener("abort", () => reject(new Error("Login cancelled")), {
+          once: true,
+        });
+      }),
+    );
+  }
+
+  return Promise.race(candidates);
+}
+
 export async function loginAntigravity(
   callbacks: OAuthLoginCallbacks,
 ): Promise<AntigravityOAuthCredentials> {
@@ -208,10 +293,14 @@ export async function loginAntigravity(
     });
     callbacks.onAuth({
       url: `${AUTH_URL}?${authParams.toString()}`,
-      instructions: "Complete Google sign-in. Pi will capture the local callback.",
+      instructions:
+        "Complete Google sign-in. Pi captures the local callback automatically — or, on a remote/headless machine, paste the callback URL when prompted.",
     });
 
-    const { code, state: returnedState } = await waitForCode();
+    const { code, state: returnedState } = await acquireAuthCode(state, {
+      waitForCode,
+      callbacks,
+    });
     if (returnedState !== state) throw new Error("OAuth state mismatch");
 
     const tokenResponse = await fetch(TOKEN_URL, {

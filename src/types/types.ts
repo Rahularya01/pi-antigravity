@@ -219,6 +219,8 @@ export type AccountUsage = {
   planLabel?: string;
   groups: QuotaGroup[];
   groupDescription?: string;
+  /** Set when the (subscription-gated) quota-summary RPC was unavailable, e.g. free-tier SUBSCRIPTION_REQUIRED. */
+  quotaSummaryError?: string;
   models: ModelQuotaRow[];
   defaultAgentModelId?: string;
   fetchedAt: number;
