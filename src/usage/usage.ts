@@ -372,7 +372,7 @@ export async function fetchAccountUsage(apiKeyRaw?: string): Promise<AccountUsag
 }
 
 function quotaErrorNote(msg: string): string {
-  if (/SUBSCRIPTION_REQUIRED|valid license/i.test(msg)) {
+  if (/SUBSCRIPTION_REQUIRED|#3501|(?:lack|missing).*license/i.test(msg)) {
     return "Aggregate quota summary needs a paid subscription (free-tier can't use that endpoint). Per-model usage is still available via /antigravity.models.";
   }
   return `Aggregate quota summary unavailable: ${msg.slice(0, 160)}`;

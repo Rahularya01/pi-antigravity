@@ -243,16 +243,26 @@ async function acquireAuthCode(
 
   // Manual paste path: offered whenever the callback surface can prompt.
   if (typeof callbacks.onPrompt === "function") {
-    candidates.push(
-      callbacks
-        .onPrompt({
-          message:
-            "Remote/headless machine (your browser can't reach localhost:51121)? " +
-            "After signing in, paste the full callback URL shown in your browser's address bar.",
-          placeholder: "http://localhost:51121/oauth-callback?state=…&code=…",
-        })
-        .then((text) => parsePastedCallback(text, expectedState)),
-    );
+    const promptLoop = async (): Promise<{ code: string; state: string }> => {
+      let promptMessage =
+        "Remote/headless machine (your browser can't reach localhost:51121)? " +
+        "After signing in, paste the full callback URL shown in your browser's address bar.";
+      while (true) {
+        if (callbacks.signal?.aborted) throw new Error("Login cancelled");
+        try {
+          const text = await callbacks.onPrompt({
+            message: promptMessage,
+            placeholder: "http://localhost:51121/oauth-callback?state=…&code=…",
+          });
+          return parsePastedCallback(text, expectedState);
+        } catch (err: unknown) {
+          if (callbacks.signal?.aborted) throw new Error("Login cancelled", { cause: err });
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          promptMessage = `Invalid callback (${errorMessage}). Please paste the full URL:`;
+        }
+      }
+    };
+    candidates.push(promptLoop());
   }
 
   // Flow cancellation (escape) aborts the whole login when a signal is provided.
