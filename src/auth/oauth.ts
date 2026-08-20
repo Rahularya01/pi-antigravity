@@ -229,7 +229,7 @@ function parsePastedCallback(raw: string, expectedState: string): { code: string
  * Resolve the authorization code from either the local callback server (browser
  * on the same machine) or a pasted callback URL (browser on a remote/headless
  * machine that cannot reach localhost:51121). Whichever provides a valid code
- * first wins; the losing path is discarded. Honors callbacks.signal for cancel.
+ * first wins; the losing path is cancelled. Honors callbacks.signal for cancel.
  */
 async function acquireAuthCode(
   expectedState: string,
@@ -239,6 +239,8 @@ async function acquireAuthCode(
   },
 ): Promise<{ code: string; state: string }> {
   const { waitForCode, callbacks } = opts;
+  // Signals the losing candidate(s) to stop once the race settles.
+  const settle = new AbortController();
   const candidates: Promise<{ code: string; state: string }>[] = [waitForCode()];
 
   // Manual paste path: offered whenever the callback surface can prompt.
@@ -248,15 +250,28 @@ async function acquireAuthCode(
         "Remote/headless machine (your browser can't reach localhost:51121)? " +
         "After signing in, paste the full callback URL shown in your browser's address bar.";
       while (true) {
-        if (callbacks.signal?.aborted) throw new Error("Login cancelled");
+        if (callbacks.signal?.aborted || settle.signal.aborted) {
+          throw new Error("Login cancelled");
+        }
+        let text: string;
         try {
-          const text = await callbacks.onPrompt({
+          text = await callbacks.onPrompt({
             message: promptMessage,
             placeholder: "http://localhost:51121/oauth-callback?state=…&code=…",
           });
+        } catch (err: unknown) {
+          // Prompt/transport failure — propagate, do not retry.
+          throw err instanceof Error ? err : new Error(String(err));
+        }
+        if (callbacks.signal?.aborted || settle.signal.aborted) {
+          throw new Error("Login cancelled");
+        }
+        try {
           return parsePastedCallback(text, expectedState);
         } catch (err: unknown) {
-          if (callbacks.signal?.aborted) throw new Error("Login cancelled", { cause: err });
+          if (callbacks.signal?.aborted || settle.signal.aborted) {
+            throw new Error("Login cancelled", { cause: err });
+          }
           const errorMessage = err instanceof Error ? err.message : String(err);
           promptMessage = `Invalid callback (${errorMessage}). Please paste the full URL:`;
         }
@@ -266,19 +281,30 @@ async function acquireAuthCode(
   }
 
   // Flow cancellation (escape) aborts the whole login when a signal is provided.
+  let removeAbortListener: (() => void) | undefined;
   if (callbacks.signal) {
     candidates.push(
       new Promise<never>((_resolve, reject) => {
         const signal = callbacks.signal as AbortSignal;
         if (signal.aborted) return reject(new Error("Login cancelled"));
-        signal.addEventListener("abort", () => reject(new Error("Login cancelled")), {
-          once: true,
-        });
+        const onAbort = () => reject(new Error("Login cancelled"));
+        signal.addEventListener("abort", onAbort, { once: true });
+        removeAbortListener = () => signal.removeEventListener("abort", onAbort);
       }),
     );
   }
 
-  return Promise.race(candidates);
+  // Suppress unhandled rejections from losing candidates after the race settles.
+  for (const candidate of candidates) {
+    candidate.catch(() => {});
+  }
+
+  try {
+    return await Promise.race(candidates);
+  } finally {
+    settle.abort();
+    removeAbortListener?.();
+  }
 }
 
 export async function loginAntigravity(
