@@ -166,12 +166,23 @@ function startCallbackServer(expectedState: string): Promise<CallbackServer> {
       }
     });
 
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      closeServerGracefully(server);
+    };
+    const cleanup = () => {
+      finish(() => rejectCode(new Error("OAuth callback cancelled")));
+      close();
+    };
+
     server.listen(51121, CALLBACK_HOST, () => {
       timeout = setTimeout(() => {
         finish(() => rejectCode(new Error("OAuth callback timed out waiting for browser login")));
-        closeServerGracefully(server);
+        close();
       }, OAUTH_CALLBACK_TIMEOUT_MS);
-      resolve({ server, waitForCode: () => codePromise });
+      resolve({ server, waitForCode: () => codePromise, cleanup });
     });
   });
 }
@@ -314,7 +325,7 @@ export async function loginAntigravity(
   // State must be independent of the PKCE verifier so a leaked callback URL
   // cannot also disclose the code_verifier needed to mint tokens.
   const state = base64Url(randomBytes(32));
-  const { server, waitForCode } = await startCallbackServer(state);
+  const { waitForCode, cleanup } = await startCallbackServer(state);
   try {
     const authParams = new URLSearchParams({
       client_id: CLIENT_ID,
@@ -379,7 +390,7 @@ export async function loginAntigravity(
       email,
     };
   } finally {
-    closeServerGracefully(server);
+    cleanup();
   }
 }
 
