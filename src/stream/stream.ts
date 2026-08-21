@@ -873,6 +873,8 @@ export function streamAntigravity(
       setLastLatencyMs(Date.now() - startTime);
       if (output.stopReason === "error" || output.stopReason === "aborted") {
         stream.push({ type: "error", reason: output.stopReason, error: output });
+      } else if (output.stopReason === "pending") {
+        throw new Error("Antigravity API returned no stop reason");
       } else {
         stream.push({ type: "done", reason: output.stopReason, message: output });
       }
