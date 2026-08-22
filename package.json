@@ -35,7 +35,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "security-check": "tsx scripts/security-check.ts",
-    "test": "tsx scripts/test-model-routing.ts && tsx scripts/test-usage-formatter.ts && tsx scripts/test-stream-sse.ts",
+    "test": "tsx scripts/test-model-routing.ts && tsx scripts/test-usage-formatter.ts && tsx scripts/test-stream-sse.ts && tsx scripts/test-http-proxy.ts",
     "smoke:tools": "tsx scripts/smoke-tool-schema.ts",
     "smoke:models": "node --import tsx scripts/smoke-all-models.mjs",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run security-check && npm test"

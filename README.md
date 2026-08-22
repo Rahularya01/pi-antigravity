@@ -145,7 +145,7 @@ By default, the provider tries `https://cloudcode-pa.googleapis.com` and then it
 
 ### Latency
 
-Provider requests reuse a long-lived keep-alive connection pool, so consecutive turns do not repeat the DNS, TCP, and TLS handshake. The pool is scoped to this provider and does not change HTTP behaviour elsewhere in Pi. The connection is also opened when the extension loads so the first message of a session skips the handshake too. For the lowest time-to-first-token, pick a fast runtime: `gemini-3.7-flash` with reasoning off routes to `gemini-3.7-flash-tiered` at thinking level `LOW`. Setting `ANTIGRAVITY_PROJECT_ID` also removes the project-discovery round-trip when credentials do not already carry a project ID.
+Provider requests reuse a long-lived keep-alive connection pool, so consecutive turns do not repeat the DNS, TCP, and TLS handshake. The pool is scoped to this provider and does not change HTTP behaviour elsewhere in Pi. When `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` is configured, requests instead use Pi's global proxy-aware dispatcher. The connection is also opened when the extension loads so the first message of a session skips the handshake too. For the lowest time-to-first-token, pick a fast runtime: `gemini-3.7-flash` with reasoning off routes to `gemini-3.7-flash-tiered` at thinking level `LOW`. Setting `ANTIGRAVITY_PROJECT_ID` also removes the project-discovery round-trip when credentials do not already carry a project ID.
 
 ## Troubleshooting
 

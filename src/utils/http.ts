@@ -21,9 +21,19 @@ type DispatcherInit = RequestInit & { dispatcher?: unknown };
 
 let dispatcherPromise: Promise<unknown> | undefined;
 
+function hasProxyConfiguration(): boolean {
+  return ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"].some(
+    (name) => Boolean(process.env[name]?.trim()),
+  );
+}
+
 async function getDispatcher(): Promise<unknown> {
   dispatcherPromise ??= (async () => {
-    if (antigravityEnv("NO_KEEPALIVE") === "1") return undefined;
+    // Pi configures a proxy-aware global dispatcher. Passing a private Agent here
+    // would bypass it and make Antigravity requests connect directly instead.
+    if (antigravityEnv("NO_KEEPALIVE") === "1" || hasProxyConfiguration()) {
+      return undefined;
+    }
     try {
       const { Agent } = await import("undici");
       return new Agent({
