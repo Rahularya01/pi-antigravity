@@ -122,6 +122,22 @@ function asTextParts(content: unknown): Array<GeminiTextPart | GeminiInlineDataP
   });
 }
 
+function asImageParts(content: unknown): GeminiInlineDataPart[] {
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((item): GeminiInlineDataPart[] => {
+    if (!isRecord(item)) return [];
+    const block = item as ContentBlock;
+    if (block.type === "image") {
+      const rawData = block.data || block.source?.data;
+      if (!rawData) return [];
+      const explicitMime = block.mimeType || block.mediaType || block.source?.mediaType;
+      const { data, mimeType } = parseImageData(rawData, explicitMime);
+      return data ? [{ inlineData: { mimeType, data } }] : [];
+    }
+    return [];
+  });
+}
+
 function appendTurn(contents: GeminiContent[], role: GeminiRole, parts: GeminiPart[]): void {
   if (!parts.length) return;
   const last = contents[contents.length - 1];
@@ -178,6 +194,7 @@ export function convertMessages(
         .map((c) => sanitizeText(c.text))
         .join("\n");
       const responseText = text || (msg.isError ? "Tool failed" : "");
+      const imageParts = asImageParts(msg.content);
       const part: GeminiFunctionResponsePart = {
         functionResponse: {
           name: msg.toolName,
@@ -187,7 +204,7 @@ export function convertMessages(
             : {}),
         },
       };
-      appendTurn(contents, GeminiRole.User, [part]);
+      appendTurn(contents, GeminiRole.User, [part, ...imageParts]);
     }
   }
 

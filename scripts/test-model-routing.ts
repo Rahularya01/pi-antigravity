@@ -439,6 +439,47 @@ for (const [reasoning, thinkingLevel] of [
   assert.equal(request.request.generationConfig?.thinkingConfig?.thinkingLevel, thinkingLevel);
 }
 
+// Case F: Multimodal tool results preserve images alongside text
+const multimodalResultContext = {
+  messages: [
+    { role: "user", content: "take screenshot", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call-shot",
+          name: "screenshot",
+          arguments: {},
+        },
+      ],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "gemini-3.7-flash",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call-shot",
+      toolName: "screenshot",
+      content: [
+        { type: "text", text: "captured" },
+        { type: "image", data: "data:image/png;base64,iVBORw0KGgo=", mimeType: "image/png" },
+      ],
+      isError: false,
+      timestamp: Date.now(),
+    },
+  ],
+} as unknown as Context;
+const convertedMultimodal = convertMessages(flash37Model, multimodalResultContext, "gemini-3.7-flash-tiered");
+assert.equal(convertedMultimodal.length, 3);
+assert.equal(convertedMultimodal[2]?.role, "user");
+assert.equal(convertedMultimodal[2]?.parts.length, 2);
+assert.ok(convertedMultimodal[2]?.parts.some((p) => "functionResponse" in p));
+assert.ok(convertedMultimodal[2]?.parts.some((p) => "inlineData" in p && p.inlineData.mimeType === "image/png"));
+
 console.log(
   `model routing: ${routeCases.length} cases, tool schema, errors, project ids, token clamping, and message conversion passed`,
 );
