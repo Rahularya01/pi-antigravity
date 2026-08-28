@@ -144,6 +144,10 @@ export function convertMessages(
       const parts = asTextParts(msg.content);
       appendTurn(contents, GeminiRole.User, parts);
     } else if (msg.role === "assistant") {
+      // Skip errored/aborted turns during replay so incomplete calls do not cause cascading errors.
+      if (msg.stopReason === "error" || msg.stopReason === "aborted") {
+        continue;
+      }
       const parts: GeminiPart[] = [];
       for (const block of msg.content) {
         if (block.type === "text" && String(block.text || "").trim()) {
@@ -678,6 +682,7 @@ export async function streamResponse(
       }
 
       if (candidate?.finishReason) {
+        output.rawStopReason = candidate.finishReason;
         output.stopReason = blocks.some((b) => b.type === "toolCall")
           ? StopReason.ToolUse
           : mapStopReason(candidate.finishReason);
@@ -872,6 +877,11 @@ export function streamAntigravity(
       if (!received) throw new Error("Antigravity API returned an empty response");
       setLastLatencyMs(Date.now() - startTime);
       if (output.stopReason === "error" || output.stopReason === "aborted") {
+        const errorDetail = output.rawStopReason
+          ? `Provider stopped with: ${output.rawStopReason}`
+          : "An unknown error occurred";
+        output.errorMessage = output.errorMessage || errorDetail;
+        setLastError(output.errorMessage);
         stream.push({ type: "error", reason: output.stopReason, error: output });
       } else if (output.stopReason === "pending") {
         throw new Error("Antigravity API returned no stop reason");
