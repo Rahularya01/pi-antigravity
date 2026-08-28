@@ -78,7 +78,7 @@ let toolCallCounter = 0;
 function sanitizeToolCallId(id: string, fallbackName?: string): string {
   const cleaned = id.replace(/[^a-zA-Z0-9_-]/g, "_");
   const capped = cleaned.slice(0, 64);
-  return capped || `${fallbackName || "tool"}_${Date.now()}_${++toolCallCounter}`;
+  return capped || `${fallbackName || "tool"}_${++toolCallCounter}`;
 }
 
 function toolCallIdNeeded(modelId: string, runtimeModel: string): boolean {
