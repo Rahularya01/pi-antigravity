@@ -155,9 +155,9 @@ export function convertMessages(
               text: sanitizeText(block.thinking),
               ...(block.thinkingSignature ? { thoughtSignature: block.thinkingSignature } : {}),
             });
-          } else {
-            parts.push({ text: sanitizeText(block.thinking) });
           }
+          // Cross-model thinking blocks are dropped rather than converted to assistant text
+          // to prevent Gemini from mimicking older models' thought monologues in its final text response.
         } else if (block.type === "toolCall") {
           parts.push({
             functionCall: {
@@ -393,9 +393,11 @@ export function buildRequest(
   if (options.temperature !== undefined) generationConfig.temperature = options.temperature;
   if (runtimeModel === "gemini-3.7-flash-tiered") {
     const effort = options.reasoning ?? "off";
+    const thinkingLevel =
+      effort === "high" || effort === "xhigh" ? "HIGH" : effort === "medium" ? "MEDIUM" : "LOW";
     generationConfig.thinkingConfig = {
-      thinkingLevel:
-        effort === "high" || effort === "xhigh" ? "HIGH" : effort === "medium" ? "MEDIUM" : "LOW",
+      thinkingLevel,
+      ...(effort !== "off" ? { includeThoughts: true } : {}),
     };
   }
   const maxAllowed = getMaxOutputTokens(model.id, runtimeModel);
@@ -691,6 +693,7 @@ export async function streamResponse(
           (responseData.usageMetadata.candidatesTokenCount || 0) +
           (responseData.usageMetadata.thoughtsTokenCount || 0);
         output.usage.cacheRead = cacheRead;
+        output.usage.reasoning = responseData.usageMetadata.thoughtsTokenCount || 0;
         output.usage.totalTokens = responseData.usageMetadata.totalTokenCount || 0;
         // Keep subscription costs at zero (matches model catalog freeCost).
         output.usage.cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };

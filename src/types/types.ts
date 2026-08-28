@@ -105,7 +105,8 @@ export type GeminiGenerationConfig = {
   temperature?: number;
   maxOutputTokens?: number;
   thinkingConfig?: {
-    thinkingLevel: "LOW" | "MEDIUM" | "HIGH";
+    includeThoughts?: boolean;
+    thinkingLevel?: "LOW" | "MEDIUM" | "HIGH";
   };
 };
 

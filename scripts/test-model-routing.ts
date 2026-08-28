@@ -422,7 +422,7 @@ const reqD = buildRequest(
 );
 assert.equal(reqD.request.generationConfig?.maxOutputTokens, 65535);
 
-// Case E: Gemini 3.7 uses its tiered runtime and sends effort in thinkingConfig.
+// Case E: Gemini 3.7 uses its tiered runtime and sends effort in thinkingConfig with includeThoughts: true.
 const flash37Model = { ...model, id: "gemini-3.7-flash", maxTokens: 65536 };
 for (const [reasoning, thinkingLevel] of [
   ["low", "LOW"],
@@ -437,7 +437,42 @@ for (const [reasoning, thinkingLevel] of [
     "gemini-3.7-flash-tiered",
   );
   assert.equal(request.request.generationConfig?.thinkingConfig?.thinkingLevel, thinkingLevel);
+  assert.equal(request.request.generationConfig?.thinkingConfig?.includeThoughts, true);
 }
+
+// Case F: Gemini 3.7 with reasoning "off" sets thinkingLevel: LOW without includeThoughts
+const reqOff = buildRequest(
+  flash37Model,
+  dummyContext,
+  "test-proj",
+  { reasoning: "off" },
+  "gemini-3.7-flash-tiered",
+);
+assert.equal(reqOff.request.generationConfig?.thinkingConfig?.thinkingLevel, "LOW");
+assert.equal(reqOff.request.generationConfig?.thinkingConfig?.includeThoughts, undefined);
+
+// Case G: Cross-model thinking blocks are dropped to prevent prompt pollution
+const crossThinkingContext = {
+  messages: [
+    { role: "user", content: "hi", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        { type: "thinking", thinking: "cross model internal monologue" },
+        { type: "text", text: "visible answer" },
+      ],
+      api: "anthropic-messages",
+      provider: "anthropic",
+      model: "claude-opus-4-6",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "stop",
+      timestamp: Date.now(),
+    },
+  ],
+} as unknown as Context;
+const convertedCross = convertMessages(flash37Model, crossThinkingContext, "gemini-3.7-flash-tiered");
+assert.equal(convertedCross[1]?.parts.length, 1);
+assert.deepEqual(convertedCross[1]?.parts[0], { text: "visible answer" });
 
 console.log(
   `model routing: ${routeCases.length} cases, tool schema, errors, project ids, token clamping, and message conversion passed`,
