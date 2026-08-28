@@ -90,6 +90,23 @@ function toolCallIdNeeded(modelId: string, runtimeModel: string): boolean {
   );
 }
 
+const base64SignaturePattern = /^[A-Za-z0-9+/]+={0,2}$/;
+function isValidThoughtSignature(signature?: string): boolean {
+  if (!signature || typeof signature !== "string" || signature.length === 0) return false;
+  if (signature.length % 4 !== 0) return false;
+  return base64SignaturePattern.test(signature);
+}
+
+function geminiRequiresThoughtSignature(runtimeModel: string): boolean {
+  if (!runtimeModel.startsWith("gemini-")) return false;
+  const match = runtimeModel.match(/^gemini-(\d+)/);
+  if (match) {
+    const major = Number.parseInt(match[1], 10);
+    return major >= 3;
+  }
+  return true;
+}
+
 function parseImageData(raw: string, explicitMime?: string): { data: string; mimeType: string } {
   const match = raw.match(/^data:([^;]+);base64,(.+)$/s);
   if (match) {
@@ -139,17 +156,44 @@ export function convertMessages(
   runtimeModel: string,
 ): GeminiContent[] {
   const contents: GeminiContent[] = [];
+  const requiresSig = geminiRequiresThoughtSignature(runtimeModel);
+  // Map unsigned toolCall IDs to their argument strings.
+  // Their paired toolResults are converted into user observations without emitting
+  // pseudo-code text in the model turn (which prevents Gemini from mimicking text calls).
+  const droppedToolCallIds = new Map<string, string>();
   for (const msg of context.messages) {
     if (msg.role === "user") {
       const parts = asTextParts(msg.content);
       appendTurn(contents, GeminiRole.User, parts);
     } else if (msg.role === "assistant") {
       const parts: GeminiPart[] = [];
+      const isSameModel = msg.provider === PROVIDER_ID && msg.model === model.id;
+      const toolCalls = msg.content.filter((b): b is ToolCall => b.type === "toolCall");
+      // In parallel function calling, Gemini places thoughtSignature only on the first call.
+      // A tool-call group is valid only when originating from compatible Gemini history and
+      // the first call carries a valid signature, with no malformed signatures on sibling calls.
+      const firstCallHasSig =
+        toolCalls.length > 0 && isValidThoughtSignature(toolCalls[0]?.thoughtSignature);
+      const allSigsValid = toolCalls.every(
+        (tc) => !tc.thoughtSignature || isValidThoughtSignature(tc.thoughtSignature),
+      );
+      const groupIsSigned = isSameModel && firstCallHasSig && allSigsValid;
+
       for (const block of msg.content) {
-        if (block.type === "text" && String(block.text || "").trim()) {
-          parts.push({ text: sanitizeText(block.text) });
+        if (block.type === "text") {
+          const textSig =
+            isSameModel && isValidThoughtSignature(block.textSignature)
+              ? block.textSignature
+              : undefined;
+          if ((!block.text || block.text.trim() === "") && !textSig) {
+            continue;
+          }
+          parts.push({
+            text: sanitizeText(block.text),
+            ...(textSig ? { thoughtSignature: textSig } : {}),
+          });
         } else if (block.type === "thinking" && String(block.thinking || "").trim()) {
-          if (msg.provider === PROVIDER_ID && msg.model === model.id) {
+          if (isSameModel) {
             parts.push({
               thought: true,
               text: sanitizeText(block.thinking),
@@ -159,16 +203,41 @@ export function convertMessages(
             parts.push({ text: sanitizeText(block.thinking) });
           }
         } else if (block.type === "toolCall") {
-          parts.push({
-            functionCall: {
-              name: block.name,
-              args: block.arguments ?? {},
-              ...(toolCallIdNeeded(model.id, runtimeModel)
-                ? { id: sanitizeToolCallId(block.id || "", block.name) }
-                : {}),
-            },
-            ...(block.thoughtSignature ? { thoughtSignature: block.thoughtSignature } : {}),
-          });
+          const isSigned = groupIsSigned;
+          // Gemini 3+ with thinking requires thoughtSignature on every functionCall.
+          // Cross-provider history (or any history without a valid sig) would 400:
+          //   "Function call is missing a thought_signature ... position 136"
+          // See: https://ai.google.dev/gemini-api/docs/thought-signatures
+          // When missing, record the call so the corresponding toolResult is rendered as an
+          // observation in the user turn without emitting a pseudo-code model turn that trains
+          // Gemini to emit text calls.
+          if (requiresSig && !isSigned) {
+            const rawId = block.id || "";
+            const argsText = (() => {
+              try {
+                return JSON.stringify(block.arguments ?? {});
+              } catch {
+                return "{}";
+              }
+            })();
+            if (rawId) {
+              droppedToolCallIds.set(rawId, argsText);
+              droppedToolCallIds.set(sanitizeToolCallId(rawId, block.name), argsText);
+            } else {
+              droppedToolCallIds.set(`empty:${block.name}`, argsText);
+            }
+          } else {
+            parts.push({
+              functionCall: {
+                name: block.name,
+                args: block.arguments ?? {},
+                ...(toolCallIdNeeded(model.id, runtimeModel)
+                  ? { id: sanitizeToolCallId(block.id || "", block.name) }
+                  : {}),
+              },
+              ...(block.thoughtSignature ? { thoughtSignature: block.thoughtSignature } : {}),
+            });
+          }
         }
       }
       appendTurn(contents, GeminiRole.Model, parts);
@@ -178,16 +247,33 @@ export function convertMessages(
         .map((c) => sanitizeText(c.text))
         .join("\n");
       const responseText = text || (msg.isError ? "Tool failed" : "");
-      const part: GeminiFunctionResponsePart = {
-        functionResponse: {
-          name: msg.toolName,
-          response: msg.isError ? { error: responseText } : { output: responseText },
-          ...(toolCallIdNeeded(model.id, runtimeModel)
-            ? { id: sanitizeToolCallId(msg.toolCallId || "", msg.toolName) }
-            : {}),
-        },
-      };
-      appendTurn(contents, GeminiRole.User, [part]);
+      const rawId = msg.toolCallId || "";
+      const sanitizedId = toolCallIdNeeded(model.id, runtimeModel)
+        ? sanitizeToolCallId(rawId, msg.toolName)
+        : rawId;
+      const droppedArgs = requiresSig
+        ? (droppedToolCallIds.get(rawId) ??
+          droppedToolCallIds.get(sanitizedId) ??
+          (rawId === "" ? droppedToolCallIds.get(`empty:${msg.toolName}`) : undefined))
+        : undefined;
+      if (droppedArgs !== undefined) {
+        const label =
+          droppedArgs === "{}" ? `\`${msg.toolName}\`` : `\`${msg.toolName}\` (${droppedArgs})`;
+        appendTurn(contents, GeminiRole.User, [
+          { text: sanitizeText(`[Observation from ${label}:\n${responseText}]`) },
+        ]);
+      } else {
+        const part: GeminiFunctionResponsePart = {
+          functionResponse: {
+            name: msg.toolName,
+            response: msg.isError ? { error: responseText } : { output: responseText },
+            ...(toolCallIdNeeded(model.id, runtimeModel)
+              ? { id: sanitizeToolCallId(msg.toolCallId || "", msg.toolName) }
+              : {}),
+          },
+        };
+        appendTurn(contents, GeminiRole.User, [part]);
+      }
     }
   }
 

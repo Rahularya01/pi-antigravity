@@ -439,6 +439,169 @@ for (const [reasoning, thinkingLevel] of [
   assert.equal(request.request.generationConfig?.thinkingConfig?.thinkingLevel, thinkingLevel);
 }
 
+// Case F: Cross-provider unsigned tool calls are converted to user observations on Gemini 3+
+const unsignedToolContext = {
+  messages: [
+    { role: "user", content: "read file", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call-prev-1",
+          name: "read",
+          arguments: { path: "main.ts" },
+        },
+      ],
+      api: "openai-responses",
+      provider: "openai",
+      model: "gpt-4o",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call-prev-1",
+      toolName: "read",
+      content: [{ type: "text", text: "file content" }],
+      isError: false,
+      timestamp: Date.now(),
+    },
+  ],
+} as unknown as Context;
+const convertedUnsigned = convertMessages(flash37Model, unsignedToolContext, "gemini-3.7-flash-tiered");
+assert.equal(convertedUnsigned.length, 1);
+assert.equal(convertedUnsigned[0]?.role, "user");
+assert.ok(convertedUnsigned[0]?.parts.some((p) => "text" in p && p.text.includes("Observation from `read`")));
+
+// Case G: Parallel tool calls where only the first call has thoughtSignature
+const validSig = "QkFTRTY0LXRlc3Qtc2lnbmF0dXJlLXRlc3QxMjM0NTY=";
+const parallelSignedContext = {
+  messages: [
+    { role: "user", content: "read two files", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call-1",
+          name: "read",
+          arguments: { path: "a.ts" },
+          thoughtSignature: validSig,
+        },
+        {
+          type: "toolCall",
+          id: "call-2",
+          name: "read",
+          arguments: { path: "b.ts" },
+        },
+      ],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "gemini-3.7-flash",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call-1",
+      toolName: "read",
+      content: [{ type: "text", text: "content a" }],
+      isError: false,
+      timestamp: Date.now(),
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call-2",
+      toolName: "read",
+      content: [{ type: "text", text: "content b" }],
+      isError: false,
+      timestamp: Date.now(),
+    },
+  ],
+} as unknown as Context;
+const convertedParallel = convertMessages(flash37Model, parallelSignedContext, "gemini-3.7-flash-tiered");
+assert.equal(convertedParallel.length, 3);
+assert.equal(convertedParallel[1]?.role, "model");
+assert.equal(convertedParallel[1]?.parts.length, 2);
+assert.ok(convertedParallel[1]?.parts.every((p) => "functionCall" in p), "all parallel calls in signed turn remain functionCalls");
+assert.equal(convertedParallel[2]?.role, "user");
+assert.equal(convertedParallel[2]?.parts.length, 2);
+assert.ok(convertedParallel[2]?.parts.every((p) => "functionResponse" in p), "all parallel results remain functionResponses");
+
+// Case H: Parallel tool calls with reversed signature placement (first unsigned, second signed)
+const parallelReversedContext = {
+  messages: [
+    { role: "user", content: "read files", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        { type: "toolCall", id: "call-r1", name: "read", arguments: { path: "a.ts" } },
+        { type: "toolCall", id: "call-r2", name: "read", arguments: { path: "b.ts" }, thoughtSignature: validSig },
+      ],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "gemini-3.7-flash",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    { role: "toolResult", toolCallId: "call-r1", toolName: "read", content: [{ type: "text", text: "a" }], isError: false, timestamp: Date.now() },
+    { role: "toolResult", toolCallId: "call-r2", toolName: "read", content: [{ type: "text", text: "b" }], isError: false, timestamp: Date.now() },
+  ],
+} as unknown as Context;
+const convertedReversed = convertMessages(flash37Model, parallelReversedContext, "gemini-3.7-flash-tiered");
+assert.ok(!convertedReversed.some((c) => c.parts.some((p) => "functionCall" in p)), "reversed signature calls downgrade to observations");
+
+// Case I: Signed thinking block with unsigned tool call
+const signedThinkingUnsignedCallContext = {
+  messages: [
+    { role: "user", content: "do action", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        { type: "thinking", thinking: "plan", thinkingSignature: validSig },
+        { type: "toolCall", id: "call-u1", name: "read", arguments: { path: "a.ts" } },
+      ],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "gemini-3.7-flash",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    { role: "toolResult", toolCallId: "call-u1", toolName: "read", content: [{ type: "text", text: "result" }], isError: false, timestamp: Date.now() },
+  ],
+} as unknown as Context;
+const convertedSignedThinking = convertMessages(flash37Model, signedThinkingUnsignedCallContext, "gemini-3.7-flash-tiered");
+assert.ok(!convertedSignedThinking.some((c) => c.parts.some((p) => "functionCall" in p)), "thinking signature does not mark unsigned toolCall as signed");
+
+// Case J: Sibling call with malformed/corrupted signature
+const malformedSiblingContext = {
+  messages: [
+    { role: "user", content: "read files", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        { type: "toolCall", id: "call-m1", name: "read", arguments: { path: "a.ts" }, thoughtSignature: validSig },
+        { type: "toolCall", id: "call-m2", name: "read", arguments: { path: "b.ts" }, thoughtSignature: "invalid!!base64" },
+      ],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "gemini-3.7-flash",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    { role: "toolResult", toolCallId: "call-m1", toolName: "read", content: [{ type: "text", text: "a" }], isError: false, timestamp: Date.now() },
+    { role: "toolResult", toolCallId: "call-m2", toolName: "read", content: [{ type: "text", text: "b" }], isError: false, timestamp: Date.now() },
+  ],
+} as unknown as Context;
+const convertedMalformed = convertMessages(flash37Model, malformedSiblingContext, "gemini-3.7-flash-tiered");
+assert.ok(!convertedMalformed.some((c) => c.parts.some((p) => "functionCall" in p)), "malformed sibling signature causes downgrade to observation");
+
 console.log(
   `model routing: ${routeCases.length} cases, tool schema, errors, project ids, token clamping, and message conversion passed`,
 );
