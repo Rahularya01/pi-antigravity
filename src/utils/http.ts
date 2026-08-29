@@ -34,6 +34,12 @@ async function getDispatcher(): Promise<unknown> {
     if (antigravityEnv("NO_KEEPALIVE") === "1" || hasProxyConfiguration()) {
       return undefined;
     }
+    // Node.js native fetch in Node 22+ manages connection pooling and keep-alive natively,
+    // and passing external npm undici Agent instances causes onRequestStart interface mismatches.
+    const nodeMajor = Number(process.versions.node?.split(".")[0]);
+    if (!Number.isNaN(nodeMajor) && nodeMajor >= 22) {
+      return undefined;
+    }
     try {
       const { Agent } = await import("undici");
       return new Agent({
@@ -60,7 +66,12 @@ export async function antigravityFetch(
 ): Promise<Response> {
   const dispatcher = await getDispatcher();
   if (!dispatcher) return fetch(input, init);
-  return fetch(input, { ...init, dispatcher } as DispatcherInit);
+  try {
+    return await fetch(input, { ...init, dispatcher } as DispatcherInit);
+  } catch {
+    // If the custom dispatcher fails (e.g. undici/runtime mismatch), fall back to native fetch.
+    return fetch(input, init);
+  }
 }
 
 /**
