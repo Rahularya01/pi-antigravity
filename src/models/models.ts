@@ -148,7 +148,11 @@ export function getMaxOutputTokens(modelId: string, runtimeModel?: string): numb
   return 8192;
 }
 
-const freeCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+const geminiFlashCost = { input: 0.1, output: 0.4, cacheRead: 0.025, cacheWrite: 0.1 };
+const geminiProCost = { input: 1.25, output: 5.0, cacheRead: 0.3125, cacheWrite: 1.25 };
+const claudeSonnetCost = { input: 3.0, output: 15.0, cacheRead: 0.3, cacheWrite: 3.75 };
+const claudeOpusCost = { input: 15.0, output: 75.0, cacheRead: 1.5, cacheWrite: 18.75 };
+const gptOssCost = { input: 0.6, output: 2.4, cacheRead: 0.15, cacheWrite: 0.6 };
 
 // A null entry is intentionally hidden by Pi. Do not collapse levels that happen to
 // route to the same runtime ID: the UI must reflect the levels the backend advertises.
@@ -199,7 +203,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     reasoning: true,
     thinkingLevelMap: thinkingLevelMaps.lowMediumHigh,
     input: ["text", "image"],
-    cost: freeCost,
+    cost: geminiFlashCost,
     contextWindow: 1048576,
     maxTokens: 65536,
   },
@@ -209,7 +213,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     reasoning: true,
     thinkingLevelMap: thinkingLevelMaps.lowMediumHigh,
     input: ["text", "image"],
-    cost: freeCost,
+    cost: geminiFlashCost,
     contextWindow: 1048576,
     maxTokens: 65536,
   },
@@ -219,7 +223,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     reasoning: true,
     thinkingLevelMap: thinkingLevelMaps.thinking,
     input: ["text", "image"],
-    cost: freeCost,
+    cost: claudeOpusCost,
     contextWindow: 250000,
     maxTokens: 64000,
   },
@@ -229,7 +233,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     reasoning: true,
     thinkingLevelMap: thinkingLevelMaps.thinking,
     input: ["text", "image"],
-    cost: freeCost,
+    cost: claudeSonnetCost,
     contextWindow: 200000,
     maxTokens: 64000,
   },
@@ -239,7 +243,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     reasoning: true,
     thinkingLevelMap: thinkingLevelMaps.lowHigh,
     input: ["text", "image"],
-    cost: freeCost,
+    cost: geminiProCost,
     contextWindow: 1048576,
     maxTokens: 65535,
   },
@@ -249,7 +253,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     reasoning: true,
     thinkingLevelMap: thinkingLevelMaps.lowMediumHigh,
     input: ["text", "image"],
-    cost: freeCost,
+    cost: geminiFlashCost,
     contextWindow: 1048576,
     maxTokens: 65536,
   },
@@ -259,7 +263,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     reasoning: true,
     thinkingLevelMap: thinkingLevelMaps.medium,
     input: ["text"],
-    cost: freeCost,
+    cost: gptOssCost,
     contextWindow: 131072,
     maxTokens: 32768,
   },

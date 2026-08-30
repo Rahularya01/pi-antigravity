@@ -78,10 +78,10 @@ function splitEvery(text: string, size: number): string[] {
   return out;
 }
 
-async function run(chunks: string[]) {
+async function run(chunks: string[], model?: Model<Api>) {
   const stream = createAssistantMessageEventStream();
   const output = makeOutput();
-  const hasContent = await streamResponse(responseFromChunks(chunks), stream, output);
+  const hasContent = await streamResponse(responseFromChunks(chunks), stream, output, model);
   stream.end();
   const events: string[] = [];
   for await (const event of stream) events.push(event.type);
@@ -139,6 +139,23 @@ async function main() {
   const truncated = BODY.slice(0, BODY.lastIndexOf("data: [DONE]"));
   const { hasContent } = await run([truncated.slice(0, 40), truncated.slice(40)]);
   assert(hasContent, "truncated body: expected content");
+
+  // Verify cost calculation when model is provided
+  const dummyModel = {
+    id: "gemini-3.7-flash",
+    cost: { input: 0.1, output: 0.4, cacheRead: 0.025, cacheWrite: 0.1 },
+  } as Model<Api>;
+  const costRun = await run([BODY], dummyModel);
+  // input: 60 -> (0.1/1e6)*60 = 0.000006, cacheRead: 40 -> (0.025/1e6)*40 = 0.000001, output: 10 -> (0.4/1e6)*10 = 0.000004
+  // total: 0.000011
+  assert(Math.abs(costRun.output.usage.cost.total - 0.000011) < 1e-9, "cost calculation matches expected total");
+  assert(Math.abs(costRun.output.usage.cost.input - 0.000006) < 1e-9, "cost calculation matches expected input");
+
+  // Verify graceful fallback when model or model.cost is omitted
+  const noCostModel = { id: "unknown-custom" } as Model<Api>;
+  const noCostRun = await run([BODY], noCostModel);
+  assert(noCostRun.output.usage.cost.total === 0, "omitted cost defaults total to 0");
+  assert(noCostRun.output.usage.cost.input === 0, "omitted cost defaults input to 0");
 
   console.log(`stream SSE: ${sizes.length} chunk-boundary cases passed`);
 }

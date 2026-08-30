@@ -1,4 +1,5 @@
 import {
+  calculateCost,
   createAssistantMessageEventStream,
   type Api,
   type AssistantMessage,
@@ -624,6 +625,7 @@ export async function streamResponse(
   response: Response,
   stream: AssistantMessageEventStream,
   output: AssistantMessage,
+  model?: Model<Api>,
 ): Promise<boolean> {
   if (!response.body) throw new Error("No response body");
   const reader = response.body.getReader();
@@ -777,8 +779,11 @@ export async function streamResponse(
         output.usage.reasoning = thoughts;
         output.usage.cacheRead = cacheRead;
         output.usage.totalTokens = responseData.usageMetadata.totalTokenCount || 0;
-        // Keep subscription costs at zero (matches model catalog freeCost).
-        output.usage.cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
+        if (model?.cost) {
+          calculateCost(model, output.usage);
+        } else {
+          output.usage.cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
+        }
       }
     }
 
@@ -951,7 +956,7 @@ export function streamAntigravity(
         };
         output.stopReason = "stop";
 
-        received = await streamResponse(response, stream, output);
+        received = await streamResponse(response, stream, output, model);
         if (received) break;
       }
 
