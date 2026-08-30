@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { registerApiProvider } from "@earendil-works/pi-ai/compat";
 import { getApiKey, loginAntigravity, refreshAntigravityToken } from "./auth/index.js";
 import { DEFAULT_ENDPOINT, endpointCandidates } from "./client/index.js";
 import { getLastDiagnostics, runWithDiagnostics } from "./diagnostics/index.js";
@@ -57,6 +58,12 @@ export default function (pi: ExtensionAPI): void {
   // the handshake. Opt out with ANTIGRAVITY_NO_PREWARM=1.
   const primaryEndpoint = endpointCandidates()[0];
   if (primaryEndpoint) prewarmConnection(primaryEndpoint);
+
+  registerApiProvider({
+    api: ANTIGRAVITY_API,
+    stream: streamAntigravity as any,
+    streamSimple: streamAntigravity,
+  });
 
   pi.registerProvider(PROVIDER_ID, {
     name: PROVIDER_NAME,
