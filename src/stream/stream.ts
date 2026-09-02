@@ -39,7 +39,7 @@ import {
   ToolChoice,
 } from "../types/enums.js";
 import {
-  ANTIGRAVITY_ROUTING,
+  getCurrentAntigravityRouting,
   getMaxOutputTokens,
   getAntigravityRequestModelId,
   getFallbackRuntimeModel,
@@ -817,7 +817,7 @@ export function streamAntigravity(
       setLastProjectId(projectId);
 
       const effort = opts.reasoning ?? "off";
-      const isKnownModel = model.id in ANTIGRAVITY_ROUTING;
+      const isKnownModel = model.id in getCurrentAntigravityRouting();
       const baseRuntimeModel =
         antigravityEnv("RUNTIME_MODEL")?.trim() || getAntigravityRequestModelId(model.id, effort);
 

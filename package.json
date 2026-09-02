@@ -36,7 +36,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "security-check": "bun scripts/security-check.ts",
-    "test": "bun scripts/test-model-routing.ts && bun scripts/test-usage-formatter.ts && bun scripts/test-stream-sse.ts && bun scripts/test-http-proxy.ts && bun scripts/test-image-gen.ts",
+    "test": "bun scripts/test-model-routing.ts && bun scripts/test-model-discovery.ts && bun scripts/test-usage-formatter.ts && bun scripts/test-stream-sse.ts && bun scripts/test-http-proxy.ts && bun scripts/test-image-gen.ts",
     "smoke:tools": "bun scripts/smoke-tool-schema.ts",
     "smoke:models": "bun scripts/smoke-all-models.mjs",
     "check": "bun run typecheck && bun run lint && bun run format:check && bun run security-check && bun run test"

@@ -10,7 +10,12 @@ import {
   IMAGE_ASPECT_RATIOS,
   parseImageCommandArgs,
 } from "./image/index.js";
-import { ANTIGRAVITY_MODELS, PROVIDER_ID, PROVIDER_NAME } from "./models/index.js";
+import {
+  loadInitialAntigravityCatalog,
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  refreshAntigravityModels,
+} from "./models/index.js";
 import { ANTIGRAVITY_API, streamAntigravity } from "./stream/index.js";
 import {
   fetchAccountUsage,
@@ -72,11 +77,14 @@ export default function (pi: ExtensionAPI): void {
     streamSimple: streamAntigravity,
   });
 
+  const initialCatalog = loadInitialAntigravityCatalog();
+
   pi.registerProvider(PROVIDER_ID, {
     name: PROVIDER_NAME,
     baseUrl: DEFAULT_ENDPOINT,
     api: ANTIGRAVITY_API,
-    models: ANTIGRAVITY_MODELS,
+    models: initialCatalog.models,
+    refreshModels: refreshAntigravityModels,
     oauth: {
       name: PROVIDER_NAME,
       login: loginAntigravity,

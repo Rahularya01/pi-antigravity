@@ -51,6 +51,13 @@ Verify the exact `refreshModels` types from the current `@earendil-works/pi-*` d
 - `bun run check` passes.
 - Live validation with the existing Pi Antigravity OAuth shows a newly available model from `fetchAvailableModels` in Pi's model picker without editing the static model list.
 
+## Implementation notes
+
+- Grouping lives in `src/models/grouping.ts` and must produce `gemini-3.8-flash` from `*-low|medium|high` fixtures without a static catalog entry.
+- `refreshModels` is wired in `src/index.ts` from `src/models/discovery.ts`.
+- Cache writes are replace-on-success only (`src/models/cache.ts`).
+- Existing 3.7→3.6 rollout fallback is unchanged; do not add a 3.8→3.7 remap.
+
 ## Related
 
 - Upstream issue: Rahularya01/pi-antigravity#31
