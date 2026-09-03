@@ -1,5 +1,6 @@
 import type { Api, Context, Model, Tool } from "@earendil-works/pi-ai";
 import { defaultProjectId, stableProjectId } from "../src/client/index.js";
+import { getLastDiagnostics, resetDiagnosticsForTests } from "../src/diagnostics/index.js";
 import { StopReason } from "../src/types/enums.js";
 import {
   ANTIGRAVITY_MODELS,
@@ -267,9 +268,11 @@ const danglingRefTool = {
     properties: { theme: { $ref: "#/$defs/DesignTheme" } },
   },
 } as Tool;
+resetDiagnosticsForTests();
 const declarationsWithoutDangling = convertTools([refTool, danglingRefTool])?.[0]?.functionDeclarations;
 assert.equal(declarationsWithoutDangling?.length, 1);
 assert.equal(declarationsWithoutDangling?.[0]?.name, "ref_probe");
+assert.match(getLastDiagnostics().toolSchemaWarnings || "", /dangling_ref_probe.*not present/i);
 assert.equal(convertTools([danglingRefTool]), undefined);
 
 // Recursive references cannot be made self-contained for the Antigravity backend.
@@ -287,6 +290,7 @@ const cyclicRefTool = {
 } as Tool;
 assert.equal(convertTools([cyclicRefTool]), undefined);
 
+/** Return every unresolved reference emitted in a converted declaration. */
 function unresolvedRefs(value: unknown, path = "$"): string[] {
   if (Array.isArray(value)) {
     return value.flatMap((item, index) => unresolvedRefs(item, `${path}[${index}]`));
@@ -427,6 +431,59 @@ assert.deepEqual(
   convertTools([fullyEscapedPointerTool])?.[0]?.functionDeclarations[0]?.parametersJsonSchema,
   { type: "object", properties: { value: { type: "boolean" } } },
 );
+
+// RFC 6901 array tokens resolve schemas selected from combinator arrays.
+const arrayPointerTool = {
+  name: "array_pointer_probe",
+  description: "Tool with an array-index local JSON Pointer",
+  parameters: {
+    type: "object",
+    properties: { value: { $ref: "#/$defs/Value/anyOf/0" } },
+    $defs: { Value: { anyOf: [{ type: "integer" }, { type: "string" }] } },
+  },
+} as Tool;
+assert.deepEqual(
+  convertTools([arrayPointerTool])?.[0]?.functionDeclarations[0]?.parametersJsonSchema,
+  { type: "object", properties: { value: { type: "integer" } } },
+);
+
+// Property names may themselves be JSON Schema keywords and must remain ordinary property names.
+const keywordNamedPropertiesTool = {
+  name: "keyword_named_properties_probe",
+  description: "Tool with keyword-like property names",
+  parameters: {
+    type: "object",
+    properties: {
+      definitions: { type: "string" },
+      $ref: { type: "number" },
+    },
+  },
+} as Tool;
+assert.deepEqual(
+  convertTools([keywordNamedPropertiesTool])?.[0]?.functionDeclarations[0]?.parametersJsonSchema,
+  {
+    type: "object",
+    properties: { definitions: { type: "string" }, $ref: { type: "number" } },
+  },
+);
+
+// Bound fan-out from untrusted MCP schemas instead of expanding references indefinitely.
+const expansionBudgetTool = {
+  name: "expansion_budget_probe",
+  description: "Tool with excessive repeated references",
+  parameters: {
+    type: "object",
+    properties: {
+      value: {
+        anyOf: Array.from({ length: 4_000 }, () => ({ $ref: "#/$defs/Value" })),
+      },
+    },
+    $defs: { Value: { type: "string" } },
+  },
+} as Tool;
+resetDiagnosticsForTests();
+assert.equal(convertTools([expansionBudgetTool]), undefined);
+assert.match(getLastDiagnostics().toolSchemaWarnings || "", /expansion exceeded.*nodes/i);
 
 // MCP servers can expose external or malformed refs. They are isolated instead of poisoning all tools.
 const externalRefTool = {

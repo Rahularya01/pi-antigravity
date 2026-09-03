@@ -313,6 +313,29 @@ type DereferencedSchema = {
   issues: SchemaReferenceIssue[];
 };
 
+type DereferenceState = {
+  nodes: number;
+};
+
+const MAX_SCHEMA_DEREFERENCE_DEPTH = 64;
+const MAX_SCHEMA_DEREFERENCE_NODES = 10_000;
+const SCHEMA_MAP_KEYWORDS = new Set(["properties", "patternProperties", "dependentSchemas"]);
+const SCHEMA_VALUE_KEYWORDS = new Set([
+  "additionalItems",
+  "additionalProperties",
+  "contains",
+  "contentSchema",
+  "else",
+  "if",
+  "items",
+  "not",
+  "propertyNames",
+  "then",
+  "unevaluatedItems",
+  "unevaluatedProperties",
+]);
+const SCHEMA_ARRAY_KEYWORDS = new Set(["allOf", "anyOf", "oneOf", "prefixItems"]);
+
 /** Resolve a local RFC 6901 JSON Pointer against the original tool schema. */
 function resolveLocalJsonPointer(ref: string, rootSchema: unknown): unknown {
   if (ref === "#") return rootSchema;
@@ -321,30 +344,103 @@ function resolveLocalJsonPointer(ref: string, rootSchema: unknown): unknown {
   let current: unknown = rootSchema;
   for (const token of ref.slice(2).split("/")) {
     const key = token.replace(/~1/g, "/").replace(/~0/g, "~");
-    if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
+    if (Array.isArray(current)) {
+      if (!/^(0|[1-9]\d*)$/.test(key)) return undefined;
+      const index = Number(key);
+      if (!Number.isSafeInteger(index) || index >= current.length) return undefined;
+      current = current[index];
+      continue;
+    }
+    if (!current || typeof current !== "object") return undefined;
     if (!Object.prototype.hasOwnProperty.call(current, key)) return undefined;
     current = (current as Record<string, unknown>)[key];
   }
   return current;
 }
 
+/** Dereference every schema in a keyword map without interpreting map keys as JSON Schema keywords. */
+function dereferenceSchemaMap(
+  schemaMap: unknown,
+  rootSchema: unknown,
+  refStack: Set<string>,
+  objectStack: Set<object>,
+  state: DereferenceState,
+  path: string,
+  depth: number,
+): DereferencedSchema {
+  if (!isRecord(schemaMap)) {
+    return dereferenceSchema(schemaMap, rootSchema, refStack, objectStack, state, path, depth);
+  }
+
+  const out: Record<string, unknown> = {};
+  const issues: SchemaReferenceIssue[] = [];
+  for (const [key, value] of Object.entries(schemaMap)) {
+    const result = dereferenceSchema(
+      value,
+      rootSchema,
+      refStack,
+      objectStack,
+      state,
+      `${path}.${key}`,
+      depth,
+    );
+    out[key] = result.schema;
+    issues.push(...result.issues);
+  }
+  return { schema: out, issues };
+}
+
 /**
- * Gemini rejects dangling JSON Schema references. Inline every reachable local
- * reference and report references that cannot be made self-contained so the
- * affected tool can be omitted without breaking every other tool declaration.
+ * Inline reachable local references while bounding expansion of untrusted MCP schemas.
+ * A reported issue causes only the affected tool declaration to be omitted.
  */
 function dereferenceSchema(
   schema: unknown,
   rootSchema: unknown = schema,
   refStack = new Set<string>(),
   objectStack = new Set<object>(),
+  state: DereferenceState = { nodes: 0 },
   path = "$",
+  depth = 0,
 ): DereferencedSchema {
+  if (depth > MAX_SCHEMA_DEREFERENCE_DEPTH) {
+    return {
+      schema: {},
+      issues: [
+        {
+          path,
+          ref: "(depth limit)",
+          reason: `schema expansion exceeded ${MAX_SCHEMA_DEREFERENCE_DEPTH} levels`,
+        },
+      ],
+    };
+  }
+  state.nodes += 1;
+  if (state.nodes > MAX_SCHEMA_DEREFERENCE_NODES) {
+    return {
+      schema: {},
+      issues: [
+        {
+          path,
+          ref: "(node limit)",
+          reason: `schema expansion exceeded ${MAX_SCHEMA_DEREFERENCE_NODES} nodes`,
+        },
+      ],
+    };
+  }
   if (!schema || typeof schema !== "object") return { schema, issues: [] };
 
   if (Array.isArray(schema)) {
     const results = schema.map((item, index) =>
-      dereferenceSchema(item, rootSchema, refStack, objectStack, `${path}[${index}]`),
+      dereferenceSchema(
+        item,
+        rootSchema,
+        refStack,
+        objectStack,
+        state,
+        `${path}[${index}]`,
+        depth + 1,
+      ),
     );
     return {
       schema: results.map((result) => result.schema),
@@ -382,9 +478,25 @@ function dereferenceSchema(
 
     const nextRefStack = new Set(refStack);
     nextRefStack.add(ref);
-    const resolved = dereferenceSchema(target, rootSchema, nextRefStack, nextObjectStack, path);
+    const resolved = dereferenceSchema(
+      target,
+      rootSchema,
+      nextRefStack,
+      nextObjectStack,
+      state,
+      path,
+      depth + 1,
+    );
     const { $ref: _, ...siblings } = s;
-    const siblingResult = dereferenceSchema(siblings, rootSchema, refStack, nextObjectStack, path);
+    const siblingResult = dereferenceSchema(
+      siblings,
+      rootSchema,
+      refStack,
+      nextObjectStack,
+      state,
+      path,
+      depth + 1,
+    );
 
     if (isRecord(resolved.schema) && isRecord(siblingResult.schema)) {
       return {
@@ -404,15 +516,36 @@ function dereferenceSchema(
     // Definitions are available through rootSchema while resolving $ref, but must
     // not be emitted because the Antigravity backend requires self-contained schemas.
     if (key === "$defs" || key === "definitions") continue;
-    const result = dereferenceSchema(
-      value,
-      rootSchema,
-      refStack,
-      nextObjectStack,
-      `${path}.${key}`,
-    );
-    out[key] = result.schema;
-    issues.push(...result.issues);
+
+    let result: DereferencedSchema | undefined;
+    if (SCHEMA_MAP_KEYWORDS.has(key)) {
+      result = dereferenceSchemaMap(
+        value,
+        rootSchema,
+        refStack,
+        nextObjectStack,
+        state,
+        `${path}.${key}`,
+        depth + 1,
+      );
+    } else if (SCHEMA_VALUE_KEYWORDS.has(key) || SCHEMA_ARRAY_KEYWORDS.has(key)) {
+      result = dereferenceSchema(
+        value,
+        rootSchema,
+        refStack,
+        nextObjectStack,
+        state,
+        `${path}.${key}`,
+        depth + 1,
+      );
+    }
+
+    if (result) {
+      out[key] = result.schema;
+      issues.push(...result.issues);
+    } else {
+      out[key] = value;
+    }
   }
   return { schema: out, issues };
 }
@@ -427,21 +560,40 @@ function ensureRootObjectSchema(schema: unknown): Record<string, unknown> {
   return schema;
 }
 
+const META_SCHEMA_KEYWORDS = new Set([
+  "$schema",
+  "$id",
+  "$anchor",
+  "$dynamicAnchor",
+  "$vocabulary",
+  "$comment",
+  "$defs",
+  "definitions",
+]);
+
+/** Remove schema metadata without treating user-defined property names as keywords. */
+function stripMetaSchemaMap(schemaMap: unknown): unknown {
+  if (!isRecord(schemaMap)) return stripMetaSchema(schemaMap);
+  return Object.fromEntries(
+    Object.entries(schemaMap).map(([key, value]) => [key, stripMetaSchema(value)]),
+  );
+}
+
+/** Remove metadata that Cloud Code Assist rejects from JSON Schema keyword positions. */
 function stripMetaSchema(schema: unknown): unknown {
-  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return schema;
-  const omit = new Set([
-    "$schema",
-    "$id",
-    "$anchor",
-    "$dynamicAnchor",
-    "$vocabulary",
-    "$comment",
-    "$defs",
-    "definitions",
-  ]);
+  if (!schema || typeof schema !== "object") return schema;
+  if (Array.isArray(schema)) return schema.map(stripMetaSchema);
+
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(schema)) {
-    if (!omit.has(key)) out[key] = stripMetaSchema(value);
+    if (META_SCHEMA_KEYWORDS.has(key)) continue;
+    if (SCHEMA_MAP_KEYWORDS.has(key)) {
+      out[key] = stripMetaSchemaMap(value);
+    } else if (SCHEMA_VALUE_KEYWORDS.has(key) || SCHEMA_ARRAY_KEYWORDS.has(key)) {
+      out[key] = stripMetaSchema(value);
+    } else {
+      out[key] = value;
+    }
   }
   return out;
 }
