@@ -319,7 +319,12 @@ type DereferenceState = {
 
 const MAX_SCHEMA_DEREFERENCE_DEPTH = 64;
 const MAX_SCHEMA_DEREFERENCE_NODES = 10_000;
-const SCHEMA_MAP_KEYWORDS = new Set(["properties", "patternProperties", "dependentSchemas"]);
+const SCHEMA_MAP_KEYWORDS = new Set([
+  "properties",
+  "patternProperties",
+  "dependentSchemas",
+  "dependencies",
+]);
 const SCHEMA_VALUE_KEYWORDS = new Set([
   "additionalItems",
   "additionalProperties",

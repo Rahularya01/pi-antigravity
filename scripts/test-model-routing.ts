@@ -390,6 +390,40 @@ assert.deepEqual(
   { type: "string", enum: ["red", "blue"] },
 );
 
+// Draft-07 dependencies may contain schemas with references or property-name arrays.
+const dependencyReferenceTool = {
+  name: "dependency_reference_probe",
+  description: "Tool with a referenced dependency schema",
+  parameters: {
+    type: "object",
+    properties: {
+      enabled: { type: "boolean" },
+      mode: { type: "string" },
+    },
+    dependencies: {
+      enabled: { $ref: "#/definitions/EnabledOptions" },
+      mode: ["enabled"],
+    },
+    definitions: {
+      EnabledOptions: {
+        type: "object",
+        properties: { threshold: { type: "number" } },
+      },
+    },
+  },
+} as Tool;
+const dependencySchema = convertTools([dependencyReferenceTool])?.[0]?.functionDeclarations[0]
+  ?.parametersJsonSchema as Record<string, unknown>;
+assert.ok(dependencySchema);
+assert.deepEqual(unresolvedRefs(dependencySchema), []);
+assert.deepEqual(dependencySchema.dependencies, {
+  enabled: {
+    type: "object",
+    properties: { threshold: { type: "number" } },
+  },
+  mode: ["enabled"],
+});
+
 // References embedded in JSON Schema combinators are traversed like MCP tool schemas from Zod/Ajv.
 const combinatorReferenceTool = {
   name: "combinator_reference_probe",
