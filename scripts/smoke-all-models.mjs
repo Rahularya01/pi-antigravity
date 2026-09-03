@@ -2,7 +2,7 @@
  * Live smoke: hit every registered public model with a tiny prompt.
  * Usage: bun scripts/smoke-all-models.mjs
  *        FILTER=gemini-3.5-flash bun scripts/smoke-all-models.mjs
- *        FILTER=gemini-3.7-flash EFFORT=high bun scripts/smoke-all-models.mjs
+ *        FILTER=gemini-3.8-flash EFFORT=high bun scripts/smoke-all-models.mjs
  *        CONCURRENCY=2 TIMEOUT_MS=45000 bun scripts/smoke-all-models.mjs
  */
 
@@ -133,7 +133,11 @@ async function smokeOne(publicId) {
       runtimeModel = candidates[i];
       const isClaude = publicId.startsWith("claude-") || runtimeModel.startsWith("claude-");
       const generationConfig: Record<string, unknown> = { maxOutputTokens: 256 };
-      if (publicId === "gemini-3.7-flash" || publicId === "gemini-3.6-flash") {
+      if (
+        publicId === "gemini-3.8-flash" ||
+        publicId === "gemini-3.7-flash" ||
+        publicId === "gemini-3.6-flash"
+      ) {
         generationConfig.thinkingConfig = {
           includeThoughts: true,
           thinkingLevel:

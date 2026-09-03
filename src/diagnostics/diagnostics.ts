@@ -12,6 +12,7 @@ export type DiagnosticsSnapshot = {
   latencyMs?: number;
   maskedEmail?: string;
   tokenExpiry?: string;
+  toolSchemaWarnings?: string;
 };
 
 const storage = new AsyncLocalStorage<DiagnosticsSnapshot>();
@@ -82,6 +83,11 @@ export function setLastMaskedEmail(email: string | undefined): void {
 }
 export function setLastTokenExpiry(expiry: string | undefined): void {
   currentBag().tokenExpiry = expiry;
+}
+/** Store sanitized tool-schema omissions for the next doctor report. */
+export function setLastToolSchemaWarnings(warnings: string[] | undefined): void {
+  currentBag().toolSchemaWarnings =
+    warnings === undefined ? undefined : redactSecrets(warnings.join(" | ")).slice(0, 1200);
 }
 
 /** Test helper: reset last snapshot between cases. */

@@ -51,6 +51,9 @@ function info(
 }
 
 const currentCatalog: Record<string, ModelInfoRaw> = {
+  "gemini-3.9-flash-low": info("Gemini 3.9 Flash (Low)"),
+  "gemini-3.9-flash-medium": info("Gemini 3.9 Flash (Medium)"),
+  "gemini-3.9-flash-high": info("Gemini 3.9 Flash (High)"),
   "gemini-3.8-flash-low": info("Gemini 3.8 Flash (Low)"),
   "gemini-3.8-flash-medium": info("Gemini 3.8 Flash (Medium)"),
   "gemini-3.8-flash-high": info("Gemini 3.8 Flash (High)"),
@@ -77,11 +80,8 @@ const currentCatalog: Record<string, ModelInfoRaw> = {
 const catalog = buildAntigravityCatalog(currentCatalog, fallback);
 const ids = new Set(catalog.models.map((model) => model.id));
 
-assert.ok(
-  !ANTIGRAVITY_MODELS.some((model) => model.id === "gemini-3.8-flash"),
-  "gemini-3.8-flash is not a static catalog entry",
-);
-assert.ok(ids.has("gemini-3.8-flash"), "discovers gemini-3.8-flash family missing from fallback");
+assert.ok(ids.has("gemini-3.8-flash"), "preserves and refreshes Gemini 3.8");
+assert.ok(ids.has("gemini-3.9-flash"), "discovers a Gemini family missing from fallback");
 assert.ok(ids.has("gemini-3.7-flash"), "preserves Gemini 3.7");
 assert.ok(ids.has("claude-sonnet-4-6"), "preserves Claude Sonnet");
 assert.ok(ids.has("claude-opus-4-6"), "preserves Claude Opus");
@@ -100,31 +100,33 @@ assert.deepEqual(flash38Levels, ["low", "medium", "high"], "groups 3.8 low/mediu
 assert.equal(catalog.routing["gemini-3.8-flash"]?.routing?.low, "gemini-3.8-flash-low");
 assert.equal(catalog.routing["gemini-3.8-flash"]?.routing?.medium, "gemini-3.8-flash-medium");
 assert.equal(catalog.routing["gemini-3.8-flash"]?.routing?.high, "gemini-3.8-flash-high");
+assert.equal(catalog.routing["gemini-3.9-flash"]?.routing?.medium, "gemini-3.9-flash-medium");
 
 const single = buildAntigravityCatalog(
   { "gemini-custom-preview": info("Gemini Custom Preview", { supportsThinking: false }) },
   fallback,
 );
-assert.equal(single.models.length, 1, "single unsuffixed runtime becomes its own public model");
-assert.equal(single.models[0]?.id, "gemini-custom-preview");
+const customPreview = single.models.find((model) => model.id === "gemini-custom-preview");
+assert.ok(customPreview, "single unsuffixed runtime becomes its own public model");
 assert.equal(single.routing["gemini-custom-preview"]?.defaultRequestId, "gemini-custom-preview");
 assert.equal(
-  single.models[0]?.reasoning,
+  customPreview?.reasoning,
   false,
   "explicit supportsThinking: false must not infer reasoning",
 );
 assert.equal(
-  single.models[0]?.thinkingLevelMap,
+  customPreview?.thinkingLevelMap,
   undefined,
   "explicit non-thinking models must not expose thinking controls",
 );
 
 const omittedThinking = buildAntigravityCatalog(
-  { "gemini-custom-omitted": info("Gemini Custom Omitted") },
+  { "gemini-custom-omitted": { displayName: "Gemini Custom Omitted" } },
   fallback,
 );
+const customOmitted = omittedThinking.models.find((model) => model.id === "gemini-custom-omitted");
 assert.equal(
-  omittedThinking.models[0]?.reasoning,
+  customOmitted?.reasoning,
   true,
   "omitted capability data may still infer conservative reasoning",
 );
@@ -187,12 +189,16 @@ assert.equal(
 );
 assert.equal(
   getFallbackRuntimeModel("gemini-3.8-flash-medium"),
-  undefined,
-  "discovered models must not silently fall back to another generation",
+  "gemini-3.7-flash-medium",
+  "existing Gemini 3.8 rollout fallback remains available",
 );
 
 const emptyDiscovered = buildAntigravityCatalog({}, fallback);
-assert.equal(emptyDiscovered.models.length, 0, "empty backend yields no public models");
+assert.equal(
+  emptyDiscovered.models.length,
+  fallback.models.length,
+  "empty backend preserves conservative static models",
+);
 const kept = resolvedCatalog(emptyDiscovered, fallback);
 assert.equal(kept, fallback, "empty discovery does not replace last-known-good catalog");
 assert.equal(resolvedCatalog(undefined, fallback), fallback, "failed discovery keeps current catalog");

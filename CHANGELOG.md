@@ -6,7 +6,13 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
-- **Dynamic model discovery:** The selectable catalog is refreshed from authenticated `fetchAvailableModels` and grouped into public Pi IDs, so newly enabled models can appear without a catalog-only release. Last-known-good cache plus a conservative static seed remain for cold start. Discovery does not add a new cross-generation fallback; the existing Gemini 3.7→3.6 rollout remap is unchanged.
+- **Dynamic model discovery:** The selectable catalog is refreshed from authenticated `fetchAvailableModels` and grouped into public Pi IDs, so newly enabled models can appear without a catalog-only release. Last-known-good cache plus a conservative static seed remain for cold start. Discovery does not add a new cross-generation fallback; existing Gemini rollout remaps are unchanged.
+
+## [0.7.0] - 2026-09-02
+
+### Added
+
+- **Gemini 3.8 Flash:** Added public model `gemini-3.8-flash` with Low, Medium, and High thinking-effort routing to `gemini-3.8-flash-low|medium|high`. Falls back to Gemini 3.7 Flash if the runtime is not yet advertised on an endpoint.
 
 ## [0.6.0] - 2026-09-02
 

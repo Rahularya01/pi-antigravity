@@ -106,6 +106,8 @@ export function buildAntigravityCatalog(
 
   mergeAgentSingletons(groups);
 
+  if (groups.size === 0) return fallback;
+
   const models: ProviderModelConfig[] = [];
   const routing: Record<string, AntigravityRouting> = {};
 
@@ -121,6 +123,14 @@ export function buildAntigravityCatalog(
     const synthesized = synthesizeModel(group, fallback.models);
     models.push(synthesized.model);
     routing[group.publicId] = synthesized.routing;
+  }
+
+  for (const fallbackModel of fallback.models) {
+    if (routing[fallbackModel.id]) continue;
+    const fallbackRouting = fallback.routing[fallbackModel.id];
+    if (!fallbackRouting) continue;
+    models.push(fallbackModel);
+    routing[fallbackModel.id] = fallbackRouting;
   }
 
   models.sort(comparePublicModels);

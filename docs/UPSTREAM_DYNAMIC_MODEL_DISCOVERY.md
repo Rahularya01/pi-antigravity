@@ -27,7 +27,7 @@ Implement:
 - Do not shell out to `agy` or introduce another agent loop. Pi remains the only harness.
 - Do not replace the current OAuth flow solely to solve model discovery.
 - Do not hard-code Gemini 3.8 as the mechanism that makes this work. Fixture grouping of an unknown `*-low|medium|high` family (3.8 in tests) is the required acceptance case. Live 3.8 is only a conditional validation when the current account/auth tier exposes it; free-tier catalogs without 3.8 do not fail this PR.
-- Do not add a new silent cross-generation fallback for discovered models. If a selected runtime model is unavailable, surface that failure rather than silently substituting another generation. The existing Gemini 3.7→3.6 rollout remap stays as-is.
+- Do not add a new silent cross-generation fallback for discovered models. Existing static Gemini rollout remaps stay as-is.
 - Keep the PR focused on model discovery. Avoid unrelated refactors.
 
 ## Suggested shape
@@ -42,9 +42,9 @@ Verify the exact `refreshModels` types from the current `@earendil-works/pi-*` d
 
 ## Acceptance criteria
 
-- **Required:** with a fixture containing `gemini-3.8-flash-low`, `gemini-3.8-flash-medium`, and `gemini-3.8-flash-high`, grouping exposes one selectable `gemini-3.8-flash` entry with Low/Medium/High reasoning levels. That public ID is produced by discovery/grouping, not a static catalog entry.
+- **Required:** with a fixture containing a previously unknown `gemini-3.9-flash-low|medium|high` family, grouping exposes one selectable `gemini-3.9-flash` entry with Low/Medium/High reasoning levels. That public ID is produced by discovery/grouping, not a static catalog entry.
 - **Required:** a single unknown unsuffixed Gemini/Claude/GPT-OSS runtime remains selectable conservatively. Explicit `supportsThinking: false` must not grow fake reasoning controls.
-- **Required:** existing Claude, GPT-OSS, Gemini 3.1/3.5 aliases and routing continue to work. The existing 3.7→3.6 rollout remap is unchanged.
+- **Required:** existing Claude, GPT-OSS, Gemini 3.1/3.5 aliases and routing continue to work. Existing Gemini rollout remaps are unchanged.
 - **Required:** empty or failed discovery does not erase the last-known-good model catalog.
 - **Required:** existing OAuth, streaming, usage, diagnostics, image generation and runtime override behavior remain working.
 - **Required:** `bun run check` passes.
@@ -52,10 +52,10 @@ Verify the exact `refreshModels` types from the current `@earendil-works/pi-*` d
 
 ## Implementation notes
 
-- Grouping lives in `src/models/grouping.ts` and must produce `gemini-3.8-flash` from `*-low|medium|high` fixtures without a static catalog entry.
+- Grouping lives in `src/models/grouping.ts` and must produce an unknown Gemini family from `*-low|medium|high` fixtures without a static catalog entry.
 - `refreshModels` is wired in `src/index.ts` from `src/models/discovery.ts`.
 - Cache writes are replace-on-success only (`src/models/cache.ts`).
-- Existing 3.7→3.6 rollout fallback is unchanged; do not add a 3.8→3.7 remap.
+- Existing Gemini rollout fallbacks are unchanged by discovery.
 - Live 3.8 is account/tier-dependent. Dynamic discovery of whatever the catalog returns is the required bar.
 
 ## Related
