@@ -466,6 +466,16 @@ const flash36 = buildRequest(
 );
 assert.equal(flash36.request.generationConfig?.thinkingConfig?.thinkingLevel, "MEDIUM");
 
+const flash37Off = buildRequest(
+  flash37Model,
+  dummyContext,
+  "test-proj",
+  { reasoning: "off" },
+  "gemini-3.7-flash-low",
+);
+assert.equal(flash37Off.request.generationConfig?.thinkingConfig?.includeThoughts, false);
+assert.equal(flash37Off.request.generationConfig?.thinkingConfig?.thinkingLevel, undefined);
+
 const flash35 = buildRequest(
   { ...model, id: "gemini-3.5-flash", maxTokens: 65536 },
   dummyContext,

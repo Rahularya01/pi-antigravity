@@ -384,6 +384,7 @@ export function getThinkingConfig(
     };
   }
   if (modelId.startsWith("gemini-")) {
+    if (!effort || effort === "off") return { includeThoughts: false };
     return { includeThoughts: true, thinkingLevel: googleLevel(effort) };
   }
   return undefined;

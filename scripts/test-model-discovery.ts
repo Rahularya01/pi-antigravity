@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { mergeAvailableModelsResults } from "../src/client/index.js";
 import type { ModelInfoRaw } from "../src/types/types.js";
 import {
   ANTIGRAVITY_MODELS,
@@ -107,6 +108,26 @@ const single = buildAntigravityCatalog(
 assert.equal(single.models.length, 1, "single unsuffixed runtime becomes its own public model");
 assert.equal(single.models[0]?.id, "gemini-custom-preview");
 assert.equal(single.routing["gemini-custom-preview"]?.defaultRequestId, "gemini-custom-preview");
+assert.equal(
+  single.models[0]?.reasoning,
+  false,
+  "explicit supportsThinking: false must not infer reasoning",
+);
+assert.equal(
+  single.models[0]?.thinkingLevelMap,
+  undefined,
+  "explicit non-thinking models must not expose thinking controls",
+);
+
+const omittedThinking = buildAntigravityCatalog(
+  { "gemini-custom-omitted": info("Gemini Custom Omitted") },
+  fallback,
+);
+assert.equal(
+  omittedThinking.models[0]?.reasoning,
+  true,
+  "omitted capability data may still infer conservative reasoning",
+);
 
 applyAntigravityCatalog(catalog);
 assert.equal(getAntigravityRequestModelId("gemini-3.8-flash", "medium"), "gemini-3.8-flash-medium");
@@ -133,6 +154,37 @@ assert.equal(
   "new Gemini families send thinkingLevel",
 );
 assert.equal(getThinkingConfig("gemini-3.5-flash", "medium")?.thinkingBudget, 4000);
+assert.equal(
+  getThinkingConfig("gemini-3.7-flash", "off")?.includeThoughts,
+  false,
+  "reasoning=off disables Gemini thinking",
+);
+assert.equal(getThinkingConfig("gemini-3.7-flash", "off")?.thinkingLevel, undefined);
+assert.equal(getThinkingConfig("gemini-3.6-flash", undefined)?.includeThoughts, false);
+assert.equal(getThinkingConfig("gemini-3.8-flash", "off")?.includeThoughts, false);
+assert.equal(getThinkingConfig("gemini-3.7-flash", "medium")?.includeThoughts, true);
+assert.equal(getThinkingConfig("gemini-3.7-flash", "medium")?.thinkingLevel, "MEDIUM");
+
+const mergedDefaultOnly = mergeAvailableModelsResults([
+  {
+    endpoint: "https://cloudcode-pa.googleapis.com",
+    status: 200,
+    data: {
+      models: { "gemini-3.7-flash-low": info("Gemini 3.7 Flash (Low)") },
+      defaultAgentModel: "gemini-3.7-flash-low",
+    },
+  },
+]);
+assert.equal(
+  mergedDefaultOnly.data.defaultAgentModel,
+  "gemini-3.7-flash-low",
+  "preserve defaultAgentModel when defaultAgentModelId is omitted",
+);
+assert.equal(mergedDefaultOnly.data.defaultAgentModelId, undefined);
+assert.equal(
+  mergedDefaultOnly.data.defaultAgentModelId || mergedDefaultOnly.data.defaultAgentModel,
+  "gemini-3.7-flash-low",
+);
 assert.equal(
   getFallbackRuntimeModel("gemini-3.8-flash-medium"),
   undefined,

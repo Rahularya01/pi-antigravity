@@ -14,7 +14,8 @@ type RuntimeGroup = {
   variants: Partial<Record<ThinkingLevel, string>>;
   unsuffixed?: string;
   displayNames: string[];
-  supportsThinking: boolean;
+  /** Catalog capability: true/false when advertised, undefined when omitted. */
+  supportsThinking?: boolean;
   supportsImages?: boolean;
 };
 
@@ -133,7 +134,6 @@ function ensureGroup(groups: Map<string, RuntimeGroup>, publicId: string): Runti
     publicId,
     variants: {},
     displayNames: [],
-    supportsThinking: false,
   };
   groups.set(publicId, created);
   return created;
@@ -145,7 +145,10 @@ function absorbMetadata(
   displayName: string | undefined,
 ): void {
   if (displayName) group.displayNames.push(displayName);
-  if (info?.supportsThinking) group.supportsThinking = true;
+  if (info?.supportsThinking === true) group.supportsThinking = true;
+  else if (info?.supportsThinking === false && group.supportsThinking !== true) {
+    group.supportsThinking = false;
+  }
   if (info?.supportsImages === true) group.supportsImages = true;
   if (info?.supportsImages === false && group.supportsImages === undefined) {
     group.supportsImages = false;
@@ -216,7 +219,9 @@ function synthesizeModel(
   const routing = routingFromVariants(group.publicId, group.variants, group.unsuffixed);
   const supportsImages = group.supportsImages ?? template?.input.includes("image") ?? true;
   const reasoning =
-    advertisedLevels.size > 0 || group.supportsThinking || Boolean(template?.reasoning);
+    advertisedLevels.size > 0 ||
+    group.supportsThinking === true ||
+    (group.supportsThinking === undefined && Boolean(template?.reasoning));
   return {
     model: {
       id: group.publicId,
@@ -234,7 +239,10 @@ function synthesizeModel(
 
 function advertisedThinkingLevels(group: RuntimeGroup): Set<string> {
   const levels = new Set(Object.keys(group.variants));
-  if (levels.size === 0 && (group.supportsThinking || group.unsuffixed)) {
+  if (levels.size > 0) return levels;
+  // Explicit false from the catalog must not grow a fake High control.
+  if (group.supportsThinking === false) return levels;
+  if (group.supportsThinking === true || group.unsuffixed) {
     levels.add(ThinkingEffort.High);
   }
   return levels;

@@ -432,23 +432,13 @@ function catalogSignal(signal?: AbortSignal): AbortSignal {
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
-/**
- * Merge fetchAvailableModels across endpoint candidates so daily/sandbox-only
- * models appear alongside production catalog entries.
- */
-export async function fetchAvailableModelsCatalog(
-  token: string,
-  projectId: string,
-  signal?: AbortSignal,
-): Promise<{ endpoint: string; status: number; data: AvailableModelsRaw }> {
-  const results = await Promise.all(
-    endpointCandidates().map((endpoint) =>
-      fetchAvailableModelsFromEndpoint(endpoint, token, projectId, signal),
-    ),
-  );
-
+/** Merge catalog payloads from one or more fetchAvailableModels responses. */
+export function mergeAvailableModelsResults(
+  results: Array<{ endpoint: string; status: number; data: unknown } | undefined>,
+): { endpoint: string; status: number; data: AvailableModelsRaw } {
   const mergedModels: Record<string, unknown> = {};
   let defaultAgentModelId: string | undefined;
+  let defaultAgentModel: string | undefined;
   let lastEndpoint = "";
   let lastStatus = 0;
 
@@ -465,6 +455,9 @@ export async function fetchAvailableModelsCatalog(
     if (isRecord(data) && typeof data.defaultAgentModelId === "string") {
       defaultAgentModelId = data.defaultAgentModelId;
     }
+    if (isRecord(data) && typeof data.defaultAgentModel === "string") {
+      defaultAgentModel = data.defaultAgentModel;
+    }
   }
 
   if (!lastEndpoint) {
@@ -477,8 +470,26 @@ export async function fetchAvailableModelsCatalog(
     data: {
       models: mergedModels as AvailableModelsRaw["models"],
       defaultAgentModelId,
+      defaultAgentModel,
     },
   };
+}
+
+/**
+ * Merge fetchAvailableModels across endpoint candidates so daily/sandbox-only
+ * models appear alongside production catalog entries.
+ */
+export async function fetchAvailableModelsCatalog(
+  token: string,
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<{ endpoint: string; status: number; data: AvailableModelsRaw }> {
+  const results = await Promise.all(
+    endpointCandidates().map((endpoint) =>
+      fetchAvailableModelsFromEndpoint(endpoint, token, projectId, signal),
+    ),
+  );
+  return mergeAvailableModelsResults(results);
 }
 
 async function loadCodeAssistUncached(token: string): Promise<string | undefined> {
