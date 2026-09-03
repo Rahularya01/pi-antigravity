@@ -12,6 +12,7 @@ export type DiagnosticsSnapshot = {
   latencyMs?: number;
   maskedEmail?: string;
   tokenExpiry?: string;
+  toolSchemaWarnings?: string;
 };
 
 const storage = new AsyncLocalStorage<DiagnosticsSnapshot>();
@@ -82,6 +83,10 @@ export function setLastMaskedEmail(email: string | undefined): void {
 }
 export function setLastTokenExpiry(expiry: string | undefined): void {
   currentBag().tokenExpiry = expiry;
+}
+export function setLastToolSchemaWarnings(warnings: string[] | undefined): void {
+  currentBag().toolSchemaWarnings =
+    warnings === undefined ? undefined : redactSecrets(warnings.join(" | ")).slice(0, 1200);
 }
 
 /** Test helper: reset last snapshot between cases. */

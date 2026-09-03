@@ -233,6 +233,225 @@ assert.deepEqual(dereferencedCustom?.parameters, {
     status: { type: "string", enum: ["open", "closed"] },
   },
 });
+
+// Resolve complete JSON Pointers, including RFC 6901 escaped property names.
+const nestedPointerTool = {
+  name: "nested_pointer_probe",
+  description: "Tool with an escaped local JSON Pointer",
+  parameters: {
+    type: "object",
+    properties: {
+      accent: { $ref: "#/$defs/Theme/properties/accent~1color" },
+    },
+    $defs: {
+      Theme: {
+        type: "object",
+        properties: {
+          "accent/color": { type: "string" },
+        },
+      },
+    },
+  },
+} as Tool;
+assert.deepEqual(convertTools([nestedPointerTool])?.[0]?.functionDeclarations[0]?.parametersJsonSchema, {
+  type: "object",
+  properties: { accent: { type: "string" } },
+});
+
+// One malformed declaration must not prevent healthy tools from being sent.
+const danglingRefTool = {
+  name: "dangling_ref_probe",
+  description: "Tool with a missing local reference",
+  parameters: {
+    type: "object",
+    properties: { theme: { $ref: "#/$defs/DesignTheme" } },
+  },
+} as Tool;
+const declarationsWithoutDangling = convertTools([refTool, danglingRefTool])?.[0]?.functionDeclarations;
+assert.equal(declarationsWithoutDangling?.length, 1);
+assert.equal(declarationsWithoutDangling?.[0]?.name, "ref_probe");
+assert.equal(convertTools([danglingRefTool]), undefined);
+
+// Recursive references cannot be made self-contained for the Antigravity backend.
+const cyclicRefTool = {
+  name: "cyclic_ref_probe",
+  description: "Tool with a circular local reference",
+  parameters: {
+    type: "object",
+    properties: { value: { $ref: "#/$defs/A" } },
+    $defs: {
+      A: { $ref: "#/$defs/B" },
+      B: { $ref: "#/$defs/A" },
+    },
+  },
+} as Tool;
+assert.equal(convertTools([cyclicRefTool]), undefined);
+
+function unresolvedRefs(value: unknown, path = "$"): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => unresolvedRefs(item, `${path}[${index}]`));
+  }
+  if (!value || typeof value !== "object") return [];
+
+  const schema = value as Record<string, unknown>;
+  const own = typeof schema.$ref === "string" ? [`${path}: ${schema.$ref}`] : [];
+  return [
+    ...own,
+    ...Object.entries(schema).flatMap(([key, child]) => unresolvedRefs(child, `${path}.${key}`)),
+  ];
+}
+
+// Regression: mirrors Stitch's design-system schema, including a nested shared definition.
+const stitchDesignSystemTool = {
+  name: "stitch_design_system_probe",
+  description: "Schema representative of Stitch design-system tools",
+  parameters: {
+    type: "object",
+    properties: {
+      designSystem: {
+        type: "object",
+        properties: {
+          theme: {
+            $ref: "#/$defs/DesignTheme",
+            description: "Required theme configuration",
+          },
+        },
+        required: ["theme"],
+      },
+    },
+    required: ["designSystem"],
+    $defs: {
+      Font: { type: "string", enum: ["INTER", "MANROPE"] },
+      DesignTheme: {
+        type: "object",
+        properties: {
+          bodyFont: { $ref: "#/$defs/Font" },
+          headlineFont: { $ref: "#/$defs/Font" },
+          colorMode: { type: "string", enum: ["LIGHT", "DARK"] },
+        },
+        required: ["bodyFont", "headlineFont", "colorMode"],
+      },
+    },
+  },
+} as Tool;
+const stitchSchema = convertTools([stitchDesignSystemTool])?.[0]?.functionDeclarations[0]
+  ?.parametersJsonSchema as Record<string, unknown>;
+assert.ok(stitchSchema);
+assert.deepEqual(unresolvedRefs(stitchSchema), []);
+assert.deepEqual(
+  (stitchSchema.properties as Record<string, Record<string, unknown>>).designSystem.properties,
+  {
+    theme: {
+      type: "object",
+      properties: {
+        bodyFont: { type: "string", enum: ["INTER", "MANROPE"] },
+        headlineFont: { type: "string", enum: ["INTER", "MANROPE"] },
+        colorMode: { type: "string", enum: ["LIGHT", "DARK"] },
+      },
+      required: ["bodyFont", "headlineFont", "colorMode"],
+      description: "Required theme configuration",
+    },
+  },
+);
+
+// Resolve both Draft-07 definitions and repeated nested references without global visitation.
+const sharedReferenceTool = {
+  name: "shared_reference_probe",
+  description: "Tool with repeated references to a shared nested schema",
+  parameters: {
+    type: "object",
+    properties: {
+      primary: { $ref: "#/definitions/Theme" },
+      secondary: { $ref: "#/definitions/Theme" },
+      accents: { type: "array", items: { $ref: "#/definitions/Color" } },
+    },
+    definitions: {
+      Color: { type: "string", enum: ["red", "blue"] },
+      Theme: {
+        type: "object",
+        properties: {
+          foreground: { $ref: "#/definitions/Color" },
+          background: { $ref: "#/definitions/Color" },
+        },
+      },
+    },
+  },
+} as Tool;
+const sharedSchema = convertTools([sharedReferenceTool])?.[0]?.functionDeclarations[0]
+  ?.parametersJsonSchema as Record<string, unknown>;
+assert.ok(sharedSchema);
+assert.deepEqual(unresolvedRefs(sharedSchema), []);
+assert.deepEqual(
+  (sharedSchema.properties as Record<string, Record<string, unknown>>).accents.items,
+  { type: "string", enum: ["red", "blue"] },
+);
+
+// References embedded in JSON Schema combinators are traversed like MCP tool schemas from Zod/Ajv.
+const combinatorReferenceTool = {
+  name: "combinator_reference_probe",
+  description: "Tool with refs in schema combinators",
+  parameters: {
+    type: "object",
+    properties: {
+      value: {
+        anyOf: [
+          { $ref: "#/$defs/Text" },
+          { type: "array", items: { $ref: "#/$defs/Text" } },
+        ],
+      },
+      constrained: {
+        allOf: [{ $ref: "#/$defs/Text" }],
+      },
+    },
+    $defs: { Text: { type: "string", minLength: 1 } },
+  },
+} as Tool;
+const combinatorSchema = convertTools([combinatorReferenceTool])?.[0]?.functionDeclarations[0]
+  ?.parametersJsonSchema;
+assert.ok(combinatorSchema);
+assert.deepEqual(unresolvedRefs(combinatorSchema), []);
+
+// RFC 6901 supports both '~' and '/' escaping in property names.
+const fullyEscapedPointerTool = {
+  name: "fully_escaped_pointer_probe",
+  description: "Tool with a fully escaped JSON Pointer",
+  parameters: {
+    type: "object",
+    properties: { value: { $ref: "#/$defs/Envelope/properties/a~0b~1c" } },
+    $defs: {
+      Envelope: { type: "object", properties: { "a~b/c": { type: "boolean" } } },
+    },
+  },
+} as Tool;
+assert.deepEqual(
+  convertTools([fullyEscapedPointerTool])?.[0]?.functionDeclarations[0]?.parametersJsonSchema,
+  { type: "object", properties: { value: { type: "boolean" } } },
+);
+
+// MCP servers can expose external or malformed refs. They are isolated instead of poisoning all tools.
+const externalRefTool = {
+  name: "external_ref_probe",
+  description: "Tool with an unsupported external reference",
+  parameters: {
+    type: "object",
+    properties: { value: { $ref: "https://example.test/schema.json#/Value" } },
+  },
+} as Tool;
+const schemasWithExternalRef = convertTools([refTool, externalRefTool])?.[0]?.functionDeclarations;
+assert.equal(schemasWithExternalRef?.length, 1);
+assert.equal(schemasWithExternalRef?.[0]?.name, "ref_probe");
+
+// The legacy Claude/GPT bridge receives the same fully inlined schema before its allowlist pass.
+const legacyStitchSchema = convertTools([stitchDesignSystemTool], true)?.[0]
+  ?.functionDeclarations[0]?.parameters as Record<string, unknown>;
+assert.ok(legacyStitchSchema);
+assert.deepEqual(unresolvedRefs(legacyStitchSchema), []);
+assert.deepEqual(
+  ((legacyStitchSchema.properties as Record<string, Record<string, unknown>>).designSystem
+    .properties as Record<string, Record<string, unknown>>).theme.type,
+  "object",
+);
+
 assert.match(
   friendlyAntigravityError(400, JSON.stringify({ error: { message: "Unknown name nullable" } })),
   /Unknown name nullable/i,

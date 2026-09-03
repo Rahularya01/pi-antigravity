@@ -29,6 +29,7 @@ import {
   setLastProjectId,
   setLastResolvedRuntimeModel,
   setLastStatus,
+  setLastToolSchemaWarnings,
 } from "../diagnostics/diagnostics.js";
 import {
   AntigravityRequestType,
@@ -301,43 +302,119 @@ export function convertMessages(
   return contents;
 }
 
+type SchemaReferenceIssue = {
+  path: string;
+  ref: string;
+  reason: string;
+};
+
+type DereferencedSchema = {
+  schema: unknown;
+  issues: SchemaReferenceIssue[];
+};
+
+/** Resolve a local RFC 6901 JSON Pointer against the original tool schema. */
+function resolveLocalJsonPointer(ref: string, rootSchema: unknown): unknown {
+  if (ref === "#") return rootSchema;
+  if (!ref.startsWith("#/")) return undefined;
+
+  let current: unknown = rootSchema;
+  for (const token of ref.slice(2).split("/")) {
+    const key = token.replace(/~1/g, "/").replace(/~0/g, "~");
+    if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
+    if (!Object.prototype.hasOwnProperty.call(current, key)) return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+/**
+ * Gemini rejects dangling JSON Schema references. Inline every reachable local
+ * reference and report references that cannot be made self-contained so the
+ * affected tool can be omitted without breaking every other tool declaration.
+ */
 function dereferenceSchema(
   schema: unknown,
-  rootDefs: Record<string, unknown> = {},
-  visited = new Set<unknown>(),
-): unknown {
-  if (!schema || typeof schema !== "object") return schema;
+  rootSchema: unknown = schema,
+  refStack = new Set<string>(),
+  objectStack = new Set<object>(),
+  path = "$",
+): DereferencedSchema {
+  if (!schema || typeof schema !== "object") return { schema, issues: [] };
+
   if (Array.isArray(schema)) {
-    return schema.map((item) => dereferenceSchema(item, rootDefs, visited));
+    const results = schema.map((item, index) =>
+      dereferenceSchema(item, rootSchema, refStack, objectStack, `${path}[${index}]`),
+    );
+    return {
+      schema: results.map((result) => result.schema),
+      issues: results.flatMap((result) => result.issues),
+    };
   }
 
   const s = schema as Record<string, unknown>;
-  if (visited.has(s)) return s;
-  visited.add(s);
+  if (objectStack.has(s)) {
+    return {
+      schema: {},
+      issues: [{ path, ref: "(object cycle)", reason: "circular schema object" }],
+    };
+  }
 
-  const defs: Record<string, unknown> = { ...rootDefs };
-  if (isRecord(s.$defs)) Object.assign(defs, s.$defs);
-  if (isRecord(s.definitions)) Object.assign(defs, s.definitions);
+  const nextObjectStack = new Set(objectStack);
+  nextObjectStack.add(s);
 
   if (typeof s.$ref === "string") {
     const ref = s.$ref;
-    const match = ref.match(/^#\/(?:\$defs|definitions)\/(.+)$/);
-    if (match && match[1] && defs[match[1]] !== undefined) {
-      const resolved = dereferenceSchema(defs[match[1]], defs, visited);
-      if (isRecord(resolved)) {
-        const { $ref: _, ...rest } = s;
-        const restCleaned = dereferenceSchema(rest, defs, visited);
-        return isRecord(restCleaned) ? { ...resolved, ...restCleaned } : resolved;
-      }
-      return resolved;
+    if (refStack.has(ref)) {
+      return {
+        schema: {},
+        issues: [{ path, ref, reason: "circular local reference" }],
+      };
     }
+
+    const target = resolveLocalJsonPointer(ref, rootSchema);
+    if (target === undefined) {
+      return {
+        schema: {},
+        issues: [{ path, ref, reason: "target is not present in the root schema" }],
+      };
+    }
+
+    const nextRefStack = new Set(refStack);
+    nextRefStack.add(ref);
+    const resolved = dereferenceSchema(target, rootSchema, nextRefStack, nextObjectStack, path);
+    const { $ref: _, ...siblings } = s;
+    const siblingResult = dereferenceSchema(siblings, rootSchema, refStack, nextObjectStack, path);
+
+    if (isRecord(resolved.schema) && isRecord(siblingResult.schema)) {
+      return {
+        schema: { ...resolved.schema, ...siblingResult.schema },
+        issues: [...resolved.issues, ...siblingResult.issues],
+      };
+    }
+    return {
+      schema: resolved.schema,
+      issues: [...resolved.issues, ...siblingResult.issues],
+    };
   }
 
   const out: Record<string, unknown> = {};
+  const issues: SchemaReferenceIssue[] = [];
   for (const [key, value] of Object.entries(s)) {
-    out[key] = dereferenceSchema(value, defs, visited);
+    // Definitions are available through rootSchema while resolving $ref, but must
+    // not be emitted because the Antigravity backend requires self-contained schemas.
+    if (key === "$defs" || key === "definitions") continue;
+    const result = dereferenceSchema(
+      value,
+      rootSchema,
+      refStack,
+      nextObjectStack,
+      `${path}.${key}`,
+    );
+    out[key] = result.schema;
+    issues.push(...result.issues);
   }
-  return out;
+  return { schema: out, issues };
 }
 
 function ensureRootObjectSchema(schema: unknown): Record<string, unknown> {
@@ -439,22 +516,34 @@ export function convertTools(
   useLegacyParameters = false,
 ): { functionDeclarations: GeminiFunctionDeclaration[] }[] | undefined {
   if (!tools?.length) return undefined;
-  return [
-    {
-      functionDeclarations: tools.map((tool) => {
-        const dereferenced = dereferenceSchema(tool.parameters);
-        const rootObject = ensureRootObjectSchema(dereferenced);
-        const schema = stripMetaSchema(rootObject);
-        return {
-          name: tool.name,
-          description: tool.description,
-          ...(useLegacyParameters
-            ? { parameters: normalizeCustomToolSchema(schema) }
-            : { parametersJsonSchema: schema }),
-        };
-      }),
-    },
-  ];
+
+  const warnings: string[] = [];
+  const functionDeclarations = tools.flatMap((tool) => {
+    const dereferenced = dereferenceSchema(tool.parameters);
+    if (dereferenced.issues.length > 0) {
+      const detail = dereferenced.issues
+        .map((issue) => `${issue.path} (${issue.ref}: ${issue.reason})`)
+        .join(", ");
+      warnings.push(`Skipped tool '${tool.name}' due to unresolved schema reference: ${detail}`);
+      return [];
+    }
+
+    const rootObject = ensureRootObjectSchema(dereferenced.schema);
+    const schema = stripMetaSchema(rootObject);
+    return [
+      {
+        name: tool.name,
+        description: tool.description,
+        ...(useLegacyParameters
+          ? { parameters: normalizeCustomToolSchema(schema) }
+          : { parametersJsonSchema: schema }),
+      },
+    ];
+  });
+
+  setLastToolSchemaWarnings(warnings.length ? warnings : undefined);
+  if (!functionDeclarations.length) return undefined;
+  return [{ functionDeclarations }];
 }
 
 function mapToolChoiceMode(
