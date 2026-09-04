@@ -68,6 +68,7 @@ import {
   antigravityEnv,
   antigravityRequestEnvelope,
   isRecord,
+  resolveSessionTrajectory,
   sanitizeText,
 } from "../utils/util.js";
 import { antigravityFetch } from "../utils/http.js";
@@ -760,7 +761,32 @@ export function buildRequest(
     };
   }
 
-  const envelope = antigravityRequestEnvelope(runtimeModel, isClaude);
+  const isNonGemini =
+    isClaude ||
+    model.id.startsWith("gpt-oss-") ||
+    runtimeModel.startsWith("gpt-oss-") ||
+    (!model.id.startsWith("gemini-") && !runtimeModel.startsWith("gemini-"));
+
+  // Pure agy CLI wire alignment:
+  // - step in requestId (.../<step>) equals contents.length (total content blocks)
+  // - last_step_index is 0-based index of the last content block (contents.length - 1)
+  // - request_id is ${trajectoryId}-${requestIndex} (0-based HTTP request sequence counter)
+  //   In multi-turn agent loops (with tools), every completed assistant response increments the request counter.
+  const step = Math.max(1, request.contents.length);
+  const lastStepIndex = String(Math.max(0, request.contents.length - 1));
+  const requestIndex = context.messages?.filter((m) => m.role === "assistant").length ?? 0;
+
+  const { conversationId, trajectoryId } = resolveSessionTrajectory(context);
+
+  const envelope = antigravityRequestEnvelope(runtimeModel, {
+    isClaude,
+    isNonGemini,
+    step,
+    lastStepIndex,
+    requestIndex,
+    conversationId,
+    trajectoryId,
+  });
   request.sessionId = options.sessionId || envelope.sessionId;
   request.labels = envelope.labels;
 
@@ -1083,11 +1109,7 @@ export function streamAntigravity(
         runtimeCandidates.push(fallback);
       }
 
-      const isClaudeReasoning = model.id.startsWith("claude-") && model.reasoning;
-      const requestHeaders: Record<string, string> = {
-        ...antigravityHeaders(creds.token),
-        ...(isClaudeReasoning ? { "anthropic-beta": "interleaved-thinking-2025-05-14" } : {}),
-      };
+      const requestHeaders = antigravityHeaders(creds.token);
 
       let response: Response | undefined;
       let lastText = "";
