@@ -863,7 +863,53 @@ function asToolCallArguments(args: Record<string, unknown> | undefined): ToolCal
   return (args ?? {}) as ToolCall["arguments"];
 }
 
+/** Default response-header deadline for streaming requests (see fetchWithHeaderDeadline). */
+const STREAM_HEADER_TIMEOUT_DEFAULT_MS = 180_000;
+
+/**
+ * Streaming header deadline in milliseconds, from ANTIGRAVITY_STREAM_HEADER_TIMEOUT_MS
+ * (or the legacy NOAGY_ prefix). 0 disables the deadline; invalid values fall back
+ * to the default.
+ */
+export function streamHeaderTimeoutMs(): number {
+  const raw = Number.parseInt(antigravityEnv("STREAM_HEADER_TIMEOUT_MS") ?? "", 10);
+  return Number.isFinite(raw) && raw >= 0 ? raw : STREAM_HEADER_TIMEOUT_DEFAULT_MS;
+}
+
+/**
+ * Fetch with a response-header deadline. A server can accept a request on a warm
+ * keep-alive socket and then never send response headers; without a deadline that
+ * stall is unbounded. The timer covers only the header phase: once the fetch
+ * resolves (headers received) it is disarmed, so a long SSE body streams to
+ * completion regardless of duration.
+ *
+ * Exported with an injectable fetch for unit tests.
+ */
+export async function fetchWithHeaderDeadline(
+  url: string,
+  init: RequestInit,
+  callerSignal: AbortSignal | undefined,
+  timeoutMs: number,
+  fetchFn: (input: string, init: RequestInit) => Promise<Response> = antigravityFetch,
+): Promise<Response> {
+  if (timeoutMs <= 0) return fetchFn(url, init);
+  const controller = new AbortController();
+  const forward = () => controller.abort();
+  callerSignal?.addEventListener("abort", forward, { once: true });
+  const timer = setTimeout(
+    () => controller.abort(new Error(`no response headers within ${timeoutMs}ms`)),
+    timeoutMs,
+  );
+  try {
+    return await fetchFn(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+    callerSignal?.removeEventListener("abort", forward);
+  }
+}
+
 /** Exported for unit tests. */
+
 export async function streamResponse(
   response: Response,
   stream: AssistantMessageEventStream,
@@ -1108,14 +1154,15 @@ export function streamAntigravity(
 
           for (const endpoint of endpointCandidates()) {
             setLastEndpoint(endpoint);
-            response = await antigravityFetch(
+            response = await fetchWithHeaderDeadline(
               `${endpoint}/v1internal:streamGenerateContent?alt=sse`,
               {
                 method: "POST",
                 headers: requestHeaders,
                 body,
-                signal: opts.signal,
               },
+              opts.signal,
+              streamHeaderTimeoutMs(),
             );
             setLastStatus(response.status);
             if (response.ok) break;
