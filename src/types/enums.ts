@@ -7,12 +7,6 @@ export enum ThinkingEffort {
   Xhigh = "xhigh",
 }
 
-export enum Platform {
-  Macos = "MACOS",
-  Windows = "WINDOWS",
-  Linux = "LINUX",
-}
-
 export enum ToolChoice {
   Auto = "auto",
   None = "none",

@@ -1,5 +1,10 @@
 import type { Api, Context, Model, Tool } from "@earendil-works/pi-ai";
-import { defaultProjectId, stableProjectId } from "../src/client/index.js";
+import {
+  antigravityHeaders,
+  defaultProjectId,
+  defaultUserAgent,
+  stableProjectId,
+} from "../src/client/index.js";
 import { getLastDiagnostics, resetDiagnosticsForTests } from "../src/diagnostics/index.js";
 import { StopReason } from "../src/types/enums.js";
 import {
@@ -1017,6 +1022,21 @@ assert.equal(flashCost?.output, 0.4);
 const opusCost = ANTIGRAVITY_MODELS.find((m) => m.id === "claude-opus-4-6")?.cost;
 assert.equal(opusCost?.input, 15);
 assert.equal(opusCost?.output, 75);
+
+// Wire fingerprint: User-Agent format (pure agy CLI)
+assert.equal(
+  defaultUserAgent(),
+  "antigravity/cli/1.1.23 (aidev_client; os_type=linux; arch=amd64; cl=974125021; auth_method=consumer)",
+);
+
+// Wire fingerprint: Headers hygiene (no leaking VS Code plugin headers)
+const headers = antigravityHeaders("test-token-xyz");
+assert.equal(headers.Authorization, "Bearer test-token-xyz");
+assert.equal(headers["Content-Type"], "application/json");
+assert.equal(headers["User-Agent"], defaultUserAgent());
+assert.equal(headers["X-Goog-Api-Client"], undefined);
+assert.equal(headers["Client-Metadata"], undefined);
+assert.equal(headers["Accept"], undefined);
 
 console.log(
   `model routing: ${routeCases.length} cases, tool schema, errors, project ids, token clamping, and message conversion passed`,

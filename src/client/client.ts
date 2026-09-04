@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { Platform } from "../types/enums.js";
 import {
   getCurrentAvailableModels,
   getCurrentEndpoint,
@@ -60,35 +59,18 @@ export function endpointCandidates(): string[] {
   return explicit ? [assertSafeApiBaseUrl(explicit)] : ENDPOINT_FALLBACKS;
 }
 
-const DEFAULT_ANTIGRAVITY_VERSION = "2.8.0";
-const DEFAULT_ANTIGRAVITY_CL = "963137146";
+const DEFAULT_USER_AGENT =
+  "antigravity/cli/1.1.23 (aidev_client; os_type=linux; arch=amd64; cl=974125021; auth_method=consumer)";
 
-function defaultUserAgent(): string {
-  const version = antigravityEnv("HUB_VERSION") || DEFAULT_ANTIGRAVITY_VERSION;
-  const cl = antigravityEnv("HUB_CL") || DEFAULT_ANTIGRAVITY_CL;
-  const os = antigravityEnv("HUB_OS") || "darwin";
-  const arch = antigravityEnv("HUB_ARCH") || "arm64";
-  return `antigravity/hub/${version} (aidev_client; os_type=${os}; arch=${arch}; cl=${cl})`;
+export function defaultUserAgent(): string {
+  return DEFAULT_USER_AGENT;
 }
 
 export function antigravityHeaders(token: string): Record<string, string> {
-  const platform =
-    process.platform === "darwin"
-      ? Platform.Macos
-      : process.platform === "win32"
-        ? Platform.Windows
-        : Platform.Linux;
   return {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
-    Accept: "text/event-stream",
     "User-Agent": antigravityEnv("USER_AGENT") || defaultUserAgent(),
-    "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
-    "Client-Metadata": JSON.stringify({
-      ideType: "ANTIGRAVITY",
-      platform,
-      pluginType: "GEMINI",
-    }),
   };
 }
 
@@ -502,8 +484,6 @@ async function loadCodeAssistUncached(token: string): Promise<string | undefined
   const body = JSON.stringify({
     metadata: {
       ideType: "ANTIGRAVITY",
-      platform: "PLATFORM_UNSPECIFIED",
-      pluginType: "GEMINI",
     },
   });
 
