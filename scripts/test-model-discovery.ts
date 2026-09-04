@@ -154,9 +154,9 @@ assert.equal(
 assert.equal(getAntigravityRequestModelId("claude-opus-4-6", "high"), "claude-opus-4-6-thinking");
 assert.equal(getAntigravityRequestModelId("gpt-oss-120b", "medium"), "gpt-oss-120b-medium");
 assert.equal(
-  getThinkingConfig("gemini-3.8-flash", "medium")?.thinkingLevel,
-  "MEDIUM",
-  "new Gemini families send thinkingLevel",
+  getThinkingConfig("gemini-3.8-flash", "medium")?.thinkingBudget,
+  4000,
+  "Gemini families send thinkingBudget",
 );
 assert.equal(getThinkingConfig("gemini-3.5-flash", "medium")?.thinkingBudget, 4000);
 assert.equal(
@@ -164,11 +164,22 @@ assert.equal(
   false,
   "reasoning=off disables Gemini thinking",
 );
-assert.equal(getThinkingConfig("gemini-3.7-flash", "off")?.thinkingLevel, undefined);
+assert.equal(getThinkingConfig("gemini-3.7-flash", "off")?.thinkingBudget, 0);
 assert.equal(getThinkingConfig("gemini-3.6-flash", undefined)?.includeThoughts, false);
+assert.equal(getThinkingConfig("gemini-3.6-flash", undefined)?.thinkingBudget, 0);
 assert.equal(getThinkingConfig("gemini-3.8-flash", "off")?.includeThoughts, false);
+assert.equal(getThinkingConfig("gemini-3.8-flash", "off")?.thinkingBudget, 0);
 assert.equal(getThinkingConfig("gemini-3.7-flash", "medium")?.includeThoughts, true);
-assert.equal(getThinkingConfig("gemini-3.7-flash", "medium")?.thinkingLevel, "MEDIUM");
+assert.equal(getThinkingConfig("gemini-3.7-flash", "medium")?.thinkingBudget, 4000);
+assert.equal(getThinkingConfig("gemini-3.7-flash", "high")?.thinkingBudget, -1);
+assert.equal(getThinkingConfig("gemini-3.7-flash", "low")?.thinkingBudget, 1000);
+
+// Claude and GPT-OSS thinking budgets
+assert.equal(getThinkingConfig("claude-sonnet-4-6", "high")?.thinkingBudget, 1024);
+assert.equal(getThinkingConfig("claude-opus-4-6", "high")?.thinkingBudget, 1024);
+assert.equal(getThinkingConfig("claude-sonnet-4-6", "off")?.thinkingBudget, 0);
+assert.equal(getThinkingConfig("gpt-oss-120b", "medium")?.thinkingBudget, 8192);
+assert.equal(getThinkingConfig("gpt-oss-120b", "off")?.thinkingBudget, 0);
 
 const mergedDefaultOnly = mergeAvailableModelsResults([
   {

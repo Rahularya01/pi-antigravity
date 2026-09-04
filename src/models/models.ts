@@ -1,5 +1,5 @@
 import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
-import type { AntigravityRouting } from "../types/types.js";
+import type { AntigravityRouting, ThinkingWire } from "../types/types.js";
 import { ThinkingEffort } from "../types/enums.js";
 import type { AntigravityCatalog } from "./grouping.js";
 
@@ -376,13 +376,7 @@ export function getFallbackRuntimeModel(runtimeModel: string, effort?: string): 
   return undefined;
 }
 
-export type GeminiThinkingLevel = "MINIMAL" | "LOW" | "MEDIUM" | "HIGH";
-
-export type ThinkingWire = {
-  includeThoughts: boolean;
-  thinkingLevel?: GeminiThinkingLevel;
-  thinkingBudget?: number;
-};
+export type { ThinkingWire };
 
 export const ANTIGRAVITY_MODEL_ENUM: Record<string, string> = {
   "gemini-3.5-flash-extra-low": "MODEL_PLACEHOLDER_M187",
@@ -392,16 +386,18 @@ export const ANTIGRAVITY_MODEL_ENUM: Record<string, string> = {
   "gemini-pro-agent": "MODEL_PLACEHOLDER_M16",
 };
 
-function googleLevel(effort: string | undefined): GeminiThinkingLevel {
-  if (effort === "high" || effort === "xhigh") return "HIGH";
-  if (effort === "medium") return "MEDIUM";
-  return "LOW";
-}
-
 export function getThinkingConfig(
   modelId: string,
   effort: string | undefined,
 ): ThinkingWire | undefined {
+  if (modelId.startsWith("claude-")) {
+    if (!effort || effort === "off") return { includeThoughts: false, thinkingBudget: 0 };
+    return { includeThoughts: true, thinkingBudget: 1024 };
+  }
+  if (modelId.startsWith("gpt-oss-")) {
+    if (!effort || effort === "off") return { includeThoughts: false, thinkingBudget: 0 };
+    return { includeThoughts: true, thinkingBudget: 8192 };
+  }
   if (modelId === "gemini-3.5-flash") {
     if (!effort || effort === "off") return { includeThoughts: false, thinkingBudget: 0 };
     const thinkingBudget =
@@ -416,8 +412,10 @@ export function getThinkingConfig(
     };
   }
   if (modelId.startsWith("gemini-")) {
-    if (!effort || effort === "off") return { includeThoughts: false };
-    return { includeThoughts: true, thinkingLevel: googleLevel(effort) };
+    if (!effort || effort === "off") return { includeThoughts: false, thinkingBudget: 0 };
+    const thinkingBudget =
+      effort === "high" || effort === "xhigh" ? -1 : effort === "medium" ? 4_000 : 1_000;
+    return { includeThoughts: true, thinkingBudget };
   }
   return undefined;
 }
