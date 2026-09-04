@@ -6,7 +6,7 @@ import {
   stableProjectId,
 } from "../src/client/index.js";
 import { getLastDiagnostics, resetDiagnosticsForTests } from "../src/diagnostics/index.js";
-import { StopReason } from "../src/types/enums.js";
+import { GeminiToolCallingMode, StopReason, ToolChoice } from "../src/types/enums.js";
 import {
   ANTIGRAVITY_MODELS,
   getMaxOutputTokens,
@@ -1054,6 +1054,129 @@ try {
   if (savedNoagyUserAgent !== undefined) process.env.NOAGY_USER_AGENT = savedNoagyUserAgent;
   else delete process.env.NOAGY_USER_AGENT;
 }
+
+// Wire fingerprint: toolConfig omission on default (auto) for all models (pure agy CLI)
+const dummyToolsContext: Context = {
+  ...dummyContext,
+  tools: [
+    {
+      name: "read_file",
+      description: "Read a file",
+      parameters: { type: "object", properties: { path: { type: "string" } } },
+    } as Tool,
+  ],
+};
+
+// 1. Gemini with tools: tools present, toolConfig undefined
+const geminiWithTools = buildRequest(
+  flash37Model,
+  dummyToolsContext,
+  "test-proj",
+  {},
+  "gemini-3.7-flash-high",
+);
+assert.ok(geminiWithTools.request.tools);
+assert.equal(geminiWithTools.request.toolConfig, undefined);
+
+// 2. Claude with tools: tools present, toolConfig undefined
+const claudeWithTools = buildRequest(
+  model,
+  dummyToolsContext,
+  "test-proj",
+  {},
+  "claude-sonnet-4-6",
+);
+assert.ok(claudeWithTools.request.tools);
+assert.equal(claudeWithTools.request.toolConfig, undefined);
+
+// 3. Claude without tools: toolConfig undefined (no legacy VALIDATED injection)
+const claudeNoTools = buildRequest(
+  model,
+  dummyContext,
+  "test-proj",
+  {},
+  "claude-sonnet-4-6",
+);
+assert.equal(claudeNoTools.request.tools, undefined);
+assert.equal(claudeNoTools.request.toolConfig, undefined);
+
+// 4. GPT-OSS with tools: tools present, toolConfig undefined
+const gptOssModel = { ...model, id: "gpt-oss-120b", maxTokens: 32768 };
+const gptOssWithTools = buildRequest(
+  gptOssModel,
+  dummyToolsContext,
+  "test-proj",
+  {},
+  "gpt-oss-120b-medium",
+);
+assert.ok(gptOssWithTools.request.tools);
+assert.equal(gptOssWithTools.request.toolConfig, undefined);
+
+// 5. Explicit toolChoice: "auto" -> toolConfig undefined
+const autoReq = buildRequest(
+  flash37Model,
+  dummyToolsContext,
+  "test-proj",
+  { toolChoice: ToolChoice.Auto },
+  "gemini-3.7-flash-high",
+);
+assert.equal(autoReq.request.toolConfig, undefined);
+
+// 6. Explicit toolChoice: "none" -> toolConfig mode NONE
+const noneReq = buildRequest(
+  flash37Model,
+  dummyToolsContext,
+  "test-proj",
+  { toolChoice: ToolChoice.None },
+  "gemini-3.7-flash-high",
+);
+assert.deepEqual(noneReq.request.toolConfig, {
+  functionCallingConfig: { mode: GeminiToolCallingMode.None },
+});
+
+// 7. Explicit toolChoice: "any" / "required" -> toolConfig mode ANY
+const anyReq = buildRequest(
+  flash37Model,
+  dummyToolsContext,
+  "test-proj",
+  { toolChoice: ToolChoice.Any },
+  "gemini-3.7-flash-high",
+);
+assert.deepEqual(anyReq.request.toolConfig, {
+  functionCallingConfig: { mode: GeminiToolCallingMode.Any },
+});
+
+const reqChoice = buildRequest(
+  flash37Model,
+  dummyToolsContext,
+  "test-proj",
+  { toolChoice: ToolChoice.Required },
+  "gemini-3.7-flash-high",
+);
+assert.deepEqual(reqChoice.request.toolConfig, {
+  functionCallingConfig: { mode: GeminiToolCallingMode.Any },
+});
+
+// 8. String literals compatibility (Pi SimpleStreamOptions)
+const stringAutoReq = buildRequest(
+  flash37Model,
+  dummyToolsContext,
+  "test-proj",
+  { toolChoice: "auto" },
+  "gemini-3.7-flash-high",
+);
+assert.equal(stringAutoReq.request.toolConfig, undefined);
+
+const stringNoneReq = buildRequest(
+  flash37Model,
+  dummyToolsContext,
+  "test-proj",
+  { toolChoice: "none" },
+  "gemini-3.7-flash-high",
+);
+assert.deepEqual(stringNoneReq.request.toolConfig, {
+  functionCallingConfig: { mode: GeminiToolCallingMode.None },
+});
 
 console.log(
   `model routing: ${routeCases.length} cases, tool schema, errors, project ids, token clamping, and message conversion passed`,
