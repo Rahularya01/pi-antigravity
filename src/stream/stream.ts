@@ -746,17 +746,12 @@ export function buildRequest(
   const tools = convertTools(context.tools, isClaude || model.id.startsWith("gpt-oss-"));
   if (tools) {
     request.tools = tools;
+  }
+  if (options.toolChoice && options.toolChoice !== ToolChoice.Auto) {
     request.toolConfig = {
       functionCallingConfig: {
-        mode:
-          options.toolChoice && options.toolChoice !== ToolChoice.Auto
-            ? mapToolChoiceMode(options.toolChoice)
-            : GeminiToolCallingMode.Validated,
+        mode: mapToolChoiceMode(options.toolChoice),
       },
-    };
-  } else if (isClaude) {
-    request.toolConfig = {
-      functionCallingConfig: { mode: GeminiToolCallingMode.Validated },
     };
   }
 
