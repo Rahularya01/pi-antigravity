@@ -31,6 +31,7 @@ export type DynamicModelInfo = {
   experiments?: string[];
   apiProvider?: string;
   modelProvider?: string;
+  model?: string;
 };
 
 export type CallbackServer = {
@@ -260,6 +261,7 @@ export type ModelInfoRaw = {
   displayName?: unknown;
   label?: unknown;
   modelName?: unknown;
+  model?: unknown;
   modelProvider?: unknown;
   apiProvider?: unknown;
   supportsThinking?: unknown;

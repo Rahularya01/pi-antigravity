@@ -71,12 +71,7 @@ for (const { label, modelId, effort } of modelCases) {
     `${endpointCandidates()[0]}/v1internal:streamGenerateContent?alt=sse`,
     {
       method: "POST",
-      headers: {
-        ...antigravityHeaders(refreshed.access),
-        ...(modelId.startsWith("claude-")
-          ? { "anthropic-beta": "interleaved-thinking-2025-05-14" }
-          : {}),
-      },
+      headers: antigravityHeaders(refreshed.access),
       body: JSON.stringify({
         project: projectId,
         model: runtimeModel,

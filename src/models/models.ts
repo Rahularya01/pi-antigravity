@@ -385,12 +385,72 @@ export type ThinkingWire = {
 };
 
 export const ANTIGRAVITY_MODEL_ENUM: Record<string, string> = {
+  // Gemini 3.8 Flash
+  "gemini-3.8-flash": "MODEL_PLACEHOLDER_M318",
+  "gemini-3.8-flash-high": "MODEL_PLACEHOLDER_M318",
+  "gemini-3.8-flash-medium": "MODEL_PLACEHOLDER_M319",
+  "gemini-3.8-flash-low": "MODEL_PLACEHOLDER_M320",
+  "gemini-3.8-flash-tiered": "MODEL_PLACEHOLDER_M322",
+  // Gemini 3.7 Flash
+  "gemini-3.7-flash": "MODEL_PLACEHOLDER_M298",
+  "gemini-3.7-flash-high": "MODEL_PLACEHOLDER_M298",
+  "gemini-3.7-flash-medium": "MODEL_PLACEHOLDER_M299",
+  "gemini-3.7-flash-low": "MODEL_PLACEHOLDER_M300",
+  "gemini-3.7-flash-tiered": "MODEL_PLACEHOLDER_M301",
+  // Gemini 3.6 Flash
+  "gemini-3.6-flash": "MODEL_PLACEHOLDER_M71",
+  "gemini-3.6-flash-high": "MODEL_PLACEHOLDER_M71",
+  "gemini-3.6-flash-medium": "MODEL_PLACEHOLDER_M72",
+  "gemini-3.6-flash-low": "MODEL_PLACEHOLDER_M73",
+  "gemini-3.6-flash-tiered": "MODEL_PLACEHOLDER_M196",
+  // Gemini 3.5 Flash
+  "gemini-3.5-flash": "MODEL_PLACEHOLDER_M20",
   "gemini-3.5-flash-extra-low": "MODEL_PLACEHOLDER_M187",
   "gemini-3.5-flash-low": "MODEL_PLACEHOLDER_M20",
-  "gemini-3-flash-agent": "MODEL_PLACEHOLDER_M132",
+  "gemini-3-flash-agent": "MODEL_PLACEHOLDER_M84",
+  // Gemini 3.1 Pro
+  "gemini-3.1-pro": "MODEL_PLACEHOLDER_M36",
   "gemini-3.1-pro-low": "MODEL_PLACEHOLDER_M36",
+  "gemini-3.1-pro-high": "MODEL_PLACEHOLDER_M37",
   "gemini-pro-agent": "MODEL_PLACEHOLDER_M16",
+  // Claude
+  "claude-sonnet-4-6": "MODEL_PLACEHOLDER_M35",
+  "claude-opus-4-6": "MODEL_PLACEHOLDER_M26",
+  "claude-opus-4-6-thinking": "MODEL_PLACEHOLDER_M26",
+  // GPT-OSS
+  "gpt-oss-120b": "MODEL_OPENAI_GPT_OSS_120B_MEDIUM",
+  "gpt-oss-120b-medium": "MODEL_OPENAI_GPT_OSS_120B_MEDIUM",
 };
+
+const modelEnumCache = new Map<string, string>();
+
+/** Register dynamically discovered model enum (e.g. from fetchAvailableModels). */
+export function registerModelEnum(wireModelId: string, modelEnum: string): void {
+  if (wireModelId && modelEnum) {
+    modelEnumCache.set(wireModelId, modelEnum);
+  }
+}
+
+/** Register batch of discovered model enums from fetchAvailableModels raw models dictionary. */
+export function registerDiscoveredModelEnums(
+  models: Record<string, { model?: unknown }> | undefined,
+): void {
+  if (!models) return;
+  for (const [wireId, info] of Object.entries(models)) {
+    if (typeof info?.model === "string" && info.model) {
+      modelEnumCache.set(wireId, info.model);
+    }
+  }
+}
+
+/** Get model_enum label for a given wire model id (dynamic cache first, then static fallback). */
+export function getModelEnum(wireModelId: string): string | undefined {
+  return modelEnumCache.get(wireModelId) || ANTIGRAVITY_MODEL_ENUM[wireModelId];
+}
+
+export function clearModelEnumCache(): void {
+  modelEnumCache.clear();
+}
 
 function googleLevel(effort: string | undefined): GeminiThinkingLevel {
   if (effort === "high" || effort === "xhigh") return "HIGH";

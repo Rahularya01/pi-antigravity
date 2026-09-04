@@ -31,10 +31,7 @@ const body = {
 const endpoint = client.endpointCandidates()[0];
 const res = await fetch(`${endpoint}/v1internal:streamGenerateContent?alt=sse`, {
   method: "POST",
-  headers: {
-    ...client.antigravityHeaders(refreshed.access),
-    "anthropic-beta": "interleaved-thinking-2025-05-14",
-  },
+  headers: client.antigravityHeaders(refreshed.access),
   body: JSON.stringify(body),
 });
 console.log("status=", res.status, "endpoint=", endpoint);

@@ -1,18 +1,22 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mergeAvailableModelsResults } from "../src/client/index.js";
+import { antigravityHeaders, mergeAvailableModelsResults } from "../src/client/index.js";
 import type { ModelInfoRaw } from "../src/types/types.js";
 import {
   ANTIGRAVITY_MODELS,
   ANTIGRAVITY_ROUTING,
   applyAntigravityCatalog,
   buildAntigravityCatalog,
+  clearModelEnumCache,
   getAntigravityRequestModelId,
   getFallbackRuntimeModel,
+  getModelEnum,
   getThinkingConfig,
   humanizePublicId,
   readCatalogCache,
+  registerDiscoveredModelEnums,
+  registerModelEnum,
   resetAntigravityCatalogForTests,
   resolvedCatalog,
   setCatalogCachePathForTests,
@@ -30,6 +34,9 @@ function fail(message: string): never {
 const assert = {
   equal(actual: unknown, expected: unknown, message?: string) {
     if (actual !== expected) fail(message ?? `expected ${String(expected)}, got ${String(actual)}`);
+  },
+  notEqual(actual: unknown, expected: unknown, message?: string) {
+    if (actual === expected) fail(message ?? `expected values not to be equal: ${String(actual)}`);
   },
   ok(value: unknown, message?: string) {
     if (!value) fail(message ?? "expected a truthy value");
@@ -449,6 +456,50 @@ try {
   setCatalogCachePathForTests(undefined);
   rmSync(dirError, { recursive: true, force: true });
 }
+// Wire fingerprint headers: Accept: application/json must not be injected for model discovery
+const defaultHeaders = antigravityHeaders("test-token");
+assert.notEqual(
+  defaultHeaders.Accept,
+  "application/json",
+  "Accept: application/json must not be sent on discovery requests",
+);
+
+// Static fallback model_enum resolution
+clearModelEnumCache();
+assert.equal(getModelEnum("gemini-3.8-flash-high"), "MODEL_PLACEHOLDER_M318");
+assert.equal(getModelEnum("gemini-3.7-flash-high"), "MODEL_PLACEHOLDER_M298");
+assert.equal(getModelEnum("gemini-3.6-flash-high"), "MODEL_PLACEHOLDER_M71");
+assert.equal(getModelEnum("claude-sonnet-4-6"), "MODEL_PLACEHOLDER_M35");
+assert.equal(getModelEnum("gpt-oss-120b-medium"), "MODEL_OPENAI_GPT_OSS_120B_MEDIUM");
+
+// Dynamic model_enum registration and cache precedence
+registerModelEnum("custom-future-model", "MODEL_PLACEHOLDER_M999");
+assert.equal(getModelEnum("custom-future-model"), "MODEL_PLACEHOLDER_M999");
+registerModelEnum("gemini-3.8-flash-high", "MODEL_OVERRIDE_DYNAMIC");
+assert.equal(getModelEnum("gemini-3.8-flash-high"), "MODEL_OVERRIDE_DYNAMIC", "dynamic cache overrides static");
+
+// Batch registration from catalog discovery
+registerDiscoveredModelEnums({
+  "gemini-4.0-flash": { model: "MODEL_PLACEHOLDER_M400" },
+});
+assert.equal(getModelEnum("gemini-4.0-flash"), "MODEL_PLACEHOLDER_M400");
+
+// mergeAvailableModelsResults registers model_enum dynamically
+mergeAvailableModelsResults([
+  {
+    endpoint: "https://daily-cloudcode-pa.googleapis.com",
+    status: 200,
+    data: {
+      models: {
+        "catalog-dynamic-model": { model: "MODEL_CATALOG_DISCOVERED" },
+      },
+    },
+  },
+]);
+assert.equal(getModelEnum("catalog-dynamic-model"), "MODEL_CATALOG_DISCOVERED");
+
+clearModelEnumCache();
+assert.equal(getModelEnum("gemini-3.8-flash-high"), "MODEL_PLACEHOLDER_M318", "clearModelEnumCache restores static");
 
 console.log(
   "model discovery: grouping, overrides, empty/failure fallback, cache replace-on-success, thinking config, and refresh TTL passed",

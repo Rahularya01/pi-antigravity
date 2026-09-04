@@ -13,6 +13,7 @@ import { assertSafeApiBaseUrl, safeError } from "../utils/security.js";
 import type { AntigravityApiKey, AvailableModelsRaw, DynamicModelInfo } from "../types/types.js";
 import { antigravityEnv, asString, escapeRegExp, isRecord } from "../utils/util.js";
 import { antigravityFetch } from "../utils/http.js";
+import { registerDiscoveredModelEnums, registerModelEnum } from "../models/models.js";
 
 export const DEFAULT_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com";
 export const ENDPOINT_FALLBACKS = [
@@ -238,11 +239,16 @@ function dynamicModelFromInfo(modelId: string, info: unknown): DynamicModelInfo 
   const experiments = Array.isArray(info.modelExperiments)
     ? info.modelExperiments.filter((item): item is string => typeof item === "string")
     : undefined;
+  const modelEnum = asString(info.model);
+  if (modelEnum) {
+    registerModelEnum(modelId, modelEnum);
+  }
   return {
     id: modelId,
     experiments,
     apiProvider: asString(info.apiProvider),
     modelProvider: asString(info.modelProvider),
+    model: modelEnum,
   };
 }
 
@@ -320,6 +326,9 @@ async function fetchAvailableRuntimeModelUncached(
       if (!res.ok) continue;
       setLastEndpoint(endpoint);
       const data: unknown = await res.json();
+      if (isRecord(data) && isRecord(data.models)) {
+        registerDiscoveredModelEnums(data.models as Record<string, { model?: unknown }>);
+      }
       const labels = [...new Set(collectModelLabels(data))].slice(0, 16);
       if (labels.length) lastLabels = labels.join(",");
       const found = findDynamicModel(data, requestedRuntimeModel);
@@ -375,13 +384,6 @@ export function clearModelCache(): void {
   modelCache.clear();
 }
 
-function jsonHeaders(token: string): Record<string, string> {
-  return {
-    ...antigravityHeaders(token),
-    Accept: "application/json",
-  };
-}
-
 async function fetchAvailableModelsFromEndpoint(
   endpoint: string,
   token: string,
@@ -391,7 +393,7 @@ async function fetchAvailableModelsFromEndpoint(
   try {
     const res = await antigravityFetch(`${endpoint}/v1internal:fetchAvailableModels`, {
       method: "POST",
-      headers: jsonHeaders(token),
+      headers: antigravityHeaders(token),
       body: JSON.stringify({ project: projectId }),
       signal: catalogSignal(signal),
     });
@@ -441,6 +443,7 @@ export function mergeAvailableModelsResults(
     const data = result.data;
     if (isRecord(data) && isRecord(data.models)) {
       Object.assign(mergedModels, data.models);
+      registerDiscoveredModelEnums(data.models as Record<string, { model?: unknown }>);
     }
     if (isRecord(data) && typeof data.defaultAgentModelId === "string") {
       defaultAgentModelId = data.defaultAgentModelId;

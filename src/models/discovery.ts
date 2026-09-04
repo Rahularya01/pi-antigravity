@@ -9,6 +9,7 @@ import {
   applyAntigravityCatalog,
   getCurrentAntigravityCatalog,
   PROVIDER_ID,
+  registerDiscoveredModelEnums,
 } from "./models.js";
 import { isUsableCatalog, readCatalogCache, writeCatalogCache } from "./cache.js";
 import { buildAntigravityCatalog, resolvedCatalog, type AntigravityCatalog } from "./grouping.js";
@@ -52,6 +53,7 @@ export async function discoverAntigravityModels(
   if (!models || Object.keys(models).length === 0) {
     return { models: [], routing: {} };
   }
+  registerDiscoveredModelEnums(models);
   return buildAntigravityCatalog(models, fallbackCatalog());
 }
 
