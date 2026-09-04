@@ -886,6 +886,13 @@ function asToolCallArguments(args: Record<string, unknown> | undefined): ToolCal
 
 /** Default response-header deadline for streaming requests (see fetchWithHeaderDeadline). */
 const STREAM_HEADER_TIMEOUT_DEFAULT_MS = 180_000;
+/** Default mid-body stall deadline: abort when no SSE bytes arrive for this long. */
+const STREAM_STALL_TIMEOUT_DEFAULT_MS = 120_000;
+
+function envTimeoutMs(name: string, fallback: number): number {
+  const raw = Number.parseInt(antigravityEnv(name) ?? "", 10);
+  return Number.isFinite(raw) && raw >= 0 ? raw : fallback;
+}
 
 /**
  * Streaming header deadline in milliseconds, from ANTIGRAVITY_STREAM_HEADER_TIMEOUT_MS
@@ -893,16 +900,62 @@ const STREAM_HEADER_TIMEOUT_DEFAULT_MS = 180_000;
  * to the default.
  */
 export function streamHeaderTimeoutMs(): number {
-  const raw = Number.parseInt(antigravityEnv("STREAM_HEADER_TIMEOUT_MS") ?? "", 10);
-  return Number.isFinite(raw) && raw >= 0 ? raw : STREAM_HEADER_TIMEOUT_DEFAULT_MS;
+  return envTimeoutMs("STREAM_HEADER_TIMEOUT_MS", STREAM_HEADER_TIMEOUT_DEFAULT_MS);
 }
 
 /**
- * Fetch with a response-header deadline. A server can accept a request on a warm
- * keep-alive socket and then never send response headers; without a deadline that
- * stall is unbounded. The timer covers only the header phase: once the fetch
- * resolves (headers received) it is disarmed, so a long SSE body streams to
- * completion regardless of duration.
+ * Mid-body stall deadline in milliseconds, from ANTIGRAVITY_STREAM_STALL_TIMEOUT_MS
+ * (legacy NOAGY_ prefix honored). 0 disables. A healthy SSE stream emits bytes
+ * continuously while generating, so a silent gap this long means the connection
+ * is dead even though headers arrived — abort with a named error rather than
+ * hanging until an external process timeout.
+ */
+export function streamStallTimeoutMs(): number {
+  return envTimeoutMs("STREAM_STALL_TIMEOUT_MS", STREAM_STALL_TIMEOUT_DEFAULT_MS);
+}
+
+function stallError(stallMs: number): Error {
+  return new Error(`stream stalled: no data for ${stallMs}ms`);
+}
+
+/**
+ * Guard a response body against mid-stream stalls: a TransformStream that
+ * resets an idle timer on every chunk and aborts the fetch controller when no
+ * bytes arrive within stallMs. pipeThrough keeps backpressure, so chunks are
+ * only read as the consumer pulls. The timer is cleared when the body ends
+ * (flush); it is also unref'd so an armed timer cannot keep the process alive.
+ */
+function attachStallWatchdog(response: Response, controller: AbortController, stallMs: number): Response {
+  if (stallMs <= 0 || !response.body) return response;
+  let timer = setTimeout(() => controller.abort(stallError(stallMs)), stallMs);
+  timer.unref?.();
+  const reset = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(stallError(stallMs)), stallMs);
+    timer.unref?.();
+  };
+  const guarded = response.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, enqueue) {
+        reset();
+        enqueue.enqueue(chunk);
+      },
+      flush() {
+        clearTimeout(timer);
+      },
+    }),
+  );
+  return new Response(guarded, response);
+}
+
+/**
+ * Fetch with a response-header deadline and a mid-body stall watchdog. A server
+ * can accept a request on a warm keep-alive socket and then never send response
+ * headers (header phase), or send headers and then go silent mid-body (stall
+ * phase); either way the request is aborted with a named error instead of
+ * hanging until an external process timeout. Long healthy responses are never
+ * cut: the header timer disarms once headers arrive, and the stall timer resets
+ * on every chunk, so only genuine silence aborts.
  *
  * Exported with an injectable fetch for unit tests.
  */
@@ -911,20 +964,24 @@ export async function fetchWithHeaderDeadline(
   init: RequestInit,
   callerSignal: AbortSignal | undefined,
   timeoutMs: number,
+  stallMs: number = 0,
   fetchFn: (input: string, init: RequestInit) => Promise<Response> = antigravityFetch,
 ): Promise<Response> {
-  if (timeoutMs <= 0) return fetchFn(url, init);
+  if (timeoutMs <= 0 && stallMs <= 0) return fetchFn(url, init);
   const controller = new AbortController();
   const forward = () => controller.abort();
   callerSignal?.addEventListener("abort", forward, { once: true });
-  const timer = setTimeout(
-    () => controller.abort(new Error(`no response headers within ${timeoutMs}ms`)),
-    timeoutMs,
-  );
+  const timer = timeoutMs > 0
+    ? setTimeout(
+        () => controller.abort(new Error(`no response headers within ${timeoutMs}ms`)),
+        timeoutMs,
+      )
+    : undefined;
   try {
-    return await fetchFn(url, { ...init, signal: controller.signal });
+    const response = await fetchFn(url, { ...init, signal: controller.signal });
+    return attachStallWatchdog(response, controller, stallMs);
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
     callerSignal?.removeEventListener("abort", forward);
   }
 }
@@ -1180,6 +1237,7 @@ export function streamAntigravity(
               },
               opts.signal,
               streamHeaderTimeoutMs(),
+              streamStallTimeoutMs(),
             );
             setLastStatus(response.status);
             if (response.ok) break;
