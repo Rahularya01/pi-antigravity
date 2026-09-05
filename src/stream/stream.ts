@@ -130,13 +130,37 @@ function parseImageData(raw: string, explicitMime?: string): { data: string; mim
   };
 }
 
+const SKILL_BLOCK_PATTERN = /<skill\b[^>]*>[\s\S]*?<\/skill\s*>/gi;
+
+function skillBlocks(content: unknown): string[] {
+  const texts =
+    typeof content === "string"
+      ? [content]
+      : Array.isArray(content)
+        ? content.flatMap((item) =>
+            isRecord(item) && (item as ContentBlock).type === "text"
+              ? [String((item as ContentBlock).text || "")]
+              : [],
+          )
+        : [];
+  return texts.flatMap((text) => text.match(SKILL_BLOCK_PATTERN) || []);
+}
+
+function withoutSkillBlocks(text: string): string {
+  return text.replace(SKILL_BLOCK_PATTERN, "");
+}
+
 function asTextParts(content: unknown): Array<GeminiTextPart | GeminiInlineDataPart> {
-  if (typeof content === "string") return [{ text: sanitizeText(content) }];
+  const textPart = (text: string): GeminiTextPart[] => {
+    const userText = withoutSkillBlocks(text);
+    return userText.trim() ? [{ text: sanitizeText(userText) }] : [];
+  };
+  if (typeof content === "string") return textPart(content);
   if (!Array.isArray(content)) return [];
   return content.flatMap((item): Array<GeminiTextPart | GeminiInlineDataPart> => {
     if (!isRecord(item)) return [];
     const block = item as ContentBlock;
-    if (block.type === "text") return [{ text: sanitizeText(block.text) }];
+    if (block.type === "text") return textPart(block.text);
     if (block.type === "image") {
       const rawData = block.data || block.source?.data;
       if (!rawData) return [];
@@ -290,14 +314,20 @@ export function convertMessages(
     }
   }
 
-  // Google Antigravity / Gemini requires the first turn to be from 'user'.
-  // If the conversation starts with 'model' (e.g. initial assistant greeting),
-  // prepend a minimal user message to prevent backend 400 rejection.
-  if (contents.length > 0 && contents[0]?.role === GeminiRole.Model) {
-    contents.unshift({
-      role: GeminiRole.User,
-      parts: [{ text: "Hello" }],
-    });
+  // Google Antigravity requires a natural-language user part in the request,
+  // including tool-only continuation turns. Keep injected Skills in the system
+  // instruction, then add this protocol bridge only when existing context gives
+  // the model something concrete to act on.
+  const hasUserText = contents.some(
+    (turn) =>
+      turn.role === GeminiRole.User &&
+      turn.parts.some((part) => "text" in part && Boolean(part.text.trim())),
+  );
+  if (!hasUserText && contents.length > 0) {
+    const bridge = { text: "Continue the active task using the available instructions and context." };
+    const userTurn = contents.find((turn) => turn.role === GeminiRole.User);
+    if (userTurn) userTurn.parts.push(bridge);
+    else contents.unshift({ role: GeminiRole.User, parts: [bridge] });
   }
 
   return contents;
@@ -721,13 +751,32 @@ export function buildRequest(
   options: AntigravityStreamOptions,
   runtimeModel: string,
 ): AntigravityGenerateRequest {
+  const injectedSkills = context.messages.flatMap((msg) =>
+    msg.role === "user" ? skillBlocks(msg.content) : [],
+  );
+  const systemParts = context.systemPrompt
+    ? [{ text: sanitizeText(context.systemPrompt) }]
+    : [{ text: ANTIGRAVITY_SYSTEM_INSTRUCTION }, { text: ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION }];
+  systemParts.push(...injectedSkills.map((skill) => ({ text: sanitizeText(skill) })));
+
+  const contents = convertMessages(model, context, runtimeModel);
+  const hasUserText = contents.some(
+    (turn) =>
+      turn.role === GeminiRole.User &&
+      turn.parts.some((part) => "text" in part && Boolean(part.text.trim())),
+  );
+  if (!hasUserText && (injectedSkills.length > 0 || Boolean(context.systemPrompt))) {
+    contents.unshift({
+      role: GeminiRole.User,
+      parts: [{ text: "Apply the active system instructions." }],
+    });
+  }
+
   const request: GeminiRequestBody = {
-    contents: convertMessages(model, context, runtimeModel),
+    contents,
     systemInstruction: {
       role: GeminiRole.User,
-      parts: context.systemPrompt
-        ? [{ text: sanitizeText(context.systemPrompt) }]
-        : [{ text: ANTIGRAVITY_SYSTEM_INSTRUCTION }, { text: ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION }],
+      parts: systemParts,
     },
   };
 

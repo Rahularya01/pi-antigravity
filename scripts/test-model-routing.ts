@@ -1052,6 +1052,103 @@ const withPiPrompt = buildRequest(
 assert.equal(withPiPrompt.request.systemInstruction.parts.length, 1);
 assert.equal(withPiPrompt.request.systemInstruction.parts[0]?.text, "You are Pi. Follow AGENTS.md.");
 
+// Skill-only turns are injected instructions, not user prompts. The request remains
+// valid without inventing a user message, and the Skill is preserved as system context.
+const skillOnlyContext = {
+  messages: [
+    {
+      role: "user",
+      content: '<skill name="smart-commit-grouping">Group commits by intent.</skill>',
+      timestamp: Date.now(),
+    },
+  ],
+} as Context;
+const skillOnlyRequest = buildRequest(
+  flash37Model,
+  skillOnlyContext,
+  "test-proj",
+  {},
+  "gemini-3.7-flash-low",
+);
+assert.equal(skillOnlyRequest.request.contents.length, 1);
+assert.equal(skillOnlyRequest.request.contents[0]?.role, "user");
+assert.equal(
+  skillOnlyRequest.request.contents[0]?.parts[0]?.text,
+  "Apply the active system instructions.",
+);
+assert.equal(skillOnlyRequest.request.systemInstruction.parts.length, 3);
+assert.equal(
+  skillOnlyRequest.request.systemInstruction.parts[2]?.text,
+  '<skill name="smart-commit-grouping">Group commits by intent.</skill>',
+);
+
+const systemOnlyRequest = buildRequest(
+  flash37Model,
+  { messages: [], systemPrompt: "Follow the repository conventions." } as Context,
+  "test-proj",
+  {},
+  "gemini-3.7-flash-low",
+);
+assert.equal(systemOnlyRequest.request.contents[0]?.parts[0]?.text, "Apply the active system instructions.");
+assert.equal(
+  systemOnlyRequest.request.systemInstruction.parts[0]?.text,
+  "Follow the repository conventions.",
+);
+
+const skillAndUserContext = {
+  messages: [
+    {
+      role: "user",
+      content:
+        '<skill name="smart-commit-grouping">Group commits by intent.</skill> Commit the staged changes.',
+      timestamp: Date.now(),
+    },
+  ],
+} as Context;
+const skillAndUserRequest = buildRequest(
+  flash37Model,
+  skillAndUserContext,
+  "test-proj",
+  {},
+  "gemini-3.7-flash-low",
+);
+assert.equal(skillAndUserRequest.request.contents[0]?.parts[0]?.text, " Commit the staged changes.");
+assert.equal(
+  skillAndUserRequest.request.systemInstruction.parts[2]?.text,
+  '<skill name="smart-commit-grouping">Group commits by intent.</skill>',
+);
+
+// Tool-result-only turns also need no synthetic user text.
+const toolResultOnlyContext = {
+  messages: [
+    {
+      role: "toolResult",
+      toolCallId: "call-1",
+      toolName: "read",
+      content: [{ type: "text", text: "file contents" }],
+      isError: false,
+      timestamp: Date.now(),
+    },
+  ],
+} as unknown as Context;
+const toolResultOnlyRequest = buildRequest(
+  flash37Model,
+  toolResultOnlyContext,
+  "test-proj",
+  {},
+  "gemini-3.7-flash-low",
+);
+assert.equal(toolResultOnlyRequest.request.contents.length, 1);
+assert.equal(toolResultOnlyRequest.request.contents[0]?.role, "user");
+assert.ok(
+  toolResultOnlyRequest.request.contents[0]?.parts.some((part) => "functionResponse" in part),
+);
+assert.ok(
+  toolResultOnlyRequest.request.contents[0]?.parts.some(
+    (part) => "text" in part && part.text === "Continue the active task using the available instructions and context.",
+  ),
+);
+
 const fallbackPersona = buildRequest(flash37Model, dummyContext, "test-proj", {}, "gemini-3.7-flash-low");
 assert.equal(fallbackPersona.request.systemInstruction.parts.length, 2);
 assert.match(fallbackPersona.request.systemInstruction.parts[0]?.text || "", /You are Antigravity/);
