@@ -836,6 +836,19 @@ const claudeReq = buildRequest(
 assert.equal(claudeReq.request.generationConfig?.thinkingConfig?.thinkingBudget, 1024);
 assert.equal(claudeReq.request.generationConfig?.thinkingConfig?.includeThoughts, true);
 
+const crossProviderOverride = buildRequest(
+  flash37Model,
+  dummyContext,
+  "test-proj",
+  { reasoning: "high" },
+  "claude-sonnet-4-6",
+);
+assert.equal(
+  crossProviderOverride.request.generationConfig?.thinkingConfig?.thinkingBudget,
+  1024,
+  "thinking configuration follows the effective runtime override",
+);
+
 const gptOssModel = { ...model, id: "gpt-oss-120b", maxTokens: 32768 };
 const gptOssReq = buildRequest(
   gptOssModel,
@@ -1242,6 +1255,44 @@ assert.equal(
   reqTurn2.request.labels?.trajectory_id,
   reqTurn1.request.labels?.trajectory_id,
   "turn 2 preserves same trajectory_id",
+);
+
+const failedAssistantContext: Context = {
+  messages: [
+    ...turn2Context.messages,
+    {
+      role: "assistant",
+      content: [],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "gemini-3.7-flash",
+      usage: zeroUsage,
+      stopReason: "error",
+      timestamp: baseTime + 5000,
+    },
+    {
+      role: "assistant",
+      content: [],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "gemini-3.7-flash",
+      usage: zeroUsage,
+      stopReason: "aborted",
+      timestamp: baseTime + 6000,
+    },
+  ],
+};
+const reqAfterFailures = buildRequest(
+  flash37Model,
+  failedAssistantContext,
+  "test-proj",
+  {},
+  "gemini-3.7-flash-low",
+);
+assert.equal(
+  reqAfterFailures.request.labels?.request_id,
+  `${reqAfterFailures.request.labels?.trajectory_id}-2`,
+  "failed and aborted assistant messages do not increment requestIndex",
 );
 
 // 4. Session restart resilience: clearing in-memory cache restores identical deterministic trajectory_id

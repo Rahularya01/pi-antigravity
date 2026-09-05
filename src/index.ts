@@ -14,13 +14,10 @@ import {
   applyAntigravityCatalog,
   discoverAntigravityModels,
   getCurrentAntigravityCatalog,
-  isUsableCatalog,
-  loadInitialAntigravityCatalog,
   PROVIDER_ID,
   PROVIDER_NAME,
   refreshAntigravityModels,
   resolvedCatalog,
-  writeCatalogCache,
 } from "./models/index.js";
 import { ANTIGRAVITY_API, streamAntigravity } from "./stream/index.js";
 import {
@@ -83,7 +80,7 @@ export default function (pi: ExtensionAPI): void {
     streamSimple: streamAntigravity,
   });
 
-  const initialCatalog = loadInitialAntigravityCatalog();
+  const initialCatalog = getCurrentAntigravityCatalog();
 
   pi.registerProvider(PROVIDER_ID, {
     name: PROVIDER_NAME,
@@ -140,9 +137,8 @@ export default function (pi: ExtensionAPI): void {
         } else {
           const discovered = await discoverAntigravityModels(apiKey);
           const next = resolvedCatalog(discovered, getCurrentAntigravityCatalog());
-          if (isUsableCatalog(discovered)) {
+          if (discovered.models.length > 0) {
             applyAntigravityCatalog(next);
-            writeCatalogCache(next);
           }
         }
         const catalog = getCurrentAntigravityCatalog();

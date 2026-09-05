@@ -439,7 +439,26 @@ export function registerDiscoveredModelEnums(
 
 /** Get model_enum label for a given wire model id (dynamic cache first, then static fallback). */
 export function getModelEnum(wireModelId: string): string | undefined {
-  return modelEnumCache.get(wireModelId) || ANTIGRAVITY_MODEL_ENUM[wireModelId];
+  const direct = modelEnumCache.get(wireModelId) || ANTIGRAVITY_MODEL_ENUM[wireModelId];
+  if (direct) return direct;
+
+  // Runtime overrides may name a public/base model while discovery only returned
+  // an enum for its selected runtime variant (for example `-low`).
+  const routed = getAntigravityRequestModelId(wireModelId, undefined);
+  return modelEnumCache.get(routed) || ANTIGRAVITY_MODEL_ENUM[routed];
+}
+
+/** Return a serializable snapshot of model enums learned from discovery. */
+export function snapshotDynamicModelEnums(): Record<string, string> {
+  return Object.fromEntries(modelEnumCache);
+}
+
+/** Replace dynamically learned model enums with a previously persisted snapshot. */
+export function restoreDynamicModelEnums(modelEnums: Record<string, string>): void {
+  modelEnumCache.clear();
+  for (const [wireModelId, modelEnum] of Object.entries(modelEnums)) {
+    if (wireModelId && modelEnum) modelEnumCache.set(wireModelId, modelEnum);
+  }
 }
 
 export function clearModelEnumCache(): void {
@@ -458,13 +477,13 @@ export function getThinkingConfig(
     if (!effort || effort === "off") return { includeThoughts: false, thinkingBudget: 0 };
     return { includeThoughts: true, thinkingBudget: 8192 };
   }
-  if (modelId === "gemini-3.5-flash") {
+  if (modelId.startsWith("gemini-3.5-flash") || modelId === "gemini-3-flash-agent") {
     if (!effort || effort === "off") return { includeThoughts: false, thinkingBudget: 0 };
     const thinkingBudget =
       effort === "high" || effort === "xhigh" ? 10_000 : effort === "medium" ? 4_000 : 1_000;
     return { includeThoughts: true, thinkingBudget };
   }
-  if (modelId === "gemini-3.1-pro") {
+  if (modelId.startsWith("gemini-3.1-pro") || modelId === "gemini-pro-agent") {
     if (!effort || effort === "off") return { includeThoughts: false, thinkingBudget: 0 };
     return {
       includeThoughts: true,

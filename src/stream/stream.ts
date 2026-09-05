@@ -733,7 +733,7 @@ export function buildRequest(
 
   const generationConfig: GeminiGenerationConfig = {};
   if (options.temperature !== undefined) generationConfig.temperature = options.temperature;
-  const thinking = getThinkingConfig(model.id, options.reasoning ?? "off");
+  const thinking = getThinkingConfig(runtimeModel, options.reasoning ?? "off");
   if (thinking) generationConfig.thinkingConfig = thinking;
   const maxAllowed = getMaxOutputTokens(model.id, runtimeModel);
   if (options.maxTokens !== undefined) {
@@ -769,7 +769,10 @@ export function buildRequest(
   //   In multi-turn agent loops (with tools), every completed assistant response increments the request counter.
   const step = Math.max(1, request.contents.length);
   const lastStepIndex = String(Math.max(0, request.contents.length - 1));
-  const requestIndex = context.messages?.filter((m) => m.role === "assistant").length ?? 0;
+  const requestIndex =
+    context.messages?.filter(
+      (m) => m.role === "assistant" && m.stopReason !== "error" && m.stopReason !== "aborted",
+    ).length ?? 0;
 
   const { conversationId, trajectoryId } = resolveSessionTrajectory(context);
 
