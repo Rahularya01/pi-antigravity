@@ -849,9 +849,9 @@ assert.equal(
   "thinking configuration follows the effective runtime override",
 );
 
-const gptOssModel = { ...model, id: "gpt-oss-120b", maxTokens: 32768 };
+const gptOssOverrideModel = { ...model, id: "gpt-oss-120b", maxTokens: 32768 };
 const gptOssReq = buildRequest(
-  gptOssModel,
+  gptOssOverrideModel,
   dummyContext,
   "test-proj",
   { reasoning: "medium" },
@@ -1447,9 +1447,9 @@ assert.equal(claudeNoTools.request.tools, undefined);
 assert.equal(claudeNoTools.request.toolConfig, undefined);
 
 // 4. GPT-OSS with tools: tools present, toolConfig undefined
-const gptOssModel = { ...model, id: "gpt-oss-120b", maxTokens: 32768 };
+const gptOssToolsModel = { ...model, id: "gpt-oss-120b", maxTokens: 32768 };
 const gptOssWithTools = buildRequest(
-  gptOssModel,
+  gptOssToolsModel,
   dummyToolsContext,
   "test-proj",
   {},

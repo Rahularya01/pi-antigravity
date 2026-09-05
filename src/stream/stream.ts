@@ -138,8 +138,8 @@ function skillBlocks(content: unknown): string[] {
       ? [content]
       : Array.isArray(content)
         ? content.flatMap((item) =>
-            isRecord(item) && (item as ContentBlock).type === "text"
-              ? [String((item as ContentBlock).text || "")]
+            isRecord(item) && item.type === "text" && typeof item.text === "string"
+              ? [item.text]
               : [],
           )
         : [];
@@ -324,7 +324,9 @@ export function convertMessages(
       turn.parts.some((part) => "text" in part && Boolean(part.text.trim())),
   );
   if (!hasUserText && contents.length > 0) {
-    const bridge = { text: "Continue the active task using the available instructions and context." };
+    const bridge = {
+      text: "Continue the active task using the available instructions and context.",
+    };
     const userTurn = contents.find((turn) => turn.role === GeminiRole.User);
     if (userTurn) userTurn.parts.push(bridge);
     else contents.unshift({ role: GeminiRole.User, parts: [bridge] });
