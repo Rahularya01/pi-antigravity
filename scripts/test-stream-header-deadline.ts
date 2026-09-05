@@ -11,7 +11,11 @@
  * 6. A body that keeps emitting chunks slower than the total runtime but faster
  *    than the stall deadline must complete — only silence aborts.
  */
-import { fetchWithHeaderDeadline } from "../src/stream/stream.js";
+import {
+  fetchWithHeaderDeadline,
+  streamHeaderTimeoutMs,
+  streamStallTimeoutMs,
+} from "../src/stream/stream.js";
 
 function assert(condition: unknown, message: string): void {
   if (!condition) throw new Error(`FAILED: ${message}`);
@@ -107,6 +111,36 @@ async function main(): Promise<void> {
   // 6. Chunks every 20ms with 60ms stall deadline: no false positive.
   const steady = await fetchWithHeaderDeadline("https://x", {}, undefined, 5000, 60, chunkyBody);
   assert((await steady.text()).includes("chunk4"), "steady chunks must complete without a stall abort");
+
+  // 7. The caller can still stop a response after headers and its first chunk.
+  const caller = new AbortController();
+  const abortable = await fetchWithHeaderDeadline(
+    "https://x",
+    {},
+    caller.signal,
+    5000,
+    0,
+    silentAfterFirstChunk,
+  );
+  const reader = abortable.body?.getReader();
+  assert(reader, "abortable response should have a body");
+  await reader.read();
+  caller.abort(new Error("caller cancelled"));
+  let sawCallerAbort = false;
+  try {
+    await reader.read();
+  } catch (error) {
+    sawCallerAbort = error instanceof Error && error.message === "caller cancelled";
+  }
+  assert(sawCallerAbort, "caller cancellation should stop an already-started body");
+
+  // 8. Partially numeric timeout settings are invalid rather than silently truncated.
+  process.env.ANTIGRAVITY_STREAM_HEADER_TIMEOUT_MS = "120s";
+  process.env.ANTIGRAVITY_STREAM_STALL_TIMEOUT_MS = "12.5";
+  assert(streamHeaderTimeoutMs() === 180_000, "partial header timeout must use the default");
+  assert(streamStallTimeoutMs() === 120_000, "partial stall timeout must use the default");
+  delete process.env.ANTIGRAVITY_STREAM_HEADER_TIMEOUT_MS;
+  delete process.env.ANTIGRAVITY_STREAM_STALL_TIMEOUT_MS;
 
   console.log("test-stream-header-deadline: all assertions passed");
 }

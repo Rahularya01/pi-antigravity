@@ -893,8 +893,10 @@ const STREAM_HEADER_TIMEOUT_DEFAULT_MS = 180_000;
 const STREAM_STALL_TIMEOUT_DEFAULT_MS = 120_000;
 
 function envTimeoutMs(name: string, fallback: number): number {
-  const raw = Number.parseInt(antigravityEnv(name) ?? "", 10);
-  return Number.isFinite(raw) && raw >= 0 ? raw : fallback;
+  const raw = antigravityEnv(name);
+  if (!raw || !/^\d+$/.test(raw)) return fallback;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) ? value : fallback;
 }
 
 /**
@@ -922,32 +924,71 @@ function stallError(stallMs: number): Error {
 }
 
 /**
- * Guard a response body against mid-stream stalls: a TransformStream that
- * resets an idle timer on every chunk and aborts the fetch controller when no
- * bytes arrive within stallMs. pipeThrough keeps backpressure, so chunks are
- * only read as the consumer pulls. The timer is cleared when the body ends
- * (flush); it is also unref'd so an armed timer cannot keep the process alive.
+ * Guard a response body against mid-stream stalls while retaining caller
+ * cancellation until the body finishes or is cancelled. The wrapper reads only
+ * when its consumer pulls, preserving backpressure; its timer is unref'd so an
+ * armed deadline cannot keep the process alive.
  */
-function attachStallWatchdog(response: Response, controller: AbortController, stallMs: number): Response {
-  if (stallMs <= 0 || !response.body) return response;
-  let timer = setTimeout(() => controller.abort(stallError(stallMs)), stallMs);
-  timer.unref?.();
+function guardResponseBody(
+  response: Response,
+  controller: AbortController,
+  stallMs: number,
+  cleanup: () => void,
+): Response {
+  if (!response.body) {
+    cleanup();
+    return response;
+  }
+  const reader = response.body.getReader();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    if (timer) clearTimeout(timer);
+    cleanup();
+  };
   const reset = () => {
-    clearTimeout(timer);
+    if (stallMs <= 0) return;
+    if (timer) clearTimeout(timer);
     timer = setTimeout(() => controller.abort(stallError(stallMs)), stallMs);
     timer.unref?.();
   };
-  const guarded = response.body.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, enqueue) {
+  let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
+  const abortBody = () => {
+    streamController?.error(controller.signal.reason);
+    void reader.cancel(controller.signal.reason).catch(() => undefined);
+    finish();
+  };
+  controller.signal.addEventListener("abort", abortBody, { once: true });
+  reset();
+  const guarded = new ReadableStream<Uint8Array>({
+    start(controller) {
+      streamController = controller;
+    },
+    async pull(streamController) {
+      try {
+        const chunk = await reader.read();
+        if (chunk.done) {
+          finish();
+          streamController.close();
+          return;
+        }
+        if (!(chunk.value instanceof Uint8Array)) {
+          throw new Error("Response body yielded an invalid chunk");
+        }
         reset();
-        enqueue.enqueue(chunk);
-      },
-      flush() {
-        clearTimeout(timer);
-      },
-    }),
-  );
+        streamController.enqueue(chunk.value);
+      } catch (error) {
+        finish();
+        streamController.error(error);
+      }
+    },
+    async cancel(reason) {
+      finish();
+      await reader.cancel(reason);
+    },
+  });
   return new Response(guarded, response);
 }
 
@@ -970,22 +1011,29 @@ export async function fetchWithHeaderDeadline(
   stallMs: number = 0,
   fetchFn: (input: string, init: RequestInit) => Promise<Response> = antigravityFetch,
 ): Promise<Response> {
-  if (timeoutMs <= 0 && stallMs <= 0) return fetchFn(url, init);
+  if (timeoutMs <= 0 && stallMs <= 0) {
+    return fetchFn(url, { ...init, signal: callerSignal ?? init.signal });
+  }
   const controller = new AbortController();
-  const forward = () => controller.abort();
+  const forward = () => controller.abort(callerSignal?.reason);
+  const cleanup = () => callerSignal?.removeEventListener("abort", forward);
   callerSignal?.addEventListener("abort", forward, { once: true });
-  const timer = timeoutMs > 0
-    ? setTimeout(
-        () => controller.abort(new Error(`no response headers within ${timeoutMs}ms`)),
-        timeoutMs,
-      )
-    : undefined;
+  if (callerSignal?.aborted) forward();
+  const timer =
+    timeoutMs > 0
+      ? setTimeout(
+          () => controller.abort(new Error(`no response headers within ${timeoutMs}ms`)),
+          timeoutMs,
+        )
+      : undefined;
+  let responseBodyGuarded = false;
   try {
     const response = await fetchFn(url, { ...init, signal: controller.signal });
-    return attachStallWatchdog(response, controller, stallMs);
+    responseBodyGuarded = Boolean(response.body);
+    return guardResponseBody(response, controller, stallMs, cleanup);
   } finally {
     if (timer) clearTimeout(timer);
-    callerSignal?.removeEventListener("abort", forward);
+    if (!responseBodyGuarded) cleanup();
   }
 }
 
