@@ -557,6 +557,14 @@ assert.match(
   /Unknown name nullable/i,
 );
 
+const trailingModelError = friendlyAntigravityError(
+  400,
+  JSON.stringify({ error: { message: "Requests ending with a model turn are not supported." } }),
+);
+assert.match(trailingModelError, /message boundary/i);
+assert.match(trailingModelError, /new session|user message/i);
+assert.ok(!/re-login/i.test(trailingModelError));
+
 assert.equal(mapStopReason("STOP"), StopReason.Stop);
 assert.equal(mapStopReason("MAX_TOKENS"), StopReason.Length);
 assert.equal(mapStopReason("OTHER"), StopReason.Error);
@@ -688,11 +696,15 @@ const consecutiveContext = {
   ],
 } as Context;
 const mergedContents = convertMessages(model, consecutiveContext, "claude-sonnet-4-6");
-assert.equal(mergedContents.length, 2);
+assert.equal(mergedContents.length, 3);
 assert.equal(mergedContents[0]?.role, "user");
 assert.equal(mergedContents[0]?.parts.length, 2);
 assert.equal(mergedContents[1]?.role, "model");
 assert.equal(mergedContents[1]?.parts.length, 2);
+assert.deepEqual(mergedContents[2], {
+  role: "user",
+  parts: [{ text: "Continue the active task using the available instructions and context." }],
+});
 
 // Test Base64 Image data URL prefix stripping
 const imageContext = {
@@ -871,6 +883,78 @@ const zeroUsage = {
 const geminiRuntime = "gemini-3.7-flash-low";
 const validSig = "QkFTRTY0LXRlc3Qtc2lnbmF0dXJlLXRlc3QxMjM0NTY=";
 
+
+const continuationText = "Continue the active task using the available instructions and context.";
+
+// A normal assistant text reply must not leave the Antigravity request ending in a model turn.
+const assistantTailContext = {
+  messages: [
+    { role: "user", content: "Summarize this file.", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [{ type: "text", text: "The file defines the request adapter." }],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "gemini-3.7-flash",
+      usage: zeroUsage,
+      stopReason: "stop",
+      timestamp: Date.now(),
+    },
+  ],
+} as unknown as Context;
+const assistantTailContents = convertMessages(flash37Model, assistantTailContext, geminiRuntime);
+assert.deepEqual(
+  assistantTailContents.map((turn) => turn.role),
+  ["user", "model", "user"],
+  "a text assistant tail must receive a user continuation",
+);
+assert.deepEqual(assistantTailContents[1]?.parts, [
+  { text: "The file defines the request adapter." },
+]);
+assert.deepEqual(assistantTailContents[2]?.parts, [{ text: continuationText }]);
+
+const userTailContext = {
+  messages: [
+    { role: "user", content: "First request.", timestamp: Date.now() },
+    { role: "user", content: "Second request.", timestamp: Date.now() },
+  ],
+} as Context;
+const userTailContents = convertMessages(flash37Model, userTailContext, geminiRuntime);
+assert.deepEqual(userTailContents, [
+  { role: "user", parts: [{ text: "First request." }, { text: "Second request." }] },
+]);
+
+const unresolvedToolCallContext = {
+  messages: [
+    { role: "user", content: "Read package.json.", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call-missing-result",
+          name: "read",
+          arguments: { path: "package.json" },
+          thoughtSignature: validSig,
+        },
+      ],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "gemini-3.7-flash",
+      usage: zeroUsage,
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+  ],
+} as unknown as Context;
+let unresolvedToolCallError: unknown;
+try {
+  convertMessages(flash37Model, unresolvedToolCallContext, geminiRuntime);
+} catch (error) {
+  unresolvedToolCallError = error;
+}
+assert.ok(unresolvedToolCallError instanceof Error);
+assert.match(unresolvedToolCallError.message, /missing tool result/i);
 const multimodalResultContext = {
   messages: [
     { role: "user", content: "take screenshot", timestamp: Date.now() },

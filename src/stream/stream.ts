@@ -82,6 +82,7 @@ const ANTIGRAVITY_SYSTEM_INSTRUCTION =
 const ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION =
   'CRITICAL: NEVER output rule checks, formatting guidelines, constraint checklists (e.g. "No emdashes"), or your thinking/personality preambles in the final response. Output only the final response.';
 
+const CONTINUATION_TEXT = "Continue the active task using the available instructions and context.";
 let toolCallCounter = 0;
 
 function sanitizeToolCallId(id: string, fallbackName?: string): string {
@@ -325,11 +326,21 @@ export function convertMessages(
   );
   if (!hasUserText && contents.length > 0) {
     const bridge = {
-      text: "Continue the active task using the available instructions and context.",
+      text: CONTINUATION_TEXT,
     };
     const userTurn = contents.find((turn) => turn.role === GeminiRole.User);
     if (userTurn) userTurn.parts.push(bridge);
     else contents.unshift({ role: GeminiRole.User, parts: [bridge] });
+  }
+
+  const lastTurn = contents.at(-1);
+  if (lastTurn?.role === GeminiRole.Model) {
+    if (lastTurn.parts.some((part) => "functionCall" in part)) {
+      throw new Error(
+        "Antigravity request is missing tool result(s) for the final assistant tool call. Provide the corresponding tool result before continuing.",
+      );
+    }
+    appendTurn(contents, GeminiRole.User, [{ text: CONTINUATION_TEXT }]);
   }
 
   return contents;
@@ -860,6 +871,9 @@ export function mapStopReason(reason: string | undefined): StopReason {
 export function friendlyAntigravityError(status: number | undefined, text: string): string {
   const msg = redactSecrets(jsonOrTextError(text)).slice(0, 500);
   if (status === 400) {
+    if (/Requests ending with a model turn are not supported/i.test(msg)) {
+      return "Antigravity rejected an invalid conversation message boundary. Next: update the extension or add a user message / start a new session, then retry.";
+    }
     if (/API key not valid|API_KEY_INVALID/i.test(msg)) {
       return "Antigravity login expired or credentials are invalid. Next: run /login antigravity, then retry.";
     }
