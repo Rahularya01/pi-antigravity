@@ -565,6 +565,18 @@ assert.match(trailingModelError, /message boundary/i);
 assert.match(trailingModelError, /new session|user message/i);
 assert.ok(!/re-login/i.test(trailingModelError));
 
+const functionCallBoundaryError = friendlyAntigravityError(
+  400,
+  JSON.stringify({
+    error: {
+      message:
+        "Please ensure that function call turn comes immediately after a user turn or after a function response turn.",
+    },
+  }),
+);
+assert.match(functionCallBoundaryError, /function-call message boundary/i);
+assert.match(functionCallBoundaryError, /new session/i);
+assert.match(functionCallBoundaryError, /re-login is not required/i);
 assert.equal(mapStopReason("STOP"), StopReason.Stop);
 assert.equal(mapStopReason("MAX_TOKENS"), StopReason.Length);
 assert.equal(mapStopReason("OTHER"), StopReason.Error);
@@ -955,6 +967,52 @@ try {
 }
 assert.ok(unresolvedToolCallError instanceof Error);
 assert.match(unresolvedToolCallError.message, /missing tool result/i);
+
+// Truncated/compacted history can begin with an assistant function call. Antigravity
+// requires that call turn to have an immediately preceding user boundary.
+const leadingToolCallContext = {
+  messages: [
+    {
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call-leading",
+          name: "read",
+          arguments: { path: "package.json" },
+          thoughtSignature: validSig,
+        },
+      ],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "gemini-3.7-flash",
+      usage: zeroUsage,
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call-leading",
+      toolName: "read",
+      content: [{ type: "text", text: "package contents" }],
+      isError: false,
+      timestamp: Date.now(),
+    },
+  ],
+} as unknown as Context;
+const leadingToolCallContents = convertMessages(
+  flash37Model,
+  leadingToolCallContext,
+  geminiRuntime,
+ );
+assert.deepEqual(
+  leadingToolCallContents.map((turn) => turn.role),
+  ["user", "model", "user"],
+  "a leading function call must receive a preceding user bridge",
+);
+assert.deepEqual(leadingToolCallContents[0]?.parts, [{ text: continuationText }]);
+assert.ok(leadingToolCallContents[1]?.parts.every((part) => "functionCall" in part));
+assert.ok(leadingToolCallContents[2]?.parts.every((part) => "functionResponse" in part));
 const multimodalResultContext = {
   messages: [
     { role: "user", content: "take screenshot", timestamp: Date.now() },

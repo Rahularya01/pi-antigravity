@@ -315,6 +315,24 @@ export function convertMessages(
     }
   }
 
+  // A function-call model turn is only valid immediately after a user turn
+  // (including a function-response turn). Compacted history can drop that
+  // boundary, so restore it before applying the natural-language bridge.
+  for (let index = 0; index < contents.length; index += 1) {
+    const turn = contents[index];
+    if (
+      turn?.role === GeminiRole.Model &&
+      turn.parts.some((part) => "functionCall" in part) &&
+      contents[index - 1]?.role !== GeminiRole.User
+    ) {
+      contents.splice(index, 0, {
+        role: GeminiRole.User,
+        parts: [{ text: CONTINUATION_TEXT }],
+      });
+      index += 1;
+    }
+  }
+
   // Google Antigravity requires a natural-language user part in the request,
   // including tool-only continuation turns. Keep injected Skills in the system
   // instruction, then add this protocol bridge only when existing context gives
@@ -873,6 +891,13 @@ export function friendlyAntigravityError(status: number | undefined, text: strin
   if (status === 400) {
     if (/Requests ending with a model turn are not supported/i.test(msg)) {
       return "Antigravity rejected an invalid conversation message boundary. Next: update the extension or add a user message / start a new session, then retry.";
+    }
+    if (
+      /function call turn comes immediately after a user turn or after a function response turn/i.test(
+        msg,
+      )
+    ) {
+      return "Antigravity rejected an invalid function-call message boundary. Next: update the extension or start a new session, then retry; re-login is not required.";
     }
     if (/API key not valid|API_KEY_INVALID/i.test(msg)) {
       return "Antigravity login expired or credentials are invalid. Next: run /login antigravity, then retry.";
