@@ -25,6 +25,8 @@ import {
   convertTools,
   friendlyAntigravityError,
   mapStopReason,
+  resolveContextTools,
+  resolveSystemPrompt,
 } from "../src/stream/index.js";
 import {
   antigravityRequestEnvelope,
@@ -1756,6 +1758,116 @@ const stringNoneReq = buildRequest(
 assert.deepEqual(stringNoneReq.request.toolConfig, {
   functionCallingConfig: { mode: GeminiToolCallingMode.None },
 });
+
+// 9. Context tools and prompt resolution (Pi TranscriptContext compatibility)
+const sampleTool: Tool = {
+  name: "sample_tool",
+  description: "A sample tool",
+  parameters: { type: "object", properties: { query: { type: "string" } } },
+};
+
+// resolveContextTools
+assert.deepEqual(resolveContextTools({ messages: [], tools: [sampleTool] }), [sampleTool]);
+
+const ctxWithToolsAdded = {
+  messages: [
+    {
+      role: "system",
+      content: "",
+      toolsAdded: [sampleTool],
+    },
+    { role: "user", content: "test" },
+  ],
+} as unknown as Context;
+assert.deepEqual(resolveContextTools(ctxWithToolsAdded), [sampleTool]);
+
+const ctxWithToolsArray = {
+  messages: [
+    {
+      role: "system",
+      content: "",
+      tools: [sampleTool, sampleTool],
+    },
+  ],
+} as unknown as Context;
+assert.deepEqual(resolveContextTools(ctxWithToolsArray), [sampleTool]);
+
+assert.equal(
+  resolveContextTools({ messages: [{ role: "user", content: "hi" }] } as Context),
+  undefined,
+);
+
+// resolveSystemPrompt
+assert.equal(
+  resolveSystemPrompt({ systemPrompt: "Direct system prompt", messages: [] }),
+  "Direct system prompt",
+);
+
+const ctxWithSections = {
+  messages: [
+    {
+      role: "system",
+      sections: {
+        intro: "You are a helpful coding assistant.",
+        rules: "Follow all coding conventions.",
+      },
+    },
+  ],
+} as unknown as Context;
+assert.equal(
+  resolveSystemPrompt(ctxWithSections),
+  "You are a helpful coding assistant.\n\nFollow all coding conventions.",
+);
+
+const ctxWithContentString = {
+  messages: [{ role: "system", content: "System instructions from content string" }],
+} as unknown as Context;
+assert.equal(
+  resolveSystemPrompt(ctxWithContentString),
+  "System instructions from content string",
+);
+
+const ctxWithContentArray = {
+  messages: [
+    {
+      role: "system",
+      content: [{ type: "text", text: "Part 1" }, { type: "text", text: "Part 2" }],
+    },
+  ],
+} as unknown as Context;
+assert.equal(resolveSystemPrompt(ctxWithContentArray), "Part 1\n\nPart 2");
+
+assert.equal(
+  resolveSystemPrompt({ messages: [{ role: "user", content: "hi" }] } as Context),
+  undefined,
+);
+
+// TranscriptContext end-to-end through buildRequest
+const transcriptContext = {
+  messages: [
+    {
+      role: "system",
+      sections: {
+        instructions: "System prompt from transcript sections.",
+      },
+      toolsAdded: [sampleTool],
+    },
+    { role: "user", content: "Hello model" },
+  ],
+} as unknown as Context;
+
+const transcriptReq = buildRequest(
+  flash37Model,
+  transcriptContext,
+  "test-proj",
+  {},
+  "gemini-3.7-flash-high",
+);
+assert.ok(transcriptReq.request.tools);
+assert.equal(transcriptReq.request.tools?.[0]?.functionDeclarations?.[0]?.name, "sample_tool");
+assert.deepEqual(transcriptReq.request.systemInstruction?.parts, [
+  { text: "System prompt from transcript sections." },
+]);
 
 console.log(
   `model routing: ${routeCases.length} cases, tool schema, errors, project ids, token clamping, and message conversion passed`,

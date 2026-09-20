@@ -775,6 +775,60 @@ function mapToolChoiceMode(
 }
 
 /** Exported for unit tests. */
+export function resolveContextTools(context: Context): Tool[] | undefined {
+  if (context.tools && context.tools.length > 0) {
+    return context.tools;
+  }
+  const toolMap = new Map<string, Tool>();
+  for (const msg of context.messages || []) {
+    const rawMsg = msg as unknown as Record<string, unknown>;
+    if (rawMsg.role === "system") {
+      if (Array.isArray(rawMsg.toolsAdded)) {
+        for (const t of rawMsg.toolsAdded) {
+          if (t && typeof (t as Tool).name === "string") toolMap.set((t as Tool).name, t as Tool);
+        }
+      }
+      if (Array.isArray(rawMsg.tools)) {
+        for (const t of rawMsg.tools) {
+          if (t && typeof (t as Tool).name === "string") toolMap.set((t as Tool).name, t as Tool);
+        }
+      }
+    }
+  }
+  return toolMap.size > 0 ? Array.from(toolMap.values()) : undefined;
+}
+
+/** Exported for unit tests. */
+export function resolveSystemPrompt(context: Context): string | undefined {
+  if (context.systemPrompt && context.systemPrompt.trim().length > 0) {
+    return context.systemPrompt;
+  }
+  for (const msg of context.messages || []) {
+    const rawMsg = msg as unknown as Record<string, unknown>;
+    if (rawMsg.role === "system") {
+      if (rawMsg.sections && typeof rawMsg.sections === "object") {
+        const parts = Object.values(rawMsg.sections as Record<string, unknown>).filter(
+          (s): s is string => typeof s === "string" && s.trim().length > 0,
+        );
+        if (parts.length > 0) return parts.join("\n\n");
+      }
+      if (typeof rawMsg.content === "string" && rawMsg.content.trim().length > 0) {
+        return rawMsg.content;
+      }
+      if (Array.isArray(rawMsg.content)) {
+        const texts = (rawMsg.content as unknown[])
+          .map((part) =>
+            typeof part === "string" ? part : (part as { text?: string })?.text || "",
+          )
+          .filter((t) => t.trim().length > 0);
+        if (texts.length > 0) return texts.join("\n\n");
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Exported for unit tests. */
 export function buildRequest(
   model: Model<Api>,
   context: Context,
@@ -785,8 +839,9 @@ export function buildRequest(
   const injectedSkills = context.messages.flatMap((msg) =>
     msg.role === "user" ? skillBlocks(msg.content) : [],
   );
-  const systemParts = context.systemPrompt
-    ? [{ text: sanitizeText(context.systemPrompt) }]
+  const resolvedSystemPrompt = resolveSystemPrompt(context);
+  const systemParts = resolvedSystemPrompt
+    ? [{ text: sanitizeText(resolvedSystemPrompt) }]
     : [{ text: ANTIGRAVITY_SYSTEM_INSTRUCTION }, { text: ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION }];
   systemParts.push(...injectedSkills.map((skill) => ({ text: sanitizeText(skill) })));
 
@@ -796,7 +851,7 @@ export function buildRequest(
       turn.role === GeminiRole.User &&
       turn.parts.some((part) => "text" in part && Boolean(part.text.trim())),
   );
-  if (!hasUserText && (injectedSkills.length > 0 || Boolean(context.systemPrompt))) {
+  if (!hasUserText && (injectedSkills.length > 0 || Boolean(resolvedSystemPrompt))) {
     contents.unshift({
       role: GeminiRole.User,
       parts: [{ text: "Apply the active system instructions." }],
@@ -824,7 +879,8 @@ export function buildRequest(
   if (Object.keys(generationConfig).length) request.generationConfig = generationConfig;
 
   const isClaude = model.id.startsWith("claude-") || runtimeModel.startsWith("claude-");
-  const tools = convertTools(context.tools, isClaude || model.id.startsWith("gpt-oss-"));
+  const resolvedTools = resolveContextTools(context);
+  const tools = convertTools(resolvedTools, isClaude || model.id.startsWith("gpt-oss-"));
   if (tools) {
     request.tools = tools;
   }
