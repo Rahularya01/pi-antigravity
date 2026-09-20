@@ -1,3 +1,4 @@
+import * as piAi from "@earendil-works/pi-ai";
 import {
   calculateCost,
   createAssistantMessageEventStream,
@@ -774,6 +775,57 @@ function mapToolChoiceMode(
   return GeminiToolCallingMode.Auto;
 }
 
+interface SystemMessageLike {
+  role?: string;
+  content?: string | Array<{ type?: string; text?: string }>;
+  toolsAdded?: Tool[];
+  toolsRemoved?: Array<{ name: string }>;
+}
+
+interface PiAiTranscriptModule {
+  getCurrentTools?: (messages: readonly SystemMessageLike[]) => Tool[];
+  getCurrentSystemPrompt?: (messages: readonly SystemMessageLike[]) => string;
+}
+
+function extractTranscriptTools(messages: readonly SystemMessageLike[] | undefined): Tool[] {
+  const piAiModule = piAi as PiAiTranscriptModule;
+  if (typeof piAiModule.getCurrentTools === "function") {
+    return piAiModule.getCurrentTools(messages ?? []);
+  }
+  const tools = new Map<string, Tool>();
+  for (const message of messages || []) {
+    if (message?.role !== "system") continue;
+    for (const tool of message.toolsRemoved ?? []) {
+      tools.delete(tool.name);
+    }
+    for (const tool of message.toolsAdded ?? []) {
+      tools.set(tool.name, tool);
+    }
+  }
+  return [...tools.values()];
+}
+
+function extractTranscriptSystemPrompt(messages: readonly SystemMessageLike[] | undefined): string {
+  const piAiModule = piAi as PiAiTranscriptModule;
+  if (typeof piAiModule.getCurrentSystemPrompt === "function") {
+    return piAiModule.getCurrentSystemPrompt(messages ?? []);
+  }
+  const parts: string[] = [];
+  for (const message of messages || []) {
+    if (message?.role !== "system") continue;
+    if (typeof message.content === "string" && message.content.trim()) {
+      parts.push(message.content);
+    } else if (Array.isArray(message.content)) {
+      for (const block of message.content) {
+        if (block?.type === "text" && block.text?.trim()) {
+          parts.push(block.text);
+        }
+      }
+    }
+  }
+  return parts.join("\n\n");
+}
+
 /** Exported for unit tests. */
 export function buildRequest(
   model: Model<Api>,
@@ -782,11 +834,16 @@ export function buildRequest(
   options: AntigravityStreamOptions,
   runtimeModel: string,
 ): AntigravityGenerateRequest {
+  const transcriptMessages = (context.messages ?? []) as readonly SystemMessageLike[];
+  const systemPromptText =
+    context.systemPrompt ?? extractTranscriptSystemPrompt(transcriptMessages);
+  const declaredTools = context.tools ?? extractTranscriptTools(transcriptMessages);
+
   const injectedSkills = context.messages.flatMap((msg) =>
     msg.role === "user" ? skillBlocks(msg.content) : [],
   );
-  const systemParts = context.systemPrompt
-    ? [{ text: sanitizeText(context.systemPrompt) }]
+  const systemParts = systemPromptText
+    ? [{ text: sanitizeText(systemPromptText) }]
     : [{ text: ANTIGRAVITY_SYSTEM_INSTRUCTION }, { text: ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION }];
   systemParts.push(...injectedSkills.map((skill) => ({ text: sanitizeText(skill) })));
 
@@ -796,7 +853,7 @@ export function buildRequest(
       turn.role === GeminiRole.User &&
       turn.parts.some((part) => "text" in part && Boolean(part.text.trim())),
   );
-  if (!hasUserText && (injectedSkills.length > 0 || Boolean(context.systemPrompt))) {
+  if (!hasUserText && (injectedSkills.length > 0 || Boolean(systemPromptText))) {
     contents.unshift({
       role: GeminiRole.User,
       parts: [{ text: "Apply the active system instructions." }],
@@ -824,7 +881,7 @@ export function buildRequest(
   if (Object.keys(generationConfig).length) request.generationConfig = generationConfig;
 
   const isClaude = model.id.startsWith("claude-") || runtimeModel.startsWith("claude-");
-  const tools = convertTools(context.tools, isClaude || model.id.startsWith("gpt-oss-"));
+  const tools = convertTools(declaredTools, isClaude || model.id.startsWith("gpt-oss-"));
   if (tools) {
     request.tools = tools;
   }
