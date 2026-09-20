@@ -1,7 +1,16 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { StringEnum, Type } from "@earendil-works/pi-ai";
 import { registerApiProvider } from "@earendil-works/pi-ai/compat";
-import { getApiKey, loginAntigravity, refreshAntigravityToken } from "./auth/index.js";
+import {
+  activateAccount,
+  getApiKey,
+  listAccounts,
+  loginAntigravity,
+  rememberAccount,
+  refreshAntigravityToken,
+  removeAccount,
+  updateRememberedAccount,
+} from "./auth/index.js";
 import { DEFAULT_ENDPOINT, endpointCandidates } from "./client/index.js";
 import { getLastDiagnostics, runWithDiagnostics } from "./diagnostics/index.js";
 import {
@@ -43,6 +52,22 @@ function emitCommandOutput(
   }
   if (type === "warning" || type === "error") console.error(text);
   else console.log(text);
+}
+
+async function loginAndRemember(
+  callbacks: Parameters<typeof loginAntigravity>[0],
+): ReturnType<typeof loginAntigravity> {
+  const credentials = await loginAntigravity(callbacks);
+  rememberAccount(credentials);
+  return credentials;
+}
+
+async function refreshAndRemember(
+  credentials: Parameters<typeof refreshAntigravityToken>[0],
+): ReturnType<typeof refreshAntigravityToken> {
+  const refreshed = await refreshAntigravityToken(credentials);
+  updateRememberedAccount(credentials, refreshed);
+  return refreshed;
 }
 
 async function withUsage(
@@ -90,8 +115,8 @@ export default function (pi: ExtensionAPI): void {
     refreshModels: refreshAntigravityModels,
     oauth: {
       name: PROVIDER_NAME,
-      login: loginAntigravity,
-      refreshToken: refreshAntigravityToken,
+      login: loginAndRemember,
+      refreshToken: refreshAndRemember,
       getApiKey,
     },
     streamSimple: streamAntigravity,
@@ -109,6 +134,48 @@ export default function (pi: ExtensionAPI): void {
     handler: async (args, ctx) => {
       const all = /\ball\b/i.test(args || "");
       await withUsage(ctx, (usage) => formatModelsList(usage, { all }));
+    },
+  });
+
+  pi.registerCommand("antigravity.accounts", {
+    description: "List linked Antigravity accounts",
+    handler: async (args, ctx) => {
+      const command = args.trim();
+      try {
+        if (command.startsWith("switch ")) {
+          const account = await activateAccount(command.slice("switch ".length));
+          emitCommandOutput(
+            ctx,
+            `Active Antigravity account: ${account.email || account.accountId}`,
+          );
+          return;
+        }
+        if (command.startsWith("remove ")) {
+          removeAccount(command.slice("remove ".length));
+          emitCommandOutput(ctx, "Antigravity account removed.");
+          return;
+        }
+        const accounts = listAccounts();
+        if (accounts.length === 0) {
+          emitCommandOutput(
+            ctx,
+            "No linked Antigravity accounts. Run /login antigravity to add one.",
+            "warning",
+          );
+          return;
+        }
+        const lines = accounts.map(
+          (account, index) =>
+            `${account.active ? "* " : "  "}${index + 1}. ${account.email || account.accountId}`,
+        );
+        emitCommandOutput(
+          ctx,
+          `${lines.join("\n")}\nUse /antigravity.accounts switch <index|email> or /antigravity.accounts remove <index|email>.`,
+        );
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        emitCommandOutput(ctx, msg, "error");
+      }
     },
   });
 

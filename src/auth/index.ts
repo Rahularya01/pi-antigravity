@@ -12,3 +12,11 @@ export {
   OAUTH_CALLBACK_TIMEOUT_MS,
 } from "./oauth.js";
 export type { OAuthCredentials, OAuthLoginCallbacks } from "./oauth.js";
+export {
+  activateAccount,
+  listAccounts,
+  rememberAccount,
+  removeAccount,
+  updateRememberedAccount,
+} from "./accounts.js";
+export type { AccountSummary, StoredAccount } from "./accounts.js";
