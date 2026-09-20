@@ -7,6 +7,12 @@ All notable changes to this project are documented in this file.
 ### Added
 
 - **Dynamic model discovery:** The selectable catalog is refreshed from authenticated `fetchAvailableModels` and grouped into public Pi IDs, so newly enabled models can appear without a catalog-only release. Last-known-good cache plus a conservative static seed remain for cold start. Discovery does not add a new cross-generation fallback; existing Gemini rollout remaps are unchanged.
+- **Linked Google accounts:** `/login antigravity` keeps previous accounts in `~/.pi/agent/antigravity-accounts.json`. `/antigravity.accounts` lists, switches, and removes them. A hard quota wall automatically fails over to the next linked account (#47, #58).
+
+### Fixed
+
+- **Pi 0.86 tools and system prompt:** Read prompt and tool declarations from normalized transcript system messages (`getCurrentSystemPrompt` / `getCurrentTools`, with a local replay fallback) so requests are not sent without tools (#51, #52, #53, #54, #55, #57).
+- **Startup freeze:** TLS pre-warm runs on the first Antigravity request instead of at extension load, so Pi startup is not blocked for ~10s on Node 24 (#50).
 
 ## [0.7.1] - 2026-09-03
 

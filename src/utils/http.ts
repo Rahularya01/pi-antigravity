@@ -23,6 +23,7 @@ const PREWARM_TIMEOUT_MS = 5_000;
 type DispatcherInit = RequestInit & { dispatcher?: unknown };
 
 let dispatcherPromise: Promise<unknown> | undefined;
+let prewarmStarted = false;
 
 function hasProxyConfiguration(): boolean {
   return ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"].some(
@@ -71,11 +72,15 @@ export async function antigravityFetch(
 }
 
 /**
- * Open the TLS connection when the extension loads so the first message of a session
- * does not pay the handshake either. Best-effort: failures are ignored.
+ * Open the TLS connection on the first Antigravity request so that turn does not
+ * pay the handshake. Not called at extension load: an unauthenticated HEAD to the
+ * endpoint can stall Node's event loop until connect timeout and freeze Pi startup.
+ * Best-effort: failures are ignored. Subsequent calls are no-ops.
  */
 export function prewarmConnection(url: string): void {
   if (antigravityEnv("NO_PREWARM") === "1") return;
+  if (prewarmStarted) return;
+  prewarmStarted = true;
   void (async () => {
     try {
       const res = await antigravityFetch(url, {

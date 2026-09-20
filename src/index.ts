@@ -1,8 +1,17 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { StringEnum, Type } from "@earendil-works/pi-ai";
 import { registerApiProvider } from "@earendil-works/pi-ai/compat";
-import { getApiKey, loginAntigravity, refreshAntigravityToken } from "./auth/index.js";
-import { DEFAULT_ENDPOINT, endpointCandidates } from "./client/index.js";
+import {
+  activateAccount,
+  getApiKey,
+  listAccounts,
+  loginAntigravity,
+  rememberAccount,
+  refreshAntigravityToken,
+  removeAccount,
+  updateRememberedAccount,
+} from "./auth/index.js";
+import { DEFAULT_ENDPOINT } from "./client/index.js";
 import { getLastDiagnostics, runWithDiagnostics } from "./diagnostics/index.js";
 import {
   DEFAULT_IMAGE_MODEL,
@@ -26,7 +35,7 @@ import {
   formatUsageSummary,
   resolveApiKeyFromContext,
 } from "./usage/index.js";
-import { prewarmConnection, redactSecrets } from "./utils/index.js";
+import { redactSecrets, maskEmail } from "./utils/index.js";
 
 /**
  * Pi's interactive `notify` writes into the chat transcript. `console.log` in that
@@ -43,6 +52,22 @@ function emitCommandOutput(
   }
   if (type === "warning" || type === "error") console.error(text);
   else console.log(text);
+}
+
+async function loginAndRemember(
+  callbacks: Parameters<typeof loginAntigravity>[0],
+): ReturnType<typeof loginAntigravity> {
+  const credentials = await loginAntigravity(callbacks);
+  rememberAccount(credentials);
+  return credentials;
+}
+
+async function refreshAndRemember(
+  credentials: Parameters<typeof refreshAntigravityToken>[0],
+): ReturnType<typeof refreshAntigravityToken> {
+  const refreshed = await refreshAntigravityToken(credentials);
+  updateRememberedAccount(credentials, refreshed);
+  return refreshed;
 }
 
 async function withUsage(
@@ -69,11 +94,6 @@ async function withUsage(
 }
 
 export default function (pi: ExtensionAPI): void {
-  // Open the TLS connection up front so the first message of a session does not pay
-  // the handshake. Opt out with ANTIGRAVITY_NO_PREWARM=1.
-  const primaryEndpoint = endpointCandidates()[0];
-  if (primaryEndpoint) prewarmConnection(primaryEndpoint);
-
   registerApiProvider({
     api: ANTIGRAVITY_API,
     stream: streamAntigravity,
@@ -90,8 +110,8 @@ export default function (pi: ExtensionAPI): void {
     refreshModels: refreshAntigravityModels,
     oauth: {
       name: PROVIDER_NAME,
-      login: loginAntigravity,
-      refreshToken: refreshAntigravityToken,
+      login: loginAndRemember,
+      refreshToken: refreshAndRemember,
       getApiKey,
     },
     streamSimple: streamAntigravity,
@@ -109,6 +129,51 @@ export default function (pi: ExtensionAPI): void {
     handler: async (args, ctx) => {
       const all = /\ball\b/i.test(args || "");
       await withUsage(ctx, (usage) => formatModelsList(usage, { all }));
+    },
+  });
+
+  pi.registerCommand("antigravity.accounts", {
+    description: "List, switch, or remove linked Antigravity Google accounts",
+    handler: async (args, ctx) => {
+      const command = args.trim();
+      try {
+        if (command.startsWith("switch ")) {
+          const account = await activateAccount(command.slice("switch ".length));
+          emitCommandOutput(
+            ctx,
+            `Active Antigravity account: ${account.email || account.accountId}`,
+          );
+          return;
+        }
+        if (command.startsWith("remove ")) {
+          const remaining = await removeAccount(command.slice("remove ".length));
+          const next = remaining
+            ? ` Active account is now ${remaining.email || remaining.accountId}.`
+            : "";
+          emitCommandOutput(ctx, `Antigravity account removed.${next}`);
+          return;
+        }
+        const accounts = listAccounts();
+        if (accounts.length === 0) {
+          emitCommandOutput(
+            ctx,
+            "No linked Antigravity accounts. Run /login antigravity to add one.",
+            "warning",
+          );
+          return;
+        }
+        const lines = accounts.map(
+          (account, index) =>
+            `${account.active ? "* " : "  "}${index + 1}. ${account.email || account.accountId}`,
+        );
+        emitCommandOutput(
+          ctx,
+          `${lines.join("\n")}\nUse /antigravity.accounts switch <index|email> or /antigravity.accounts remove <index|email>.`,
+        );
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        emitCommandOutput(ctx, msg, "error");
+      }
     },
   });
 
@@ -163,6 +228,12 @@ export default function (pi: ExtensionAPI): void {
     description: "Show sanitized Antigravity provider diagnostics",
     handler: async (_args, ctx) => {
       const d = getLastDiagnostics();
+      const accounts = listAccounts();
+      const active = accounts.find((account) => account.active);
+      const activeLabel = active
+        ? maskEmail(active.email) ||
+          (active.accountId.includes("@") ? maskEmail(active.accountId) : active.accountId)
+        : "none";
       const lines = [
         `provider=${PROVIDER_ID}`,
         `lastResolvedRuntimeModel=${d.resolvedRuntimeModel || "none"}`,
@@ -171,12 +242,14 @@ export default function (pi: ExtensionAPI): void {
         `lastEndpoint=${d.endpoint || "none"}`,
         `lastStatus=${d.status ?? "none"}`,
         `lastProjectId=${d.projectId || "none"}`,
+        `linkedAccounts=${accounts.length || "none"}`,
+        `activeAccount=${activeLabel || "none"}`,
         ...(d.latencyMs !== undefined ? [`lastLatencyMs=${d.latencyMs}`] : []),
         `toolSchemaWarnings=${d.toolSchemaWarnings || "none"}`,
         `lastError=${d.error ? redactSecrets(d.error) : "none"}`,
         "transport=native-streamSimple",
         "runtimeCli=not-used",
-        "commands=/antigravity.usage /antigravity.models /antigravity.refresh /antigravity.doctor /antigravity.image",
+        "commands=/antigravity.usage /antigravity.models /antigravity.accounts /antigravity.refresh /antigravity.doctor /antigravity.image",
       ];
       emitCommandOutput(ctx, `Antigravity doctor\n${lines.join("\n")}`);
     },

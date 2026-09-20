@@ -10,6 +10,9 @@ import {
   type Tool,
   type ToolCall,
 } from "@earendil-works/pi-ai";
+// Namespace import: transcript helpers exist on pi-ai >= 0.86; resolved at runtime.
+import * as piAi from "@earendil-works/pi-ai";
+import { failoverToNextAccount } from "../auth/accounts.js";
 import {
   antigravityHeaders,
   endpointCandidates,
@@ -71,7 +74,7 @@ import {
   resolveSessionTrajectory,
   sanitizeText,
 } from "../utils/util.js";
-import { antigravityFetch } from "../utils/http.js";
+import { antigravityFetch, prewarmConnection } from "../utils/http.js";
 
 export { ANTIGRAVITY_API };
 
@@ -98,6 +101,103 @@ function toolCallIdNeeded(modelId: string, runtimeModel: string): boolean {
     runtimeModel.startsWith("claude-") ||
     runtimeModel.startsWith("gpt-oss-")
   );
+}
+
+interface SystemMessageLike {
+  role?: string;
+  content?: string | Array<{ type?: string; text?: string }>;
+  sections?: Record<string, unknown>;
+  toolsAdded?: Tool[];
+  toolsRemoved?: Array<{ name: string }>;
+  tools?: Tool[];
+}
+
+interface PiAiTranscriptModule {
+  getCurrentTools?: (messages: Context["messages"]) => Tool[];
+  getCurrentSystemPrompt?: (messages: Context["messages"]) => string;
+}
+
+function transcriptModule(): PiAiTranscriptModule {
+  return piAi as unknown as PiAiTranscriptModule;
+}
+
+function asSystemMessages(messages: Context["messages"] | undefined): SystemMessageLike[] {
+  return [...(messages ?? [])] as SystemMessageLike[];
+}
+
+function extractTranscriptSystemPrompt(messages: readonly SystemMessageLike[]): string {
+  const parts: string[] = [];
+  for (const message of messages) {
+    if (message?.role !== "system") continue;
+    if (message.sections && typeof message.sections === "object") {
+      const sectionParts = Object.values(message.sections).filter(
+        (value): value is string => typeof value === "string" && value.trim().length > 0,
+      );
+      if (sectionParts.length > 0) {
+        parts.push(sectionParts.join("\n\n"));
+        continue;
+      }
+    }
+    if (typeof message.content === "string" && message.content.trim()) {
+      parts.push(message.content);
+    } else if (Array.isArray(message.content)) {
+      const texts = message.content
+        .map((block) => (typeof block === "string" ? block : block?.text || ""))
+        .filter((text) => text.trim().length > 0);
+      if (texts.length > 0) parts.push(texts.join("\n\n"));
+    }
+  }
+  return parts.join("\n\n");
+}
+
+function extractTranscriptTools(messages: readonly SystemMessageLike[]): Tool[] {
+  const tools = new Map<string, Tool>();
+  for (const message of messages) {
+    if (message?.role !== "system") continue;
+    for (const tool of message.toolsRemoved ?? []) {
+      tools.delete(tool.name);
+    }
+    for (const tool of [...(message.toolsAdded ?? []), ...(message.tools ?? [])]) {
+      if (tool && typeof tool.name === "string") tools.set(tool.name, tool);
+    }
+  }
+  return [...tools.values()];
+}
+
+/**
+ * pi >= 0.86 hands providers a normalized TranscriptContext: the system prompt and
+ * tool declarations live in system messages and must be read with
+ * `getCurrentSystemPrompt()` / `getCurrentTools()`. Older releases still pass the
+ * flat Context fields. Resolve both so requests are not sent without tools.
+ */
+export function resolveCurrentSystemPrompt(context: Context): string | undefined {
+  const helper = transcriptModule().getCurrentSystemPrompt;
+  if (typeof helper === "function") {
+    try {
+      const fromHelper = helper(context.messages ?? []);
+      if (fromHelper?.trim()) return fromHelper;
+    } catch {
+      // Fall through to local replay / legacy fields.
+    }
+  }
+  const fromTranscript = extractTranscriptSystemPrompt(asSystemMessages(context.messages));
+  if (fromTranscript.trim()) return fromTranscript;
+  return context.systemPrompt;
+}
+
+export function resolveCurrentTools(context: Context): Tool[] | undefined {
+  const helper = transcriptModule().getCurrentTools;
+  if (typeof helper === "function") {
+    try {
+      const fromHelper = helper(context.messages ?? []);
+      if (fromHelper.length > 0) return fromHelper;
+    } catch {
+      // Fall through to local replay / legacy fields.
+    }
+  }
+  const fromTranscript = extractTranscriptTools(asSystemMessages(context.messages));
+  if (fromTranscript.length > 0) return fromTranscript;
+  return context.tools;
 }
 
 const base64SignaturePattern = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -209,6 +309,7 @@ export function convertMessages(
   const requiresSig = geminiRequiresThoughtSignature(runtimeModel);
   const droppedToolCallIds = new Map<string, string>();
   for (const msg of context.messages) {
+    if ((msg.role as string) === "system") continue;
     if (msg.role === "user") {
       const parts = asTextParts(msg.content);
       appendTurn(contents, GeminiRole.User, parts);
@@ -785,8 +886,10 @@ export function buildRequest(
   const injectedSkills = context.messages.flatMap((msg) =>
     msg.role === "user" ? skillBlocks(msg.content) : [],
   );
-  const systemParts = context.systemPrompt
-    ? [{ text: sanitizeText(context.systemPrompt) }]
+  const systemPromptText = resolveCurrentSystemPrompt(context);
+  const declaredTools = resolveCurrentTools(context);
+  const systemParts = systemPromptText
+    ? [{ text: sanitizeText(systemPromptText) }]
     : [{ text: ANTIGRAVITY_SYSTEM_INSTRUCTION }, { text: ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION }];
   systemParts.push(...injectedSkills.map((skill) => ({ text: sanitizeText(skill) })));
 
@@ -796,7 +899,7 @@ export function buildRequest(
       turn.role === GeminiRole.User &&
       turn.parts.some((part) => "text" in part && Boolean(part.text.trim())),
   );
-  if (!hasUserText && (injectedSkills.length > 0 || Boolean(context.systemPrompt))) {
+  if (!hasUserText && (injectedSkills.length > 0 || Boolean(systemPromptText))) {
     contents.unshift({
       role: GeminiRole.User,
       parts: [{ text: "Apply the active system instructions." }],
@@ -824,7 +927,7 @@ export function buildRequest(
   if (Object.keys(generationConfig).length) request.generationConfig = generationConfig;
 
   const isClaude = model.id.startsWith("claude-") || runtimeModel.startsWith("claude-");
-  const tools = convertTools(context.tools, isClaude || model.id.startsWith("gpt-oss-"));
+  const tools = convertTools(declaredTools, isClaude || model.id.startsWith("gpt-oss-"));
   if (tools) {
     request.tools = tools;
   }
@@ -1327,10 +1430,13 @@ export function streamAntigravity(
     const startTime = Date.now();
     const output = createOutput(model);
     try {
-      const creds = parseApiKey(opts.apiKey);
+      let creds = parseApiKey(opts.apiKey);
+      const triedAccessTokens = new Set<string>([creds.token]);
+      const primaryEndpoint = endpointCandidates()[0];
+      if (primaryEndpoint) prewarmConnection(primaryEndpoint);
       // Skip loadCodeAssist roundtrip when credentials already carry a projectId.
       const warmedProject = creds.projectId ? null : await loadCodeAssist(creds.token);
-      const projectId = resolveProjectId({
+      let projectId = resolveProjectId({
         token: creds.token,
         warmedProject,
         credentialProjectId: creds.projectId,
@@ -1358,7 +1464,7 @@ export function streamAntigravity(
         runtimeCandidates.push(fallback);
       }
 
-      const requestHeaders = antigravityHeaders(creds.token);
+      let requestHeaders = antigravityHeaders(creds.token);
 
       let response: Response | undefined;
       let lastText = "";
@@ -1462,6 +1568,21 @@ export function streamAntigravity(
           }
           const friendly = friendlyAntigravityError(response?.status, lastText);
           if (response?.status === 429 && /Quota reached\./i.test(friendly)) {
+            const next = await failoverToNextAccount(triedAccessTokens);
+            if (next) {
+              triedAccessTokens.add(next.token);
+              creds = next;
+              requestHeaders = antigravityHeaders(creds.token);
+              const switchedProject = creds.projectId ? null : await loadCodeAssist(creds.token);
+              projectId = resolveProjectId({
+                token: creds.token,
+                warmedProject: switchedProject,
+                credentialProjectId: creds.projectId,
+              });
+              setLastProjectId(projectId);
+              emptyAttempt = -1;
+              continue;
+            }
             throw new Error(friendly);
           }
           throw new Error(

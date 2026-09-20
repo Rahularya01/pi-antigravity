@@ -59,6 +59,17 @@ Restart Pi (or run `/reload`) after installation. To update the npm package late
 
 4. Start working. If a request fails, run `/antigravity.doctor` for sanitized diagnostics.
 
+To link another account without losing the existing one, run `/login antigravity`
+again and complete Google sign-in with the other account. Manage linked accounts with:
+
+```text
+/antigravity.accounts
+/antigravity.accounts switch <index|email>
+/antigravity.accounts remove <index|email>
+```
+
+On a hard quota wall (HTTP 429 with a reset hint), the provider automatically tries the next linked account.
+
 ## Authentication and credential safety
 
 The provider uses the OAuth 2.0 Authorization Code flow with PKCE, so credentials are only ever exchanged with Google — never typed into Pi.
@@ -66,8 +77,9 @@ The provider uses the OAuth 2.0 Authorization Code flow with PKCE, so credential
 1. `/login antigravity` opens Google sign-in and starts a temporary callback listener at `http://localhost:51121/oauth-callback`.
 2. After you approve access, Pi exchanges the callback code for tokens and stores the provider credentials in Pi's auth store (normally `~/.pi/agent/auth.json`).
 3. Pi refreshes access tokens automatically when they expire — you shouldn't need to sign in again unless a token is revoked.
+4. Successful logins and token rotations are also kept in `~/.pi/agent/antigravity-accounts.json` with owner-only permissions so linked accounts can be switched without re-authenticating.
 
-The callback listener binds only to a loopback host, so it isn't reachable from outside your machine. The auth file it writes to contains sensitive access and refresh tokens: **do not commit it, paste it into issues, or share its contents.**
+The callback listener binds only to a loopback host, so it isn't reachable from outside your machine. The auth and account files it writes to contain sensitive access and refresh tokens: **do not commit them, paste them into issues, or share their contents.**
 
 Signing in requests these Google OAuth scopes:
 
@@ -91,6 +103,7 @@ Review these permissions before approving access. If your credentials expire or 
 | `/model antigravity/<model-id>` | Choose a registered Antigravity model. |
 | `/antigravity.usage` | Show the server-reported shared quota groups and reset times. |
 | `/antigravity.models` | List available runtime models, remaining shared-pool quota, and capabilities. |
+| `/antigravity.accounts` | List linked accounts; use `switch` or `remove` with an index or email to manage them. |
 | `/antigravity.models all` | Include tab/chat models normally hidden from the model list. |
 | `/antigravity.refresh` | Force refresh the dynamic model catalog from Antigravity. |
 | `/antigravity.doctor` | Show sanitized provider diagnostics, including the endpoint, status, and resolved runtime model. |
@@ -155,13 +168,13 @@ All primary environment variables start with `ANTIGRAVITY_`. The legacy `NOAGY_`
 | `ANTIGRAVITY_CLIENT_ID` | Use a custom Google OAuth client ID. |
 | `ANTIGRAVITY_CLIENT_SECRET` | Use a custom Google OAuth client secret. Keep it out of source control and shell history. |
 | `ANTIGRAVITY_NO_KEEPALIVE` | Set to `1` to skip the keep-alive connection pool. |
-| `ANTIGRAVITY_NO_PREWARM` | Set to `1` to skip the TLS pre-warm request made when the extension loads. |
+| `ANTIGRAVITY_NO_PREWARM` | Set to `1` to skip the TLS pre-warm request made on the first Antigravity request. |
 
 By default, the provider tries `https://daily-cloudcode-pa.googleapis.com`, then the sandbox host, then `https://cloudcode-pa.googleapis.com`. Prefer the built-in OAuth client unless you have a reason to use your own credentials.
 
 ### Latency
 
-Provider requests reuse a keep-alive connection pool when the runtime supports it, so consecutive turns do not repeat the DNS, TCP, and TLS handshake. When `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` is set, that pool is skipped so Pi's proxy-aware dispatcher is used instead. The connection is also opened when the extension loads so the first message of a session skips the handshake too. For the lowest time-to-first-token, pick a fast runtime: `gemini-3.8-flash` with reasoning off routes to `gemini-3.8-flash-low` at thinking level `LOW`. Setting `ANTIGRAVITY_PROJECT_ID` also removes the project-discovery round-trip when credentials do not already carry a project ID.
+Provider requests reuse a keep-alive connection pool when the runtime supports it, so consecutive turns do not repeat the DNS, TCP, and TLS handshake. When `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` is set, that pool is skipped so Pi's proxy-aware dispatcher is used instead. The connection is opened on the first Antigravity request rather than at Pi startup, so other extensions are not stalled by an unauthenticated handshake. For the lowest time-to-first-token, pick a fast runtime: `gemini-3.8-flash` with reasoning off routes to `gemini-3.8-flash-low` at thinking level `LOW`. Setting `ANTIGRAVITY_PROJECT_ID` also removes the project-discovery round-trip when credentials do not already carry a project ID.
 
 ## Troubleshooting
 
