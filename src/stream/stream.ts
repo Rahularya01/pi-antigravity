@@ -10,6 +10,9 @@ import {
   type Tool,
   type ToolCall,
 } from "@earendil-works/pi-ai";
+// Namespace import: transcript helpers (getCurrentTools/getCurrentSystemPrompt) only
+// exist on pi-ai >= 0.86; resolved defensively at runtime for older releases.
+import * as PiAi from "@earendil-works/pi-ai";
 import {
   antigravityHeaders,
   endpointCandidates,
@@ -98,6 +101,33 @@ function toolCallIdNeeded(modelId: string, runtimeModel: string): boolean {
     runtimeModel.startsWith("claude-") ||
     runtimeModel.startsWith("gpt-oss-")
   );
+}
+
+/**
+ * pi >= 0.86 hands providers a normalized TranscriptContext: the system prompt and
+ * tool declarations are carried by system messages inside `context.messages` and
+ * must be read with `getCurrentSystemPrompt()` / `getCurrentTools()`, while the flat
+ * `context.systemPrompt` / `context.tools` fields stay undefined. Older pi releases
+ * pass the plain Context shape. Resolve both so the plugin works across versions;
+ * without this, requests go out with no functionDeclarations at all, which makes
+ * the agentic-tuned Gemini runtime models fail with MALFORMED_FUNCTION_CALL.
+ */
+function resolveCurrentSystemPrompt(context: Context): string | undefined {
+  const helpers = PiAi as unknown as {
+    getCurrentSystemPrompt?: (messages: Context["messages"]) => string;
+  };
+  const fromTranscript = helpers.getCurrentSystemPrompt?.(context.messages) ?? "";
+  if (fromTranscript.trim().length > 0) return fromTranscript;
+  return context.systemPrompt;
+}
+
+function resolveCurrentTools(context: Context): Tool[] | undefined {
+  const helpers = PiAi as unknown as {
+    getCurrentTools?: (messages: Context["messages"]) => Tool[];
+  };
+  const fromTranscript = helpers.getCurrentTools?.(context.messages) ?? [];
+  if (fromTranscript.length > 0) return fromTranscript;
+  return context.tools;
 }
 
 const base64SignaturePattern = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -209,6 +239,11 @@ export function convertMessages(
   const requiresSig = geminiRequiresThoughtSignature(runtimeModel);
   const droppedToolCallIds = new Map<string, string>();
   for (const msg of context.messages) {
+    if ((msg.role as string) === "system") {
+      // pi >= 0.86 carries the system prompt / tool declarations as system messages;
+      // they are resolved separately into systemInstruction / functionDeclarations.
+      continue;
+    }
     if (msg.role === "user") {
       const parts = asTextParts(msg.content);
       appendTurn(contents, GeminiRole.User, parts);
@@ -785,8 +820,9 @@ export function buildRequest(
   const injectedSkills = context.messages.flatMap((msg) =>
     msg.role === "user" ? skillBlocks(msg.content) : [],
   );
-  const systemParts = context.systemPrompt
-    ? [{ text: sanitizeText(context.systemPrompt) }]
+  const resolvedSystemPrompt = resolveCurrentSystemPrompt(context);
+  const systemParts = resolvedSystemPrompt
+    ? [{ text: sanitizeText(resolvedSystemPrompt) }]
     : [{ text: ANTIGRAVITY_SYSTEM_INSTRUCTION }, { text: ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION }];
   systemParts.push(...injectedSkills.map((skill) => ({ text: sanitizeText(skill) })));
 
@@ -796,7 +832,7 @@ export function buildRequest(
       turn.role === GeminiRole.User &&
       turn.parts.some((part) => "text" in part && Boolean(part.text.trim())),
   );
-  if (!hasUserText && (injectedSkills.length > 0 || Boolean(context.systemPrompt))) {
+  if (!hasUserText && (injectedSkills.length > 0 || Boolean(resolvedSystemPrompt))) {
     contents.unshift({
       role: GeminiRole.User,
       parts: [{ text: "Apply the active system instructions." }],
@@ -824,7 +860,10 @@ export function buildRequest(
   if (Object.keys(generationConfig).length) request.generationConfig = generationConfig;
 
   const isClaude = model.id.startsWith("claude-") || runtimeModel.startsWith("claude-");
-  const tools = convertTools(context.tools, isClaude || model.id.startsWith("gpt-oss-"));
+  const tools = convertTools(
+    resolveCurrentTools(context),
+    isClaude || model.id.startsWith("gpt-oss-"),
+  );
   if (tools) {
     request.tools = tools;
   }
