@@ -42,6 +42,10 @@ async function main() {
 
   assert(req.project === "test-project-123", "projectId set");
   assert(req.model === DEFAULT_SEARCH_MODEL, "model matches default");
+  assert(req.requestType === "agent", "requestType set to agent");
+  assert(req.userAgent === "antigravity", "userAgent set to antigravity");
+  assert(typeof req.requestId === "string" && req.requestId.length > 0, "requestId envelope generated");
+
   const requestBody = req.request as any;
   assert(requestBody?.tools?.some((t: any) => t.googleSearch), "googleSearch tool present");
   assert(requestBody?.tools?.some((t: any) => t.urlContext), "urlContext tool present");
@@ -99,8 +103,9 @@ async function main() {
   // 4. formatSearchResult
   const markdown = formatSearchResult(parsed);
   assert(markdown.includes("MiMo-V2.6 was released on September 22, 2026."), "markdown contains text");
+  assert(markdown.includes("### Sources"), "markdown contains English Sources heading");
   assert(markdown.includes("[Example Article](https://example.com/article)"), "markdown contains source link");
-  assert(markdown.includes("`mimo 2.6 release`"), "markdown contains query chips");
+  assert(markdown.includes("*Search queries: `mimo 2.6 release`, `mimo specs`*"), "markdown contains English search queries label");
 
   console.log("search grounding: command parsing, request building, response parsing, and markdown formatting passed");
 }

@@ -4,9 +4,10 @@ import {
   jsonOrTextError,
   parseApiKey,
 } from "../client/client.js";
+import { AntigravityRequestType, AntigravityUserAgent, GeminiRole } from "../types/enums.js";
 import { antigravityFetch } from "../utils/http.js";
 import { safeError } from "../utils/security.js";
-import { isRecord } from "../utils/util.js";
+import { antigravityRequestEnvelope, isRecord } from "../utils/util.js";
 
 /** Default search engine model: fast, natively supports groundings and reasoning. */
 export const DEFAULT_SEARCH_MODEL = "gemini-3-flash";
@@ -58,6 +59,9 @@ export type SearchCommandArgs = {
  * Supports flags:
  *   --thinking: enable deep reasoning for search planning
  *   --url <url>: pass target URL for context analysis (can be repeated)
+ *
+ * @param args - Raw string of CLI arguments.
+ * @returns Parsed command arguments containing query, optional URLs, and thinking flag.
  */
 export function parseSearchCommandArgs(args: string): SearchCommandArgs {
   const tokens = args.trim().split(/\s+/).filter(Boolean);
@@ -88,6 +92,12 @@ export function parseSearchCommandArgs(args: string): SearchCommandArgs {
 
 /**
  * Builds the Antigravity wire request payload for Gemini Google Search Grounding.
+ * Includes the required `requestType` and `requestId` envelope fields.
+ *
+ * @param options - Options including search query, lead agent directives, target URLs, and thinking preference.
+ * @param model - Target model identifier (e.g., `gemini-3-flash`).
+ * @param projectId - Google Cloud Project ID.
+ * @returns Serialized request object matching the Antigravity wire contract.
  */
 export function buildSearchRequest(
   options: {
@@ -119,18 +129,19 @@ export function buildSearchRequest(
 
   // Thinking budget: 4096 if explicitly requested, baseline 2048 to trigger multi-step search planning
   const thinkingBudget = options.thinking ? 4096 : 2048;
+  const envelope = antigravityRequestEnvelope(model, false);
 
   return {
     project: projectId,
     model,
-    userAgent: "antigravity",
     request: {
       systemInstruction: {
+        role: GeminiRole.User,
         parts: [{ text: systemInstructionText }],
       },
       contents: [
         {
-          role: "user",
+          role: GeminiRole.User,
           parts: [{ text: prompt }],
         },
       ],
@@ -142,11 +153,17 @@ export function buildSearchRequest(
         },
       },
     },
+    requestType: AntigravityRequestType.Agent,
+    userAgent: AntigravityUserAgent.Antigravity,
+    requestId: envelope.requestId,
   };
 }
 
 /**
  * Parse candidate text and Grounding metadata from Antigravity API response.
+ *
+ * @param data - Raw JSON response from Antigravity generateContent API.
+ * @returns Structured SearchResult with synthesized text, web queries, and cited source URLs.
  */
 export function parseSearchResponse(data: unknown): SearchResult {
   const result: SearchResult = { text: "", sources: [], queries: [] };
@@ -198,6 +215,9 @@ export function parseSearchResponse(data: unknown): SearchResult {
 
 /**
  * Formats structured SearchResult into clean Markdown for agent consumption.
+ *
+ * @param res - Structured search result containing text, sources, and executed queries.
+ * @returns Formatted markdown string.
  */
 export function formatSearchResult(res: SearchResult): string {
   const sections: string[] = [];
@@ -208,12 +228,12 @@ export function formatSearchResult(res: SearchResult): string {
 
   if (res.sources.length > 0) {
     const list = res.sources.map((s) => `- [${s.title}](${s.url})`).join("\n");
-    sections.push(`### 来源参考\n${list}`);
+    sections.push(`### Sources\n${list}`);
   }
 
   if (res.queries.length > 0) {
     const queries = res.queries.map((q) => `\`${q}\``).join(", ");
-    sections.push(`*Google 联合检索词: ${queries}*`);
+    sections.push(`*Search queries: ${queries}*`);
   }
 
   return sections.join("\n\n");
@@ -221,6 +241,9 @@ export function formatSearchResult(res: SearchResult): string {
 
 /**
  * Execute real-time Google Search grounding via Antigravity backend with automatic fallback.
+ *
+ * @param options - Execution options containing query, API credentials, and optional directives.
+ * @returns Markdown formatted search result with synthesis, citations, and search queries.
  */
 export async function executeAntigravitySearch(options: ExecuteSearchOptions): Promise<string> {
   const query = options.query.trim();
@@ -250,10 +273,11 @@ export async function executeAntigravitySearch(options: ExecuteSearchOptions): P
 
         if (!response.ok) {
           lastError = jsonOrTextError(await response.text()).slice(0, 400);
-          if (response.status === 404 || [403, 429, 500, 502, 503, 504].includes(response.status)) {
-            continue; // Try next endpoint
+          if (response.status === 404 || [429, 500, 502, 503, 504].includes(response.status)) {
+            continue; // Retry next endpoint for transient failures or missing model endpoints
           }
-          throw new Error(lastError);
+          // Fail fast on non-retryable client errors (e.g. 400 Bad Request, 401 Unauthorized, 403 Forbidden)
+          throw Object.assign(new Error(lastError), { fatal: true });
         }
 
         const data: unknown = await response.json();
@@ -278,6 +302,7 @@ export async function executeAntigravitySearch(options: ExecuteSearchOptions): P
         return formatSearchResult(parsed);
       } catch (error) {
         if (options.signal?.aborted) throw error;
+        if (error instanceof Error && (error as { fatal?: boolean }).fatal) throw error;
         lastError = safeError(error).slice(0, 400);
       }
     }
