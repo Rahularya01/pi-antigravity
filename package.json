@@ -39,7 +39,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "security-check": "node scripts/run-ts.mjs scripts/security-check.ts",
-    "test": "node scripts/run-ts.mjs scripts/test-model-routing.ts && node scripts/run-ts.mjs scripts/test-model-discovery.ts && node scripts/run-ts.mjs scripts/test-usage-formatter.ts && node scripts/run-ts.mjs scripts/test-stream-sse.ts && node scripts/run-ts.mjs scripts/test-stream-header-deadline.ts && node scripts/run-ts.mjs scripts/test-http-proxy.ts && node scripts/run-ts.mjs scripts/test-image-gen.ts && node scripts/run-ts.mjs scripts/test-transcript-context.ts && node scripts/run-ts.mjs scripts/test-accounts.ts",
+    "test": "node scripts/run-ts.mjs scripts/test-model-routing.ts && node scripts/run-ts.mjs scripts/test-model-discovery.ts && node scripts/run-ts.mjs scripts/test-usage-formatter.ts && node scripts/run-ts.mjs scripts/test-stream-sse.ts && node scripts/run-ts.mjs scripts/test-stream-header-deadline.ts && node scripts/run-ts.mjs scripts/test-http-proxy.ts && node scripts/run-ts.mjs scripts/test-image-gen.ts && node scripts/run-ts.mjs scripts/test-transcript-context.ts && node scripts/run-ts.mjs scripts/test-accounts.ts && node scripts/run-ts.mjs scripts/test-search.ts",
     "smoke:tools": "node scripts/run-ts.mjs scripts/smoke-tool-schema.ts",
     "smoke:models": "node scripts/run-ts.mjs scripts/smoke-all-models.mjs",
     "audit": "yarn npm audit --environment production --recursive && yarn npm audit --severity high --all --recursive",
