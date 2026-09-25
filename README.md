@@ -108,10 +108,13 @@ Review these permissions before approving access. If your credentials expire or 
 | `/antigravity.refresh` | Force refresh the dynamic model catalog from Antigravity. |
 | `/antigravity.doctor` | Show sanitized provider diagnostics, including the endpoint, status, and resolved runtime model. |
 | `/antigravity.image <prompt>` | Generate an image via Antigravity and save it under `.pi/generated-images/`. Optional `--ratio 16:9`, `--model`, `--path`. |
+| `/antigravity.search <query>` | Search the web using Google Search Grounding via Antigravity. Optional `--thinking`, `--url <url>`. |
 
 Model availability, entitlement, quota groups, and resets are returned by the service and can differ by account. The quota percentage shown for a model can represent a shared pool, not a private per-model allowance.
 
 The extension also registers a `generate_image` tool the model can call. Images are written inside the project directory (default `.pi/generated-images/`). Image models such as `gemini-3-pro-image` are account-dependent; `/antigravity.image` falls back to other advertised Gemini image IDs on 404.
+
+It also registers a `google_search` tool allowing models to perform real-time web search and URL analysis using Google Search Grounding over Cloud Code Assist (powered by `gemini-3-flash` with dynamic fallback). It supports optional lead agent directives (`instruction`), specific target URLs (`urls`), and deep reasoning (`thinking: true`).
 
 ## Models and routing
 
