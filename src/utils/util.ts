@@ -52,14 +52,35 @@ export type AntigravityEnvelopeOptions = {
   userTurnIndex?: number;
   trajectoryId?: string;
   conversationId?: string;
+  lastExecutionId?: string;
 };
 
 const sessionTrajectoryMap = new Map<string, { conversationId: string; trajectoryId: string }>();
 
 /** Stable conversationId and trajectoryId within a multi-turn conversation session. */
-export function resolveSessionTrajectory(context?: {
-  messages?: Array<{ role?: string; timestamp?: number; content?: unknown }>;
-}): { conversationId: string; trajectoryId: string } {
+export function resolveSessionTrajectory(
+  context?: {
+    messages?: Array<{ role?: string; timestamp?: number; content?: unknown }>;
+  },
+  sessionId?: string,
+): { conversationId: string; trajectoryId: string } {
+  if (sessionId?.trim()) {
+    const seed = `session:${sessionId.trim()}`;
+    let entry = sessionTrajectoryMap.get(seed);
+    if (!entry) {
+      entry = {
+        conversationId: stableUuid(`antigravity:conv:${seed}`),
+        trajectoryId: stableUuid(`antigravity:traj:${seed}`),
+      };
+      sessionTrajectoryMap.set(seed, entry);
+      if (sessionTrajectoryMap.size > 64) {
+        const oldestKey = sessionTrajectoryMap.keys().next().value;
+        if (oldestKey !== undefined) sessionTrajectoryMap.delete(oldestKey);
+      }
+    }
+    return entry;
+  }
+
   const firstMsg = context?.messages?.[0];
   if (!firstMsg) {
     return { conversationId: crypto.randomUUID(), trajectoryId: crypto.randomUUID() };
@@ -122,6 +143,13 @@ export function antigravityRequestEnvelope(
   const modelEnum = getModelEnum(wireModelId);
   if (modelEnum) {
     labels.model_enum = modelEnum;
+  }
+
+  // Pure agy CLI wire alignment: last_execution_id is the execution ID of the previous turn.
+  // It is only present on subsequent turns (step > 1), never on the initial turn (step <= 1).
+  if (step > 1) {
+    labels.last_execution_id =
+      options.lastExecutionId || stableUuid(`antigravity:exec:${trajectoryId}:${step - 1}`);
   }
 
   return {

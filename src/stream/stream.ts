@@ -957,7 +957,7 @@ export function buildRequest(
       (m) => m.role === "assistant" && m.stopReason !== "error" && m.stopReason !== "aborted",
     ).length ?? 0;
 
-  const { conversationId, trajectoryId } = resolveSessionTrajectory(context);
+  const { conversationId, trajectoryId } = resolveSessionTrajectory(context, options.sessionId);
 
   const envelope = antigravityRequestEnvelope(runtimeModel, {
     isClaude,
