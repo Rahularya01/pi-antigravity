@@ -1397,7 +1397,7 @@ assert.equal(opusCost?.output, 75);
 // Wire fingerprint: User-Agent format (pure agy CLI)
 assert.equal(
   defaultUserAgent(),
-  "antigravity/cli/1.1.23 (aidev_client; os_type=linux; arch=amd64; cl=974125021; auth_method=consumer)",
+  "antigravity/cli/1.2.4 (aidev_client; os_type=linux; arch=amd64; cl=982146307; auth_method=consumer)",
 );
 
 // Wire fingerprint: Headers hygiene & environment isolation
@@ -1433,6 +1433,7 @@ assert.equal(envDefault.labels.request_id, `${envDefault.labels.trajectory_id}-0
 assert.equal(envDefault.labels.used_claude, "false");
 assert.equal(envDefault.labels.used_claude_conservative, "false");
 assert.equal(envDefault.labels.used_non_gemini_model, "false");
+assert.equal(envDefault.labels.last_execution_id, undefined);
 assert.equal(envDefault.labels.model_enum, "MODEL_PLACEHOLDER_M298");
 assert.match(envDefault.requestId, /^agent\/[0-9a-f-]+\/\d+\/[0-9a-f-]+\/1$/);
 
@@ -1448,11 +1449,24 @@ const envMultiTurn = antigravityRequestEnvelope("gpt-oss-120b-medium", {
   step: 3,
 });
 assert.equal(envMultiTurn.labels.last_step_index, "2");
+assert.match(envMultiTurn.labels.last_execution_id, /^[0-9a-f-]{36}$/);
 assert.equal(envMultiTurn.labels.request_id, `${envMultiTurn.labels.trajectory_id}-2`);
 assert.equal(envMultiTurn.labels.used_claude, "false");
 assert.equal(envMultiTurn.labels.used_non_gemini_model, "true");
 assert.equal(envMultiTurn.labels.model_enum, "MODEL_OPENAI_GPT_OSS_120B_MEDIUM");
 assert.match(envMultiTurn.requestId, /^agent\/[0-9a-f-]+\/\d+\/[0-9a-f-]+\/3$/);
+
+const envInitialWithOverride = antigravityRequestEnvelope("gemini-3.7-flash-high", {
+  step: 1,
+  lastExecutionId: "should-be-ignored-on-step-1",
+});
+assert.equal(envInitialWithOverride.labels.last_execution_id, undefined);
+
+const envSubsequentWithOverride = antigravityRequestEnvelope("gemini-3.7-flash-high", {
+  step: 2,
+  lastExecutionId: "custom-id-on-step-2",
+});
+assert.equal(envSubsequentWithOverride.labels.last_execution_id, "custom-id-on-step-2");
 
 // 2. buildRequest wire labels across models
 const claudeSonnetModel = ANTIGRAVITY_MODELS.find((m) => m.id === "claude-sonnet-4-6")!;
@@ -1474,6 +1488,51 @@ assert.equal(reqFlash38.request.labels?.used_claude_conservative, "false");
 assert.equal(reqFlash38.request.labels?.used_non_gemini_model, "false");
 assert.equal(reqFlash38.request.labels?.model_enum, "MODEL_PLACEHOLDER_M318");
 assert.match(reqFlash38.requestId, /\/1$/);
+
+// Multi-session isolation: two independent chats on the same account
+const reqChatA_1 = buildRequest(
+  ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.8-flash")!,
+  dummyContext,
+  "test-proj",
+  { sessionId: "chat-session-A" },
+  "gemini-3.8-flash-high",
+);
+const reqChatB_1 = buildRequest(
+  ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.8-flash")!,
+  dummyContext,
+  "test-proj",
+  { sessionId: "chat-session-B" },
+  "gemini-3.8-flash-high",
+);
+assert.notEqual(reqChatA_1.request.labels?.trajectory_id, reqChatB_1.request.labels?.trajectory_id);
+assert.equal(reqChatA_1.request.labels?.last_execution_id, undefined);
+assert.equal(reqChatB_1.request.labels?.last_execution_id, undefined);
+
+const multiTurnContext = {
+  ...dummyContext,
+  messages: [
+    { role: "user" as const, content: "hi" },
+    { role: "assistant" as const, content: [{ type: "text" as const, text: "hello" }] },
+    { role: "user" as const, content: "next turn" },
+  ],
+};
+const reqChatA_2 = buildRequest(
+  ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.8-flash")!,
+  multiTurnContext,
+  "test-proj",
+  { sessionId: "chat-session-A" },
+  "gemini-3.8-flash-high",
+);
+const reqChatB_2 = buildRequest(
+  ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.8-flash")!,
+  multiTurnContext,
+  "test-proj",
+  { sessionId: "chat-session-B" },
+  "gemini-3.8-flash-high",
+);
+assert.ok(reqChatA_2.request.labels?.last_execution_id);
+assert.ok(reqChatB_2.request.labels?.last_execution_id);
+assert.notEqual(reqChatA_2.request.labels?.last_execution_id, reqChatB_2.request.labels?.last_execution_id);
 
 const reqFlash36 = buildRequest(
   ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.6-flash")!,
