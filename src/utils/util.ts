@@ -14,7 +14,15 @@ export function asString(value: unknown): string | undefined {
 }
 
 export function sanitizeText(text: unknown): string {
-  return String(text ?? "").replace(/[\uD800-\uDFFF]/g, "\uFFFD");
+  const str = String(text ?? "");
+  const toWellFormed = (str as unknown as { toWellFormed?: () => string }).toWellFormed;
+  if (typeof toWellFormed === "function") {
+    return toWellFormed.call(str);
+  }
+  return str.replace(
+    /(?:[\uD800-\uDBFF](?![\uDC00-\uDFFF]))|(?:(?<![\uD800-\uDBFF])[\uDC00-\uDFFF])/g,
+    "\uFFFD",
+  );
 }
 
 export function escapeHtml(text: string): string {
