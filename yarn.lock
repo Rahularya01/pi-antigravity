@@ -1936,7 +1936,6 @@ __metadata:
     prettier: "npm:^3.9.5"
     typescript: "npm:^6.0.3"
     typescript-eslint: "npm:^8.64.0"
-    undici: "npm:^8.10.0"
   peerDependencies:
     "@earendil-works/pi-ai": ">=0.80.0"
     "@earendil-works/pi-coding-agent": ">=0.80.0"
@@ -2169,13 +2168,6 @@ __metadata:
   version: 8.9.0
   resolution: "undici@npm:8.9.0"
   checksum: 10c0/e3d9fa35a9aa8360d9f56e66bd372f451ee053e25066a97fd9fab3816267035660f67870c6d709a58a5411551657af78c4475be5b31c113b04f70251309900d0
-  languageName: node
-  linkType: hard
-
-"undici@npm:^8.10.0":
-  version: 8.10.2
-  resolution: "undici@npm:8.10.2"
-  checksum: 10c0/66d7fc69149207cab570d6abbc9e965b6afe1ae889a7d46945b431165c973d6a56f3dd8b70a856e7ae1e550b6366a1cde6f06e68640587f0dadca38de72995ee
   languageName: node
   linkType: hard
 
