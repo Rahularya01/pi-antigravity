@@ -4,8 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Extra tool toggles:** `ANTIGRAVITY_NO_EXTRA_TOOLS`, `ANTIGRAVITY_NO_SEARCH_TOOL`, and `ANTIGRAVITY_NO_IMAGE_TOOL` stop the `google_search` / `generate_image` tools from being registered so they do not clash with other search providers (#65).
+
 ### Fixed
 
+- **Emoji corruption:** `sanitizeText` now only replaces unpaired surrogates, so valid emoji and other astral characters are no longer turned into U+FFFD (#66, #67).
 - **OAuth response decompression:** Use the existing Undici fetch for Google OAuth requests so SDK hosts do not parse raw gzip bytes as JSON with Node 26 built-in fetch.
 
 ## [0.8.1] - 2026-09-28
