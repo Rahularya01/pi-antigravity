@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **OAuth response decompression:** Use the existing Undici fetch for Google OAuth requests so SDK hosts do not parse raw gzip bytes as JSON with Node 26 built-in fetch.
+
 ## [0.8.1] - 2026-09-28
 
 ### Added

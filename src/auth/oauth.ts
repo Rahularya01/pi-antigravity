@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createServer, type Server } from "node:http";
+import { fetch as oauthFetch } from "undici";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@earendil-works/pi-ai";
 import { defaultProjectId, loadCodeAssist } from "../client/client.js";
 import { escapeHtml, antigravityEnv } from "../utils/util.js";
@@ -74,7 +75,7 @@ function generatePKCE(): { verifier: string; challenge: string } {
 
 async function getUserEmail(token: string): Promise<string | undefined> {
   try {
-    const res = await fetch("https://www.googleapis.com/oauth2/v1/userinfo?alt=json", {
+    const res = await oauthFetch("https://www.googleapis.com/oauth2/v1/userinfo?alt=json", {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return undefined;
@@ -348,7 +349,7 @@ export async function loginAntigravity(
     });
     if (returnedState !== state) throw new Error("OAuth state mismatch");
 
-    const tokenResponse = await fetch(TOKEN_URL, {
+    const tokenResponse = await oauthFetch(TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -395,7 +396,9 @@ export async function loginAntigravity(
 export async function refreshAntigravityToken(
   credentials: OAuthCredentials,
 ): Promise<AntigravityOAuthCredentials> {
-  const response = await fetch(TOKEN_URL, {
+  // SDK hosts may use Node 26 built-in fetch with a separate Undici dispatcher.
+  // Use Undici's fetch to keep response decompression on the same implementation.
+  const response = await oauthFetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
