@@ -118,7 +118,7 @@ interface PiAiTranscriptModule {
 }
 
 function transcriptModule(): PiAiTranscriptModule {
-  return piAi as unknown as PiAiTranscriptModule;
+  return piAi;
 }
 
 function asSystemMessages(messages: Context["messages"] | undefined): SystemMessageLike[] {
