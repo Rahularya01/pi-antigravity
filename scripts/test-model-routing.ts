@@ -1534,6 +1534,37 @@ assert.ok(reqChatA_2.request.labels?.last_execution_id);
 assert.ok(reqChatB_2.request.labels?.last_execution_id);
 assert.notEqual(reqChatA_2.request.labels?.last_execution_id, reqChatB_2.request.labels?.last_execution_id);
 
+// Multi-turn sessionId stability (maintains backend KV cache affinity)
+assert.equal(reqChatA_1.request.sessionId, reqChatA_2.request.sessionId);
+assert.equal(reqChatB_1.request.sessionId, reqChatB_2.request.sessionId);
+assert.notEqual(reqChatA_1.request.sessionId, reqChatB_1.request.sessionId);
+assert.match(reqChatA_1.request.sessionId!, /^-?\d+$/);
+
+// When options.sessionId is omitted (standard Pi turns), sessionId is stable across turns of the same conversation
+const defaultTurn1 = buildRequest(
+  ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.8-flash")!,
+  multiTurnContext,
+  "test-proj",
+  {},
+  "gemini-3.8-flash-high",
+);
+const defaultTurn2 = buildRequest(
+  ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.8-flash")!,
+  {
+    ...multiTurnContext,
+    messages: [
+      ...multiTurnContext.messages,
+      { role: "assistant" as const, content: [{ type: "text" as const, text: "turn 3" }] },
+    ],
+  },
+  "test-proj",
+  {},
+  "gemini-3.8-flash-high",
+);
+assert.ok(defaultTurn1.request.sessionId);
+assert.match(defaultTurn1.request.sessionId!, /^-?\d+$/);
+assert.equal(defaultTurn1.request.sessionId, defaultTurn2.request.sessionId);
+
 const reqFlash36 = buildRequest(
   ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.6-flash")!,
   dummyContext,
