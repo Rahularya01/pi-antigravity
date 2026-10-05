@@ -30,6 +30,7 @@ import {
 import {
   antigravityRequestEnvelope,
   clearSessionTrajectoryMap,
+  toInt64SessionId,
 } from "../src/utils/util.js";
 
 function fail(message: string): never {
@@ -1534,13 +1535,13 @@ assert.ok(reqChatA_2.request.labels?.last_execution_id);
 assert.ok(reqChatB_2.request.labels?.last_execution_id);
 assert.notEqual(reqChatA_2.request.labels?.last_execution_id, reqChatB_2.request.labels?.last_execution_id);
 
-// Multi-turn sessionId stability (maintains backend KV cache affinity)
+// Multi-turn sessionId stability with distinct explicit seeds (no cache claim).
 assert.equal(reqChatA_1.request.sessionId, reqChatA_2.request.sessionId);
 assert.equal(reqChatB_1.request.sessionId, reqChatB_2.request.sessionId);
 assert.notEqual(reqChatA_1.request.sessionId, reqChatB_1.request.sessionId);
 assert.match(reqChatA_1.request.sessionId!, /^-?\d+$/);
 
-// When options.sessionId is omitted (standard Pi turns), sessionId is stable across turns of the same conversation
+// Omitted-ID fallback stays stable while the first-message seed stays unchanged.
 const defaultTurn1 = buildRequest(
   ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.8-flash")!,
   multiTurnContext,
@@ -1564,6 +1565,74 @@ const defaultTurn2 = buildRequest(
 assert.ok(defaultTurn1.request.sessionId);
 assert.match(defaultTurn1.request.sessionId!, /^-?\d+$/);
 assert.equal(defaultTurn1.request.sessionId, defaultTurn2.request.sessionId);
+
+// Signed-int64 normalization and request integration.
+const int64Min = -(1n << 63n);
+const int64Max = (1n << 63n) - 1n;
+function assertInt64(value: string): void {
+  assert.match(value, /^-?\d+$/);
+  assert.ok(BigInt(value) >= int64Min && BigInt(value) <= int64Max, `out of int64 range: ${value}`);
+}
+const numericSeeds = [String(int64Min), String(int64Max), "0", "-1", "42", "00042", "-0"];
+const outOfRangeSeeds = [String(int64Min - 1n), String(int64Max + 1n)];
+const uuidSeed = "550e8400-e29b-41d4-a716-446655440000";
+for (const seed of numericSeeds) {
+  assert.equal(toInt64SessionId(seed), seed);
+  assert.equal(toInt64SessionId(`  ${seed}  `), seed);
+}
+for (const seed of [...outOfRangeSeeds, uuidSeed, "arbitrary-session"]) {
+  const normalized = toInt64SessionId(seed);
+  assertInt64(normalized);
+  assert.notEqual(normalized, seed);
+  assert.equal(toInt64SessionId(seed), normalized);
+}
+
+for (const seed of [...numericSeeds, ...outOfRangeSeeds, uuidSeed]) {
+  clearSessionTrajectoryMap();
+  const first = buildRequest(flash37Model, dummyContext, "test-proj", { sessionId: seed }, "gemini-3.7-flash-low");
+  const next = buildRequest(flash37Model, multiTurnContext, "test-proj", { sessionId: seed }, "gemini-3.7-flash-low");
+  assertInt64(first.request.sessionId!);
+  assert.equal(first.request.sessionId, toInt64SessionId(seed));
+  assert.equal(first.request.sessionId, next.request.sessionId);
+  clearSessionTrajectoryMap();
+  const afterClear = buildRequest(flash37Model, dummyContext, "test-proj", { sessionId: seed }, "gemini-3.7-flash-low");
+  assert.equal(afterClear.request.sessionId, first.request.sessionId);
+  assert.deepEqual(afterClear.request.labels, first.request.labels);
+  for (let index = 0; index < 65; index++) {
+    buildRequest(flash37Model, dummyContext, "test-proj", { sessionId: `eviction-${index}` }, "gemini-3.7-flash-low");
+  }
+  const afterEviction = buildRequest(flash37Model, dummyContext, "test-proj", { sessionId: seed }, "gemini-3.7-flash-low");
+  assert.equal(afterEviction.request.sessionId, first.request.sessionId);
+  assert.deepEqual(afterEviction.request.labels, first.request.labels);
+}
+
+clearSessionTrajectoryMap();
+const fallbackAfterClear = buildRequest(flash37Model, multiTurnContext, "test-proj", {}, "gemini-3.7-flash-low");
+assertInt64(fallbackAfterClear.request.sessionId!);
+assert.equal(fallbackAfterClear.request.sessionId, defaultTurn1.request.sessionId);
+for (let index = 0; index < 65; index++) {
+  buildRequest(flash37Model, dummyContext, "test-proj", { sessionId: `fallback-eviction-${index}` }, "gemini-3.7-flash-low");
+}
+assert.equal(
+  buildRequest(flash37Model, multiTurnContext, "test-proj", {}, "gemini-3.7-flash-low").request.sessionId,
+  defaultTurn1.request.sessionId,
+);
+
+// No usable seed remains random; whitespace-only explicit IDs also use this path.
+for (const seed of [undefined, "", "   "]) {
+  const first = toInt64SessionId(seed);
+  const next = toInt64SessionId(seed);
+  assertInt64(first);
+  assertInt64(next);
+  assert.notEqual(first, next);
+  const firstRequest = buildRequest(flash37Model, { messages: [] }, "test-proj", { sessionId: seed }, "gemini-3.7-flash-low");
+  const nextRequest = buildRequest(flash37Model, { messages: [] }, "test-proj", { sessionId: seed }, "gemini-3.7-flash-low");
+  assertInt64(firstRequest.request.sessionId!);
+  assertInt64(nextRequest.request.sessionId!);
+  assert.notEqual(firstRequest.request.sessionId, nextRequest.request.sessionId);
+}
+assertInt64(envDefault.sessionId);
+assertInt64(envClaude.sessionId);
 
 const reqFlash36 = buildRequest(
   ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.6-flash")!,

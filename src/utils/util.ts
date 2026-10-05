@@ -73,11 +73,14 @@ export type AntigravityEnvelopeOptions = {
   lastExecutionId?: string;
 };
 
-/** Deterministic signed int64 string for session_id to maintain backend KV cache affinity. */
+/** Signed int64 session ID: deterministic for nonempty seeds, random otherwise. */
 export function toInt64SessionId(seed?: string): string {
   if (seed?.trim()) {
     const s = seed.trim();
-    if (/^-?\d+$/.test(s)) return s;
+    if (/^-?\d+$/.test(s)) {
+      const value = BigInt(s);
+      if (value >= -(1n << 63n) && value <= (1n << 63n) - 1n) return s;
+    }
     const hash = createHash("sha256").update(`antigravity:session:${s}`).digest();
     return String(new DataView(hash.buffer, hash.byteOffset, 8).getBigInt64(0, true));
   }
@@ -90,7 +93,11 @@ const sessionTrajectoryMap = new Map<
   { conversationId: string; trajectoryId: string; sessionId: string }
 >();
 
-/** Stable conversationId, trajectoryId, and sessionId within a multi-turn conversation session. */
+/**
+ * Resolve deterministic IDs from an explicit session ID or the first message's seed.
+ * The fallback uses role, timestamp, and a 64-character content prefix: separate or
+ * forked histories can alias, and compaction can change the seed. No cache behavior is guaranteed.
+ */
 export function resolveSessionTrajectory(
   context?: {
     messages?: Array<{ role?: string; timestamp?: number; content?: unknown }>;
@@ -150,6 +157,10 @@ export function clearSessionTrajectoryMap(): void {
   sessionTrajectoryMap.clear();
 }
 
+/**
+ * Build request metadata and model labels from legacy Claude flags or envelope options.
+ * Supplied IDs are forwarded; absent IDs are generated. Execution labels appear after step 1.
+ */
 export function antigravityRequestEnvelope(
   wireModelId: string,
   optionsOrIsClaude: boolean | AntigravityEnvelopeOptions = false,
