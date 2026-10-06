@@ -1,4 +1,6 @@
+import strictAssert from "node:assert/strict";
 import {
+  type SearchResult,
   buildSearchRequest,
   formatSearchResult,
   parseSearchCommandArgs,
@@ -107,7 +109,59 @@ async function main() {
   assert(markdown.includes("[Example Article](https://example.com/article)"), "markdown contains source link");
   assert(markdown.includes("*Search queries: `mimo 2.6 release`, `mimo specs`*"), "markdown contains English search queries label");
 
-  console.log("search grounding: command parsing, request building, response parsing, and markdown formatting passed");
+  // UTF-8 byte offsets, per-Part indices, skipped source chunks, and duplicate positions.
+  const text = "日本語 clock. More.";
+  const firstEnd = Buffer.byteLength("日本語 clock.");
+  const grounded = parseSearchResponse({
+    candidates: [{
+      content: { parts: [
+        { text: "First part." },
+        { thought: true, text: "Hidden" },
+        { text },
+      ] },
+      groundingMetadata: {
+        groundingChunks: [
+          { web: { uri: "https://example.com/a", title: "A" } },
+          { other: {} },
+          { web: { uri: "https://example.com/b", title: "B" } },
+        ],
+        groundingSupports: [
+          { segment: { text: "First part.", endIndex: 11 }, groundingChunkIndices: [0] },
+          { segment: { text: "日本語 clock.", endIndex: firstEnd, partIndex: 2 }, groundingChunkIndices: [0, 2, 99, -1, 0.5, "0"] },
+          { segment: { text: "日本語 clock.", endIndex: firstEnd, partIndex: 2 }, groundingChunkIndices: [2, 0] },
+          { segment: { text, endIndex: Buffer.byteLength(text), partIndex: 2 }, groundingChunkIndices: [2] },
+          { segment: { text: "Hidden", endIndex: 6, partIndex: 1 }, groundingChunkIndices: [0] },
+          { segment: { text: "Wrong", endIndex: 5, partIndex: 2 }, groundingChunkIndices: [0] },
+          { segment: { text: "Too far", endIndex: 999, partIndex: 2 }, groundingChunkIndices: [0] },
+          { segment: { text: "No offset" }, groundingChunkIndices: [0] },
+          { segment: { text: "No web source", endIndex: 13 }, groundingChunkIndices: [1] },
+          { segment: null, groundingChunkIndices: [0] },
+        ],
+      },
+    }],
+  });
+  strictAssert.deepEqual(grounded.parts?.map(part => part.index), [0, 2]);
+  strictAssert.deepEqual(grounded.sources.map(source => source.index), [0, 2]);
+  strictAssert.deepEqual(grounded.supports?.[1]?.sourceIndices, [0, 2]);
+  strictAssert.ok(!JSON.stringify(grounded).includes("Hidden"));
+  const cited = formatSearchResult(grounded);
+  strictAssert.ok(cited.startsWith("First part.[1]\n\n日本語 clock.[1][3] More.[3]"));
+  strictAssert.ok(cited.includes("- [3] [B](https://example.com/b)"));
+  strictAssert.ok(!cited.includes("Hidden"));
+  strictAssert.ok(!cited.includes("�"));
+  strictAssert.ok(formatSearchResult({ ...grounded, text: "Edited answer" }).startsWith("Edited answer"));
+
+  // Preserve formatting and types for callers using the original public shape.
+  const legacy: SearchResult = {
+    text: "Legacy result", sources: [{ title: "Source", url: "https://example.com" }], queries: [],
+  };
+  strictAssert.equal(
+    formatSearchResult(legacy),
+    "Legacy result\n\n### Sources\n- [Source](https://example.com)",
+  );
+  strictAssert.equal(formatSearchResult({ text: "No sources", sources: [], queries: [] }), "No sources");
+
+  console.log("search grounding: existing requests, byte-safe citations, and legacy shapes passed");
 }
 
 main().catch((err) => {
