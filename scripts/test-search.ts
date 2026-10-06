@@ -151,6 +151,21 @@ async function main() {
   strictAssert.ok(!cited.includes("�"));
   strictAssert.ok(formatSearchResult({ ...grounded, text: "Edited answer" }).startsWith("Edited answer"));
 
+  // The public formatter also rejects unknown source indices in caller-built results.
+  strictAssert.equal(
+    formatSearchResult({
+      text: "Fact.",
+      sources: [{ index: 2, title: "Source", url: "https://example.com" }],
+      queries: [],
+      supports: [{
+        text: "Fact.",
+        endIndex: 5,
+        sourceIndices: [99, -1, 0.5, NaN, 2, 2],
+      }],
+    }),
+    "Fact.[3]\n\n### Sources\n- [3] [Source](https://example.com)",
+  );
+
   // Preserve formatting and types for callers using the original public shape.
   const legacy: SearchResult = {
     text: "Legacy result", sources: [{ title: "Source", url: "https://example.com" }], queries: [],

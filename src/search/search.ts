@@ -172,23 +172,26 @@ export function buildSearchRequest(
   };
 }
 
-/**
- * Parse candidate text and Grounding metadata from Antigravity API response.
- *
- * @param data - Raw JSON response from Antigravity generateContent API.
- * @returns Structured SearchResult with synthesized text, web queries, and cited source URLs.
- */
+/** Read candidates from either the wrapped Antigravity or direct Gemini response. */
 function candidateList(data: unknown): unknown {
   if (!isRecord(data)) return undefined;
   if (isRecord(data.response)) return data.response.candidates;
   return data.candidates;
 }
 
+/** Return the first array entry without assuming its response shape. */
 function firstUnknownItem(value: unknown): unknown {
   if (!Array.isArray(value)) return undefined;
   return (value as unknown[])[0];
 }
 
+/**
+ * Parse visible candidate text and grounding metadata from an Antigravity response.
+ * Preserve original part and source indices so UTF-8 citation offsets remain usable.
+ *
+ * @param data - Raw JSON response from Antigravity generateContent API.
+ * @returns Synthesized text, web queries, sources, and grounding supports.
+ */
 export function parseSearchResponse(data: unknown): SearchResult {
   const result: SearchResult = { text: "", sources: [], queries: [], parts: [], supports: [] };
   if (!isRecord(data)) return result;
@@ -288,6 +291,7 @@ function citeSearchText(res: SearchResult): string {
   if (textParts.map((part) => part.text).join("\n\n") !== res.text) {
     return res.text;
   }
+  const sourceIndices = new Set(res.sources.map((source, index) => source.index ?? index));
   const parts = textParts.map((part) => {
     const bytes = Buffer.from(part.text, "utf8");
     const insertions = new Map<number, Set<number>>();
@@ -306,7 +310,9 @@ function citeSearchText(res: SearchResult): string {
       )
         continue;
       const indices = insertions.get(end) ?? new Set<number>();
-      for (const index of support.sourceIndices) indices.add(index);
+      for (const index of support.sourceIndices) {
+        if (Number.isInteger(index) && index >= 0 && sourceIndices.has(index)) indices.add(index);
+      }
       insertions.set(end, indices);
     }
     let cited = bytes;
