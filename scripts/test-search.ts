@@ -18,6 +18,7 @@ function assert(condition: unknown, message: string): void {
   if (!condition) fail(`FAILED: ${message}`);
 }
 
+/** Cover the request shape, the byte-safe citations, and the legacy response shapes. */
 async function main() {
   // 1. parseSearchCommandArgs
   const simple = parseSearchCommandArgs("mimo 2.6 release date");
@@ -56,11 +57,27 @@ async function main() {
   assert(SEARCH_SYSTEM_INSTRUCTION.includes("## Next checks"), "evidence brief next checks");
   assert(SEARCH_SYSTEM_INSTRUCTION.includes("neighboring entry"), "attribute bleed rule");
   const fast = buildSearchRequest({ query: "clock.monotonic" }, DEFAULT_SEARCH_MODEL, "proj");
-  assert(
-    (fast.request as { generationConfig?: { thinkingConfig?: { thinkingBudget?: number } } })
-      .generationConfig?.thinkingConfig?.thinkingBudget === 0,
-    "default search thinking budget is off",
+  strictAssert.deepEqual(
+    (fast.request as { generationConfig: unknown }).generationConfig,
+    {},
+    "default Lite search omits thinking configuration",
   );
+  for (const model of SEARCH_MODEL_FALLBACKS) {
+    for (const thinking of [undefined, false, true]) {
+      const request = buildSearchRequest({ query: "capital of France", thinking }, model, "proj");
+      const config = (request.request as {
+        generationConfig: { thinkingConfig?: { thinkingBudget: number; includeThoughts: boolean } };
+      }).generationConfig;
+      if (thinking || (thinking === undefined && !model.includes("lite"))) {
+        strictAssert.deepEqual(config.thinkingConfig, {
+          thinkingBudget: thinking ? 4096 : 2048,
+          includeThoughts: false,
+        });
+      } else {
+        strictAssert.deepEqual(config, {}, "no explicit zero budget is sent");
+      }
+    }
+  }
   assert(req.requestType === "agent", "requestType set to agent");
   assert(req.userAgent === "antigravity", "userAgent set to antigravity");
   assert(typeof req.requestId === "string" && req.requestId.length > 0, "requestId envelope generated");

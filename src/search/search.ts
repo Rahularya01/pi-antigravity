@@ -143,8 +143,14 @@ export function buildSearchRequest(
     tools.push({ urlContext: {} });
   }
 
-  // Default budget stays at 0 so interactive lookups stay fast. --thinking opts into planning.
-  const thinkingBudget = options.thinking ? 4096 : 0;
+  // Lite models reject an explicit zero budget; leave their default configuration unset.
+  const generationConfig: Record<string, unknown> = {};
+  if (options.thinking || (options.thinking === undefined && !model.includes("lite"))) {
+    generationConfig.thinkingConfig = {
+      thinkingBudget: options.thinking ? 4096 : 2048,
+      includeThoughts: false,
+    };
+  }
   const envelope = antigravityRequestEnvelope(model, false);
 
   return {
@@ -162,12 +168,7 @@ export function buildSearchRequest(
         },
       ],
       tools,
-      generationConfig: {
-        thinkingConfig: {
-          thinkingBudget,
-          includeThoughts: false,
-        },
-      },
+      generationConfig,
     },
     requestType: AntigravityRequestType.Agent,
     userAgent: AntigravityUserAgent.Antigravity,
