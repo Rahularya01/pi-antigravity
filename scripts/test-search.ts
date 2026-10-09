@@ -10,14 +10,17 @@ import {
   SEARCH_SYSTEM_INSTRUCTION,
 } from "../src/search/index.js";
 
+/** Abort the run with a message. */
 function fail(message: string): never {
   throw new Error(message);
 }
 
+/** Fail the run when an assertion does not hold. */
 function assert(condition: unknown, message: string): void {
   if (!condition) fail(`FAILED: ${message}`);
 }
 
+/** Cover the request shape, the byte-safe citations, and the legacy response shapes. */
 async function main() {
   // 1. parseSearchCommandArgs
   const simple = parseSearchCommandArgs("mimo 2.6 release date");

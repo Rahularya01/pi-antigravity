@@ -1,3 +1,6 @@
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
+
 import {
   antigravityHeaders,
   endpointCandidates,
@@ -305,10 +308,14 @@ const SOURCE_ENRICH_CONCURRENCY = 6;
 /** Upper bound on bytes read while looking for the page title. */
 const PAGE_TITLE_BYTE_CAP = 64 * 1024;
 
+/** Redirect hops chased while looking for a page title. */
+const PAGE_TITLE_MAX_HOPS = 3;
+
 const SOURCE_CACHE_LIMIT = 500;
 const resolvedUrlCache = new Map<string, string>();
 const pageTitleCache = new Map<string, string>();
 
+/** Insert into a bounded cache, evicting the oldest entry once it is full. */
 function remember(map: Map<string, string>, key: string, value: string): void {
   if (map.size >= SOURCE_CACHE_LIMIT) {
     const oldest = map.keys().next().value;
@@ -325,15 +332,76 @@ function withDeadline(signal: AbortSignal | undefined, ms: number): AbortSignal 
   return anyFn ? anyFn([signal, timeout]) : signal;
 }
 
+/** True when a grounding title is nothing but a host, which names no page by itself. */
 function isBareDomainTitle(title: string): boolean {
   return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(title);
 }
 
+/** Host of a URL, or the input unchanged when it does not parse. */
 function hostnameOf(url: string): string {
   try {
     return new URL(url).hostname;
   } catch {
     return url;
+  }
+}
+
+/**
+ * True for an address this process must never be pointed at by a search result.
+ *
+ * `URL.hostname` keeps the brackets around an IPv6 literal, so they come off before the
+ * check: `[::1]` would otherwise look like a hostname instead of an address.
+ */
+export function isPrivateAddress(address: string): boolean {
+  const bare = address.startsWith("[") && address.endsWith("]") ? address.slice(1, -1) : address;
+  const version = isIP(bare);
+  if (version === 4) {
+    const [a = 0, b = 0] = bare.split(".").map(Number);
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true; // carrier-grade NAT
+    if (a === 169 && b === 254) return true; // link-local, and the metadata endpoint
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 198 && (b === 18 || b === 19)) return true; // benchmarking range
+    return a >= 224; // multicast, then reserved
+  }
+  if (version === 6) {
+    const lowered = bare.toLowerCase();
+    if (lowered === "::" || lowered === "::1") return true;
+    if (/^f[cd]/.test(lowered)) return true; // unique local
+    if (/^fe[89ab]/.test(lowered)) return true; // link-local
+    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(lowered)?.[1];
+    return mapped ? isPrivateAddress(mapped) : false;
+  }
+  return false;
+}
+
+/**
+ * Whether a page URL is safe to request: http(s), a public literal, and not a name that
+ * resolves somewhere internal.
+ *
+ * Resolving first narrows the window but does not close it, because `fetch` resolves
+ * again when it connects. Closing it outright takes a private dispatcher, and this
+ * provider deliberately leaves the host's proxy-aware dispatcher in place, so treat this
+ * as a filter rather than as a guarantee.
+ */
+async function isFetchablePageUrl(rawUrl: string): Promise<boolean> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+  const host = parsed.hostname.toLowerCase().replace(/\.$/, "");
+  if (!host || isPrivateAddress(host)) return false;
+  if (/^(.*\.)?(localhost|local|internal|home\.arpa)$/.test(host)) return false;
+  if (isIP(host)) return true; // a public literal, already checked above
+  try {
+    const records = await lookup(host, { all: true });
+    return records.length > 0 && records.every((record) => !isPrivateAddress(record.address));
+  } catch {
+    return false;
   }
 }
 
@@ -359,6 +427,7 @@ function readablePath(url: string | undefined): string {
   }
 }
 
+/** Turn the handful of entities that appear in title text back into characters. */
 function decodeHtmlEntities(text: string): string {
   return text
     .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
@@ -415,34 +484,83 @@ async function resolveGroundingRedirect(url: string, signal?: AbortSignal): Prom
   return "";
 }
 
-/** Read just enough of a page to recover its title; blocked or slow sites return empty. */
-async function fetchPageTitle(url: string, signal?: AbortSignal): Promise<string> {
-  if (!url || url.includes(GROUNDING_REDIRECT_HOST)) return "";
+/**
+ * Read the title out of a response body, stopping at the byte cap.
+ *
+ * The cap counts bytes, not characters: `String.length` counts UTF-16 code units, so a
+ * page in a multi-byte encoding would read well past the intended limit. The slice keeps
+ * one oversized chunk from being appended whole before the limit can be checked.
+ */
+async function readPageTitle(response: Response): Promise<string> {
+  const body = response.body as ReadableStream<Uint8Array> | null;
+  if (!body) return "";
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let bytesRead = 0;
   try {
-    const response = await antigravityFetch(url, {
-      redirect: "follow",
-      signal: withDeadline(signal, SOURCE_ENRICH_TIMEOUT_MS),
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; pi-antigravity/1.0)" },
-    });
-    if (!response.ok || !response.body) return "";
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    while (buffer.length < PAGE_TITLE_BYTE_CAP) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+    while (bytesRead < PAGE_TITLE_BYTE_CAP) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      const value = chunk.value;
+      if (!value) continue;
+      const remaining = PAGE_TITLE_BYTE_CAP - bytesRead;
+      const slice = value.byteLength > remaining ? value.subarray(0, remaining) : value;
+      bytesRead += slice.byteLength;
+      buffer += decoder.decode(slice, { stream: true });
       if (/<\/head>/i.test(buffer)) break;
     }
+  } finally {
     void reader.cancel().catch(() => {});
-    const openGraph = buffer.match(
-      /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i,
-    )?.[1];
-    const titleTag = buffer.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
-    return decodeHtmlEntities(openGraph || titleTag || "");
-  } catch {
-    return "";
   }
+  const openGraph = buffer.match(
+    /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i,
+  )?.[1];
+  const titleTag = buffer.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+  return decodeHtmlEntities(openGraph || titleTag || "");
+}
+
+/**
+ * Read just enough of a page to recover its title; blocked or slow sites return empty.
+ *
+ * Search results are attacker-influenced input, so this follows no redirect on its own:
+ * every hop is checked before it is requested, and the number of hops is capped. A
+ * redirect is the ordinary way an innocent-looking URL reaches loopback or a cloud
+ * metadata address, and whatever comes back is shown to the model.
+ */
+async function fetchPageTitle(url: string, signal?: AbortSignal): Promise<string> {
+  if (!url || url.includes(GROUNDING_REDIRECT_HOST)) return "";
+  // One deadline for the whole chain, so extra hops cannot multiply the wait.
+  const deadline = withDeadline(signal, SOURCE_ENRICH_TIMEOUT_MS);
+  let current = url;
+  for (let hop = 0; hop <= PAGE_TITLE_MAX_HOPS; hop += 1) {
+    if (!(await isFetchablePageUrl(current))) return "";
+    let response: Response;
+    try {
+      response = await antigravityFetch(current, {
+        redirect: "manual",
+        signal: deadline,
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; pi-antigravity/1.0)" },
+      });
+    } catch {
+      return "";
+    }
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) return "";
+      try {
+        current = new URL(location, current).toString();
+      } catch {
+        return "";
+      }
+      continue;
+    }
+    if (!response.ok) return "";
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType && !/text\/html|application\/xhtml/i.test(contentType)) return "";
+    return await readPageTitle(response);
+  }
+  return "";
 }
 
 /**
@@ -507,6 +625,7 @@ async function enrichSources(sources: SearchSource[], signal?: AbortSignal): Pro
   );
 }
 
+/** Keep a label from breaking out of its link slot or its list line. */
 function escapeLinkText(text: string): string {
   return text.replace(/[[\]]/g, "\\$&").replace(/\s+/g, " ");
 }
@@ -561,6 +680,7 @@ function analyzeLines(text: string): LineInfo[] {
   return lines;
 }
 
+/** The classified line containing a character offset. */
 function lineAt(lines: LineInfo[], position: number): LineInfo | undefined {
   return lines.find((line) => position >= line.start && position <= line.end);
 }

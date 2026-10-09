@@ -1,5 +1,6 @@
 import strictAssert from "node:assert/strict";
 import {
+  isPrivateAddress,
   type SearchResult,
   type SearchSource,
   formatSearchResult,
@@ -18,6 +19,7 @@ function build(text: string, sources: SearchSource[], supports: SearchResult["su
 /** Byte length, because grounding offsets are UTF-8 bytes rather than character indices. */
 const bytes = (value: string): number => Buffer.byteLength(value, "utf8");
 
+/** Cover citation placement, source labels, and the private-address guard. */
 function main(): void {
   // 1. A support whose reported offsets do not match its own text is relocated by
   //    searching the part, instead of being dropped along with its provenance.
@@ -130,7 +132,37 @@ function main(): void {
   });
   strictAssert.equal(duplicates.sources.length, 3, "parseSearchResponse keeps one entry per chunk");
 
-  console.log("search citations: drifted offsets, headings, tables, fenced code, labels passed");
+  // 7. Page-title fetching must never be pointed at an internal address. Search results are
+  //    attacker-influenced, and whatever comes back is shown to the model.
+  for (const address of [
+    "127.0.0.1",
+    "0.0.0.0",
+    "10.1.2.3",
+    "172.16.0.1",
+    "172.31.255.255",
+    "192.168.1.1",
+    "169.254.169.254",
+    "100.64.0.1",
+    "224.0.0.1",
+    "::1",
+    "::",
+    "fd00::1",
+    "fe80::1",
+    "::ffff:127.0.0.1",
+  ]) {
+    strictAssert.equal(isPrivateAddress(address), true, `${address} must be rejected`);
+  }
+  // The URL API keeps the brackets on an IPv6 literal, so they have to come off first.
+  strictAssert.equal(isPrivateAddress("[::1]"), true, "a bracketed IPv6 literal must be rejected");
+  strictAssert.equal(isPrivateAddress("[2606:4700::1111]"), false);
+  for (const address of ["8.8.8.8", "1.1.1.1", "172.32.0.1", "11.0.0.1", "2606:4700::1111"]) {
+    strictAssert.equal(isPrivateAddress(address), false, `${address} is public`);
+  }
+  strictAssert.equal(isPrivateAddress("example.com"), false, "a name is not an address");
+
+  console.log(
+    "search citations: drifted offsets, headings, tables, fenced code, labels, private-address guard passed",
+  );
 }
 
 main();
