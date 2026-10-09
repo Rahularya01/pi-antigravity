@@ -7,7 +7,7 @@ import {
 import { AntigravityRequestType, AntigravityUserAgent, GeminiRole } from "../types/enums.js";
 import { antigravityFetch } from "../utils/http.js";
 import { safeError } from "../utils/security.js";
-import { antigravityRequestEnvelope, isRecord } from "../utils/util.js";
+import { antigravityEnv, antigravityRequestEnvelope, isRecord } from "../utils/util.js";
 
 /** Default search model: fast grounding model for interactive tool calls. */
 export const DEFAULT_SEARCH_MODEL = "gemini-3.5-flash-lite";
@@ -36,6 +36,16 @@ export type SearchSource = {
   index?: number;
   title: string;
   url: string;
+  /**
+   * Destination recovered by following the grounding redirect. Google wraps every
+   * source in an opaque `.../grounding-api-redirect/<token>` URL whose path carries
+   * no information, so this is what citations should link to when available.
+   */
+  resolvedUrl?: string;
+  /** The page's `<title>` (or `og:title`), when it could be fetched. */
+  pageTitle?: string;
+  /** Rendered label: page title, else host plus readable path, else host. */
+  label?: string;
 };
 
 export type SearchSupport = {
@@ -283,9 +293,333 @@ export function parseSearchResponse(data: unknown): SearchResult {
   return result;
 }
 
+/** Google wraps each source in this host; its path is an opaque token, not a readable path. */
+const GROUNDING_REDIRECT_HOST = "vertexaisearch.cloud.google.com";
+
+/** Budget for one redirect resolution or page title fetch. */
+const SOURCE_ENRICH_TIMEOUT_MS = 6_000;
+
+/** Parallel enrichment requests per search. */
+const SOURCE_ENRICH_CONCURRENCY = 6;
+
+/** Upper bound on bytes read while looking for the page title. */
+const PAGE_TITLE_BYTE_CAP = 64 * 1024;
+
+const SOURCE_CACHE_LIMIT = 500;
+const resolvedUrlCache = new Map<string, string>();
+const pageTitleCache = new Map<string, string>();
+
+function remember(map: Map<string, string>, key: string, value: string): void {
+  if (map.size >= SOURCE_CACHE_LIMIT) {
+    const oldest = map.keys().next().value;
+    if (oldest !== undefined) map.delete(oldest);
+  }
+  map.set(key, value);
+}
+
+/** Combined signal that still has a deadline when the caller supplied its own. */
+function withDeadline(signal: AbortSignal | undefined, ms: number): AbortSignal {
+  const timeout = AbortSignal.timeout(ms);
+  if (!signal) return timeout;
+  const anyFn = (AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }).any;
+  return anyFn ? anyFn([signal, timeout]) : signal;
+}
+
+function isBareDomainTitle(title: string): boolean {
+  return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(title);
+}
+
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Readable path segment for a label, but never the grounding redirect path: that is an
+ * opaque token, and using it produces labels that are all distinct yet say nothing.
+ */
+function readablePath(url: string | undefined): string {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    if (
+      parsed.hostname === GROUNDING_REDIRECT_HOST ||
+      parsed.hostname.endsWith(`.${GROUNDING_REDIRECT_HOST}`)
+    ) {
+      return "";
+    }
+    const pathname = parsed.pathname.replace(/\/+$/, "");
+    if (!pathname || pathname === "/" || pathname.includes("grounding-api-redirect")) return "";
+    return pathname;
+  } catch {
+    return "";
+  }
+}
+
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;|&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Label shown inline at the claim and in the source list.
+ *
+ * A bare domain cannot distinguish several pages from one host (three `github.com`
+ * entries), and a page title is not always usable either: some sites return only their
+ * brand, so Reddit reports "Reddit" for every thread. Both cases fall back to
+ * `host + readable path`.
+ */
+export function sourceLabel(source: SearchSource): string {
+  // The chunk title is the real host; the raw url can be the opaque redirect host, which
+  // must never surface as a label.
+  const host = isBareDomainTitle(source.title)
+    ? source.title.trim()
+    : hostnameOf(source.resolvedUrl ?? source.url);
+  const path = readablePath(source.resolvedUrl) || readablePath(source.url);
+  const hostAndPath = path ? `${host}${path}` : host;
+
+  const pageTitle = source.pageTitle?.trim();
+  if (pageTitle) {
+    const condensed = pageTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const brand = host.replace(/^www\./, "").split(".")[0] ?? "";
+    if (pageTitle.length >= 15 && condensed !== brand) return pageTitle;
+  }
+
+  if (source.title && !isBareDomainTitle(source.title)) return source.title;
+  return hostAndPath;
+}
+/** Follow one grounding redirect without downloading the target page. */
+async function resolveGroundingRedirect(url: string, signal?: AbortSignal): Promise<string> {
+  try {
+    const response = await antigravityFetch(url, {
+      redirect: "manual",
+      signal: withDeadline(signal, SOURCE_ENRICH_TIMEOUT_MS),
+    });
+    const location = response.headers.get("location");
+    if (response.status >= 300 && response.status < 400 && location) return location;
+  } catch {
+    // Caller keeps the original redirect URL.
+  }
+  return "";
+}
+
+/** Read just enough of a page to recover its title; blocked or slow sites return empty. */
+async function fetchPageTitle(url: string, signal?: AbortSignal): Promise<string> {
+  if (!url || url.includes(GROUNDING_REDIRECT_HOST)) return "";
+  try {
+    const response = await antigravityFetch(url, {
+      redirect: "follow",
+      signal: withDeadline(signal, SOURCE_ENRICH_TIMEOUT_MS),
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; pi-antigravity/1.0)" },
+    });
+    if (!response.ok || !response.body) return "";
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (buffer.length < PAGE_TITLE_BYTE_CAP) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      if (/<\/head>/i.test(buffer)) break;
+    }
+    void reader.cancel().catch(() => {});
+    const openGraph = buffer.match(
+      /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i,
+    )?.[1];
+    const titleTag = buffer.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+    return decodeHtmlEntities(openGraph || titleTag || "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Add a real link and a readable label to every source.
+ *
+ * This exists because `groundingChunks[].web` carries only `uri` and `title`: no snippet,
+ * no page title, and a title that is a bare domain almost every time. Without this step
+ * a model reading the result cannot tell what any source is. Failures degrade to the
+ * bare domain rather than to the opaque redirect URL.
+ *
+ * `ANTIGRAVITY_NO_SOURCE_ENRICH=1` skips it for callers that would rather not emit one
+ * extra request per source.
+ */
+async function enrichSources(sources: SearchSource[], signal?: AbortSignal): Promise<void> {
+  if (antigravityEnv("NO_SOURCE_ENRICH") === "1") {
+    for (const source of sources) source.label = sourceLabel(source);
+    return;
+  }
+
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const position = cursor++;
+      if (position >= sources.length) return;
+      const source = sources[position];
+      if (!source) continue;
+
+      const redirect = source.url;
+      if (!redirect.includes(GROUNDING_REDIRECT_HOST)) {
+        source.resolvedUrl = redirect;
+      } else {
+        const cached = resolvedUrlCache.get(redirect);
+        if (cached !== undefined) {
+          source.resolvedUrl = cached;
+        } else {
+          const resolved = await resolveGroundingRedirect(redirect, signal);
+          if (resolved) {
+            remember(resolvedUrlCache, redirect, resolved);
+            source.resolvedUrl = resolved;
+          }
+        }
+      }
+
+      const target = source.resolvedUrl ?? source.url;
+      const cachedTitle = pageTitleCache.get(target);
+      if (cachedTitle !== undefined) {
+        source.pageTitle = cachedTitle;
+      } else {
+        const title = await fetchPageTitle(target, signal);
+        if (title) {
+          remember(pageTitleCache, target, title);
+          source.pageTitle = title;
+        }
+      }
+
+      source.label = sourceLabel(source);
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(SOURCE_ENRICH_CONCURRENCY, sources.length) }, () => worker()),
+  );
+}
+
+function escapeLinkText(text: string): string {
+  return text.replace(/[[\]]/g, "\\$&").replace(/\s+/g, " ");
+}
+
+/** One contiguous claim, carrying every source index that supports it. */
+type CitationSpan = { start: number; end: number; indices: number[] };
+
+type LineKind = "text" | "skip" | "table-row";
+type LineInfo = { start: number; end: number; kind: LineKind; pipeAt?: number };
+
+/**
+ * Classify every line so citations never land in prose-hostile places.
+ *
+ * Google attaches supports to Markdown headings too, which would produce
+ * `### Single-Writer Rule[1,2]` noise, and a marker appended after a table row's final
+ * `|` adds a phantom column. Fenced code needs protecting for the same reason.
+ */
+function analyzeLines(text: string): LineInfo[] {
+  const raw = text.split("\n");
+  const lines: LineInfo[] = [];
+  let offset = 0;
+  let inFence = false;
+  for (let index = 0; index < raw.length; index++) {
+    const line = raw[index] ?? "";
+    const start = offset;
+    const end = start + line.length;
+    offset = end + 1;
+
+    let kind: LineKind = "text";
+    let pipeAt: number | undefined;
+    const isTableLine = (value: string): boolean => /^\s*\|?[\s:|-]*-[\s:|-]*\|/.test(value);
+
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      kind = "skip";
+    } else if (inFence) {
+      kind = "skip";
+    } else if (/^\s*#{1,6}\s/.test(line)) {
+      kind = "skip";
+    } else if (line.trim().startsWith("|")) {
+      const next = raw[index + 1] ?? "";
+      if (isTableLine(line) || isTableLine(next)) {
+        kind = "skip"; // separator or header row: a marker here breaks the table
+      } else {
+        const lastPipe = line.lastIndexOf("|");
+        kind = "table-row";
+        pipeAt = lastPipe > 0 ? start + lastPipe : end;
+      }
+    }
+    lines.push({ start, end, kind, pipeAt });
+  }
+  return lines;
+}
+
+function lineAt(lines: LineInfo[], position: number): LineInfo | undefined {
+  return lines.find((line) => position >= line.start && position <= line.end);
+}
+
+/** Drop spans contained in a larger span, then merge overlapping ones, so one claim gets one marker. */
+function mergeCitationSpans(spans: CitationSpan[]): CitationSpan[] {
+  const sorted = [...spans].sort((a, b) => a.start - b.start || b.end - a.end);
+  const kept: CitationSpan[] = [];
+  for (const span of sorted) {
+    const container = kept.find((other) => other.start <= span.start && other.end >= span.end);
+    if (container) {
+      container.indices = [...new Set([...container.indices, ...span.indices])].sort(
+        (a, b) => a - b,
+      );
+      continue;
+    }
+    kept.push({ start: span.start, end: span.end, indices: [...span.indices] });
+  }
+  const merged: CitationSpan[] = [];
+  for (const span of kept) {
+    const previous = merged[merged.length - 1];
+    if (previous && span.start <= previous.end) {
+      previous.end = Math.max(previous.end, span.end);
+      previous.indices = [...new Set([...previous.indices, ...span.indices])].sort((a, b) => a - b);
+      continue;
+    }
+    merged.push({ ...span });
+  }
+  return merged;
+}
+
+/**
+ * Map each UTF-8 byte offset in `text` to the JS character index it starts at.
+ * Keep in sync with the byte-based verification below.
+ */
+function buildByteToCharMap(text: string): number[] {
+  const map: number[] = [];
+  for (let index = 0; index < text.length;) {
+    const codePoint = text.codePointAt(index) as number;
+    const width = codePoint > 0xffff ? 2 : 1;
+    const byteLength = Buffer.byteLength(text.slice(index, index + width), "utf8");
+    for (let byte = 0; byte < byteLength; byte++) map.push(index);
+    index += width;
+  }
+  map.push(text.length);
+  return map;
+}
+
 /**
  * Google's offsets are UTF-8 bytes within a content Part, not JS character indices.
- * Verify each segment before inserting citations; skip unsafe mappings.
+ *
+ * Each segment is verified byte-for-byte before use. A segment whose bytes do not match
+ * its reported text is relocated by searching the part instead of being discarded: the
+ * offsets drift on some answers (table-heavy ones in particular), and dropping those
+ * citations silently removes exactly the provenance this function exists to provide.
+ *
+ * Markers are grouped per insertion point. The first mention of a source carries both its
+ * number and a full link, so the number always matches its entry in the source list below and
+ * the reader never has to resolve an unexplained `[n]`.
  */
 function citeSearchText(res: SearchResult): string {
   if (!res.supports?.length) return res.text;
@@ -294,38 +628,88 @@ function citeSearchText(res: SearchResult): string {
   if (textParts.map((part) => part.text).join("\n\n") !== res.text) {
     return res.text;
   }
-  const sourceIndices = new Set(res.sources.map((source, index) => source.index ?? index));
-  const parts = textParts.map((part) => {
-    const bytes = Buffer.from(part.text, "utf8");
-    const insertions = new Map<number, Set<number>>();
-    for (const support of res.supports ?? []) {
-      const start = support.startIndex ?? 0;
-      const end = support.endIndex;
-      if (
-        (support.partIndex ?? 0) !== part.index ||
-        !Number.isInteger(start) ||
-        start < 0 ||
-        end === undefined ||
-        !Number.isInteger(end) ||
-        end <= start ||
-        end > bytes.length ||
-        bytes.subarray(start, end).toString("utf8") !== support.text
-      )
-        continue;
-      const indices = insertions.get(end) ?? new Set<number>();
-      for (const index of support.sourceIndices) {
-        if (Number.isInteger(index) && index >= 0 && sourceIndices.has(index)) indices.add(index);
-      }
-      insertions.set(end, indices);
-    }
-    let cited = bytes;
-    for (const [end, indices] of [...insertions].sort(([a], [b]) => b - a)) {
-      const references = [...indices].map((index) => `[${index + 1}]`).join("");
-      cited = Buffer.concat([cited.subarray(0, end), Buffer.from(references), cited.subarray(end)]);
-    }
-    return cited.toString("utf8");
+
+  const bySourceIndex = new Map<number, { number: number; label: string; url: string }>();
+  res.sources.forEach((source, position) => {
+    const sourceIndex = source.index ?? position;
+    bySourceIndex.set(sourceIndex, {
+      number: sourceIndex + 1,
+      label: sourceLabel(source),
+      url: source.resolvedUrl ?? source.url,
+    });
   });
-  return parts.join("\n\n") || res.text;
+
+  const seen = new Set<number>();
+  const insertionsByPart = new Map<number, Array<{ at: number; text: string }>>();
+
+  for (const part of textParts) {
+    const bytes = Buffer.from(part.text, "utf8");
+    const byteToChar = buildByteToCharMap(part.text);
+    const lines = analyzeLines(part.text);
+    const spans: CitationSpan[] = [];
+
+    for (const support of res.supports ?? []) {
+      if ((support.partIndex ?? 0) !== part.index) continue;
+      const indices = support.sourceIndices.filter((index) => bySourceIndex.has(index));
+      if (indices.length === 0) continue;
+
+      let start = support.startIndex;
+      let end = support.endIndex;
+      const offsetsTrustworthy =
+        typeof start === "number" &&
+        typeof end === "number" &&
+        Number.isInteger(start) &&
+        Number.isInteger(end) &&
+        start >= 0 &&
+        end > start &&
+        end <= bytes.length &&
+        bytes.subarray(start, end).toString("utf8") === support.text;
+
+      if (!offsetsTrustworthy) {
+        const located = part.text.indexOf(support.text);
+        if (located < 0) continue;
+        start = Buffer.byteLength(part.text.slice(0, located), "utf8");
+        end = start + Buffer.byteLength(support.text, "utf8");
+      }
+
+      const startChar = byteToChar[start as number] ?? part.text.length;
+      const endChar = byteToChar[end as number] ?? part.text.length;
+      if (endChar <= startChar) continue;
+      spans.push({
+        start: startChar,
+        end: endChar,
+        indices: [...new Set(indices)].sort((a, b) => a - b),
+      });
+    }
+
+    for (const span of mergeCitationSpans(spans)) {
+      const line = lineAt(lines, span.end);
+      if (!line || line.kind === "skip") continue;
+      const at = line.kind === "table-row" ? (line.pipeAt ?? span.end) : span.end;
+      const pieces = span.indices.map((index) => {
+        const source = bySourceIndex.get(index);
+        if (!source) return "";
+        if (seen.has(index)) return `[${source.number}]`;
+        seen.add(index);
+        // The first mention carries the number too, so it matches the sources list below.
+        return `[${source.number}] [${escapeLinkText(source.label)}](${source.url})`;
+      });
+      const text = ` ${pieces.filter(Boolean).join(" ")}`;
+      const list = insertionsByPart.get(part.index) ?? [];
+      list.push({ at, text });
+      insertionsByPart.set(part.index, list);
+    }
+  }
+
+  const rendered = textParts.map((part) => {
+    let text = part.text;
+    for (const insertion of (insertionsByPart.get(part.index) ?? []).sort((a, b) => b.at - a.at)) {
+      text = text.slice(0, insertion.at) + insertion.text + text.slice(insertion.at);
+    }
+    return text;
+  });
+
+  return rendered.join("\n\n") || res.text;
 }
 
 /**
@@ -342,10 +726,11 @@ export function formatSearchResult(res: SearchResult): string {
 
   if (res.sources.length > 0) {
     const list = res.sources
-      .map(
-        (s, index) =>
-          `- ${res.supports?.length ? `[${(s.index ?? index) + 1}] ` : ""}[${s.title}](${s.url})`,
-      )
+      .map((s, index) => {
+        const number = res.supports?.length ? `[${(s.index ?? index) + 1}] ` : "";
+        const url = s.resolvedUrl ?? s.url;
+        return `- ${number}[${escapeLinkText(sourceLabel(s))}](${url})`;
+      })
       .join("\n");
     sections.push(`### Sources\n${list}`);
   }
@@ -411,6 +796,7 @@ export async function executeAntigravitySearch(options: ExecuteSearchOptions): P
         }
 
         const parsed = parseSearchResponse(data);
+        await enrichSources(parsed.sources, options.signal);
         return formatSearchResult(parsed);
       } catch (error) {
         if (options.signal?.aborted) throw error;

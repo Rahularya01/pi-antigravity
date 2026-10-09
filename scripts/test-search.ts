@@ -162,7 +162,14 @@ async function main() {
   strictAssert.deepEqual(grounded.supports?.[1]?.sourceIndices, [0, 2]);
   strictAssert.ok(!JSON.stringify(grounded).includes("Hidden"));
   const cited = formatSearchResult(grounded);
-  strictAssert.ok(cited.startsWith("First part.[1]\n\n日本語 clock.[1][3] More.[3]"));
+  // A source is linked in full the first time it is cited, so no bare `[n]` is left
+  // unexplained, and overlapping supports collapse into one marker per claim.
+  strictAssert.ok(
+    cited.startsWith(
+      `First part. [1] [A](https://example.com/a)\n\n${text} [1] [3] [B](https://example.com/b)`,
+    ),
+    `unexpected citation output: ${cited}`,
+  );
   strictAssert.ok(cited.includes("- [3] [B](https://example.com/b)"));
   strictAssert.ok(!cited.includes("Hidden"));
   strictAssert.ok(!cited.includes("�"));
@@ -180,7 +187,7 @@ async function main() {
         sourceIndices: [99, -1, 0.5, NaN, 2, 2],
       }],
     }),
-    "Fact.[3]\n\n### Sources\n- [3] [Source](https://example.com)",
+    "Fact. [3] [Source](https://example.com)\n\n### Sources\n- [3] [Source](https://example.com)",
   );
 
   // Preserve formatting and types for callers using the original public shape.
