@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const register = join(here, "register-ts.mjs");
+const register = pathToFileURL(join(here, "register-ts.mjs")).href;
 const result = spawnSync(
   process.execPath,
   [

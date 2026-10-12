@@ -143,49 +143,65 @@ export function buildSearchRequest(
     tools.push({ urlContext: {} });
   }
 
-  // Default budget stays at 0 so interactive lookups stay fast. --thinking opts into planning.
-  const thinkingBudget = options.thinking ? 4096 : 0;
   const envelope = antigravityRequestEnvelope(model, false);
+  const request: {
+    systemInstruction: {
+      role: GeminiRole;
+      parts: Array<{ text: string }>;
+    };
+    contents: Array<{
+      role: GeminiRole;
+      parts: Array<{ text: string }>;
+    }>;
+    tools: Array<Record<string, unknown>>;
+    generationConfig?: {
+      thinkingConfig: {
+        thinkingBudget: number;
+        includeThoughts: boolean;
+      };
+    };
+  } = {
+    systemInstruction: {
+      role: GeminiRole.User,
+      parts: [{ text: systemInstructionText }],
+    },
+    contents: [
+      {
+        role: GeminiRole.User,
+        parts: [{ text: prompt }],
+      },
+    ],
+    tools,
+  };
+
+  // Only attach thinkingConfig when explicitly requested (--thinking).
+  // Passing thinkingBudget: 0 causes HTTP 400 INVALID_ARGUMENT on flash-lite and flash models.
+  if (options.thinking) {
+    request.generationConfig = {
+      thinkingConfig: {
+        thinkingBudget: 4096,
+        includeThoughts: false,
+      },
+    };
+  }
 
   return {
     project: projectId,
     model,
-    request: {
-      systemInstruction: {
-        role: GeminiRole.User,
-        parts: [{ text: systemInstructionText }],
-      },
-      contents: [
-        {
-          role: GeminiRole.User,
-          parts: [{ text: prompt }],
-        },
-      ],
-      tools,
-      generationConfig: {
-        thinkingConfig: {
-          thinkingBudget,
-          includeThoughts: false,
-        },
-      },
-    },
+    request,
     requestType: AntigravityRequestType.Agent,
     userAgent: AntigravityUserAgent.Antigravity,
     requestId: envelope.requestId,
   };
 }
 
-/** Read candidates from either the wrapped Antigravity or direct Gemini response. */
-function candidateList(data: unknown): unknown {
+/** Read the first candidate from either the wrapped Antigravity or direct Gemini response. */
+function firstCandidate(data: unknown): Record<string, unknown> | undefined {
   if (!isRecord(data)) return undefined;
-  if (isRecord(data.response)) return data.response.candidates;
-  return data.candidates;
-}
-
-/** Return the first array entry without assuming its response shape. */
-function firstUnknownItem(value: unknown): unknown {
-  if (!Array.isArray(value)) return undefined;
-  return (value as unknown[])[0];
+  const response = isRecord(data.response) ? data.response : data;
+  if (!Array.isArray(response.candidates)) return undefined;
+  const first = (response.candidates as unknown[])[0];
+  return isRecord(first) ? first : undefined;
 }
 
 /**
@@ -392,12 +408,16 @@ export async function executeAntigravitySearch(options: ExecuteSearchOptions): P
           if (response.status === 404 || [429, 500, 502, 503, 504].includes(response.status)) {
             continue; // Retry next endpoint for transient failures or missing model endpoints
           }
-          // Fail fast on non-retryable client errors (e.g. 400 Bad Request, 401 Unauthorized, 403 Forbidden)
+          if (response.status === 400) {
+            // Model may reject specific parameters on this endpoint; retry next endpoint or fallback model
+            continue;
+          }
+          // Fail fast on non-retryable client errors (e.g. 401 Unauthorized, 403 Forbidden)
           throw Object.assign(new Error(lastError), { fatal: true });
         }
 
         const data: unknown = await response.json();
-        const cand = firstUnknownItem(candidateList(data));
+        const cand = firstCandidate(data);
 
         const candidateText =
           isRecord(cand) && isRecord(cand.content) && Array.isArray(cand.content.parts)

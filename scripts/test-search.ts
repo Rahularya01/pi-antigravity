@@ -57,9 +57,9 @@ async function main() {
   assert(SEARCH_SYSTEM_INSTRUCTION.includes("neighboring entry"), "attribute bleed rule");
   const fast = buildSearchRequest({ query: "clock.monotonic" }, DEFAULT_SEARCH_MODEL, "proj");
   assert(
-    (fast.request as { generationConfig?: { thinkingConfig?: { thinkingBudget?: number } } })
-      .generationConfig?.thinkingConfig?.thinkingBudget === 0,
-    "default search thinking budget is off",
+    (fast.request as { generationConfig?: { thinkingConfig?: unknown } })
+      .generationConfig?.thinkingConfig === undefined,
+    "default search thinking config is omitted to avoid invalid argument on flash-lite models",
   );
   assert(req.requestType === "agent", "requestType set to agent");
   assert(req.userAgent === "antigravity", "userAgent set to antigravity");
