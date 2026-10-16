@@ -7,6 +7,7 @@ import {
   buildAntigravityCatalog,
   clearModelEnumCache,
   getAntigravityRequestModelId,
+  getFallbackRuntimeModel,
   getModelEnum,
   hydrateAntigravityCatalog,
   refreshAntigravityModels,
@@ -153,6 +154,98 @@ try {
   );
 } finally {
   globalThis.fetch = originalFetch;
+  resetAntigravityCatalogForTests();
+  clearModelEnumCache();
+}
+
+// Gemini 4 is advertised only to current client versions. Exercise the actual
+// refresh/header path, not a manually inserted static model or runtime override.
+const savedUserAgent = process.env.ANTIGRAVITY_USER_AGENT;
+const savedLegacyUserAgent = process.env.NOAGY_USER_AGENT;
+let argonPersisted: unknown;
+globalThis.fetch = async (_input, init) => {
+  const headers = new Headers(init?.headers);
+  const currentClient = headers.get("User-Agent")?.startsWith("antigravity/cli/1.3.5 ");
+  return new Response(
+    JSON.stringify({
+      models: currentClient
+        ? {
+            "gemini-4-argon-low": info("Gemini 4 Argon (Low)", {
+              model: "MODEL_ARGON_LOW_TEST",
+            }),
+            "gemini-4-argon-medium": info("Gemini 4 Argon (Medium)", {
+              model: "MODEL_ARGON_MEDIUM_TEST",
+            }),
+            "gemini-4-argon-high": info("Gemini 4 Argon (High)", {
+              model: "MODEL_ARGON_HIGH_TEST",
+            }),
+          }
+        : { "gemini-3.8-flash-low": info("Gemini 3.8 Flash (Low)") },
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+};
+try {
+  delete process.env.ANTIGRAVITY_USER_AGENT;
+  delete process.env.NOAGY_USER_AGENT;
+  const models = await refreshAntigravityModels({
+    credential: { type: "api_key", key: JSON.stringify({ token: "fake", projectId: "fake" }) },
+    stored: undefined,
+    allowNetwork: true,
+    force: true,
+    signal: new AbortController().signal,
+    publish: async (value: unknown) => {
+      argonPersisted = value;
+      return true;
+    },
+  });
+  assert(
+    !ANTIGRAVITY_MODELS.some((model) => model.id === "gemini-4-argon"),
+    "Gemini 4 must come from authenticated discovery, not an invented fallback entry",
+  );
+  const argon = models.find((model) => model.id === "gemini-4-argon");
+  assert(argon, "default client headers discover Gemini 4 without environment overrides");
+  assert(argon.reasoning && argon.input.includes("image"), "retains advertised capabilities");
+  for (const effort of ["low", "medium", "high"] as const) {
+    assert(argon.thinkingLevelMap?.[effort] === effort, `exposes Argon ${effort} thinking`);
+    assert(
+      getAntigravityRequestModelId(argon.id, effort) === `gemini-4-argon-${effort}`,
+      `routes Argon ${effort} to its exact runtime`,
+    );
+    assert(
+      getFallbackRuntimeModel(`gemini-4-argon-${effort}`) === undefined,
+      "never silently substitutes another generation for Gemini 4",
+    );
+  }
+  assert(argon.thinkingLevelMap?.off === null, "does not advertise unsupported off mode");
+  assert(getModelEnum("gemini-4-argon-high") === "MODEL_ARGON_HIGH_TEST", "uses discovered enum");
+
+  resetAntigravityCatalogForTests();
+  clearModelEnumCache();
+  const persisted = (argonPersisted as { persist?: Record<string, unknown> }).persist;
+  const offline = await refreshAntigravityModels({
+    credential: undefined,
+    stored: persisted,
+    allowNetwork: false,
+    force: false,
+    signal: new AbortController().signal,
+    publish: async () => true,
+  });
+  assert(offline.some((model) => model.id === "gemini-4-argon"), "Argon survives offline restart");
+  assert(
+    getAntigravityRequestModelId("gemini-4-argon", "medium") === "gemini-4-argon-medium",
+    "offline restart preserves Argon medium routing",
+  );
+  assert(
+    getModelEnum("gemini-4-argon-medium") === "MODEL_ARGON_MEDIUM_TEST",
+    "offline restart preserves Argon dynamic enums",
+  );
+} finally {
+  globalThis.fetch = originalFetch;
+  if (savedUserAgent === undefined) delete process.env.ANTIGRAVITY_USER_AGENT;
+  else process.env.ANTIGRAVITY_USER_AGENT = savedUserAgent;
+  if (savedLegacyUserAgent === undefined) delete process.env.NOAGY_USER_AGENT;
+  else process.env.NOAGY_USER_AGENT = savedLegacyUserAgent;
   resetAntigravityCatalogForTests();
   clearModelEnumCache();
 }

@@ -136,6 +136,11 @@ The native API returns in-memory image/text blocks and does not save files. Inpu
 
 ## Models and routing
 
+For Gemini 4 Argon, run `/antigravity.refresh` after upgrading to replace an
+older cached catalog, then select `/model antigravity/gemini-4-argon`. Low,
+Medium and High variants are discovered dynamically when your account
+advertises them; updating the client version does not grant model entitlement.
+
 After you sign in, the provider refreshes its catalog from Antigravity (`fetchAvailableModels`) and groups runtime thinking variants into public Pi model IDs. Newly enabled models — for example a new Gemini Flash generation — become selectable after that refresh without waiting for an extension release. A last-known-good cache is kept for offline/cold start; the static table below is only the conservative fallback and a routing reference.
 
 Use `/antigravity.models` to see live availability and quota for your account. Runtime names such as `gemini-3.8-flash-low` / `-medium` / `-high` collapse to `gemini-3.8-flash` with those thinking levels. The conservative static entries remain selectable when an account's authenticated catalog omits them.
