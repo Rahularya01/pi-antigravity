@@ -326,7 +326,18 @@ export function resetAntigravityCatalogForTests(): void {
 
 /** Resolve public model id + thinking effort to Antigravity runtime model id. */
 export function getAntigravityRequestModelId(modelId: string, effort: string | undefined): string {
-  const r = currentRouting[modelId] ?? ANTIGRAVITY_ROUTING[modelId];
+  // A selected model can outlive a catalog refresh (for example in a resumed
+  // session). Do not resurrect a retired route from the bootstrap catalog.
+  if (
+    currentModels !== ANTIGRAVITY_MODELS &&
+    !currentRouting[modelId] &&
+    ANTIGRAVITY_ROUTING[modelId]
+  ) {
+    throw new Error(
+      `Antigravity model ${modelId} is absent from the current catalog. Next: run /antigravity.refresh and select an available model.`,
+    );
+  }
+  const r = currentRouting[modelId];
   if (!r) return modelId;
 
   if (effort === undefined || effort === "off") {
@@ -361,6 +372,18 @@ export function getAntigravityRequestModelId(modelId: string, effort: string | u
  * provide a fallback runtime model ID (e.g. Gemini 3.7 Flash) to maintain availability.
  */
 export function getFallbackRuntimeModel(runtimeModel: string, effort?: string): string | undefined {
+  const fallback = legacyFallbackRuntimeModel(runtimeModel, effort);
+  if (!fallback || currentModels === ANTIGRAVITY_MODELS) return fallback;
+  // Compatibility fallbacks are only valid while the backend still advertises
+  // their runtime ID. Never downgrade into a retired Flash generation.
+  return Object.values(currentRouting).some((route) =>
+    [route.off, route.defaultRequestId, ...Object.values(route.routing ?? {})].includes(fallback),
+  )
+    ? fallback
+    : undefined;
+}
+
+function legacyFallbackRuntimeModel(runtimeModel: string, effort?: string): string | undefined {
   if (runtimeModel.startsWith("gemini-3.8-flash-")) {
     return runtimeModel.replace("gemini-3.8-flash-", "gemini-3.7-flash-");
   }
@@ -368,7 +391,8 @@ export function getFallbackRuntimeModel(runtimeModel: string, effort?: string): 
     return "gemini-3.7-flash-low";
   }
   if (runtimeModel === "gemini-3.7-flash-tiered") {
-    return getAntigravityRequestModelId("gemini-3.6-flash", effort);
+    const route = currentRouting["gemini-3.6-flash"];
+    return route ? getAntigravityRequestModelId("gemini-3.6-flash", effort) : undefined;
   }
   if (runtimeModel.startsWith("gemini-3.7-flash-")) {
     return runtimeModel.replace("gemini-3.7-flash-", "gemini-3.6-flash-");
