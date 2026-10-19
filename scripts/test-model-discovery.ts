@@ -104,6 +104,34 @@ try {
 }
 
 const knownId = ANTIGRAVITY_MODELS[0].id;
+// A resumed session may still select a static model removed by live curation.
+try {
+  const active = buildAntigravityCatalog(
+    { "gemini-3.8-flash-low": info("Gemini 3.8 Flash (Low)") },
+    fallback,
+  );
+  applyAntigravityCatalog(active);
+  for (const retired of ["gemini-3.6-flash", "gemini-3.7-flash"]) {
+    assert.throws(
+      () => getAntigravityRequestModelId(retired, "medium"),
+      /absent from the current catalog.*\/antigravity.refresh/,
+      "retired selections must not recover static runtime routes",
+    );
+  }
+  assert.equal(getAntigravityRequestModelId("gemini-3.8-flash", "medium"), "gemini-3.8-flash-low");
+  assert.equal(getAntigravityRequestModelId("custom-runtime", "medium"), "custom-runtime");
+  assert.equal(getFallbackRuntimeModel("gemini-3.8-flash-low"), undefined);
+  assert.equal(getFallbackRuntimeModel("gemini-3.7-flash-tiered", "medium"), undefined);
+  applyAntigravityCatalog(buildAntigravityCatalog({
+    "gemini-3.8-flash-low": info("Gemini 3.8 Flash (Low)"),
+    "gemini-3.7-flash-low": info("Gemini 3.7 Flash (Low)"),
+  }, fallback));
+  assert.equal(getFallbackRuntimeModel("gemini-3.8-flash-low"), "gemini-3.7-flash-low");
+} finally {
+  resetAntigravityCatalogForTests();
+}
+assert.equal(getAntigravityRequestModelId("gemini-3.6-flash", "medium"), "gemini-3.6-flash-medium");
+
 const updated = buildAntigravityCatalog(
   {
     [knownId + "-low"]: info("Updated model (Low)", {

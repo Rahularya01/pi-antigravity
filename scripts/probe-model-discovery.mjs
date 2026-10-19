@@ -63,6 +63,7 @@ assert.ok(
 
 for (const endpoint of endpointCandidates()) {
   let raw;
+  let agentModelSorts;
   await check(endpoint + " catalog response", async () => {
     const res = await fetch(endpoint + "/v1internal:fetchAvailableModels", {
       method: "POST",
@@ -78,11 +79,12 @@ for (const endpoint of endpointCandidates()) {
     );
     assert.ok(Object.keys(data.models).length, "empty catalog");
     raw = data.models;
+    agentModelSorts = data.agentModelSorts;
   });
   if (!raw) continue;
   let catalog;
   await check(endpoint + " supported chat catalog", () => {
-    catalog = buildAntigravityCatalog(raw, fallback);
+    catalog = buildAntigravityCatalog(raw, fallback, agentModelSorts);
   });
   if (!catalog) continue;
   console.log(
@@ -94,6 +96,7 @@ for (const endpoint of endpointCandidates()) {
       catalog.models.length +
       " public models",
   );
+  console.log("INFO selectable: " + catalog.models.map((model) => model.id).join(", "));
   await check(endpoint + " every generated route exists in live response", () => {
     for (const r of Object.values(catalog.routing)) {
       for (const id of [r.off, r.defaultRequestId, ...Object.values(r.routing || {})]) {
