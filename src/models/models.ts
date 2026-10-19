@@ -383,6 +383,7 @@ export function getFallbackRuntimeModel(runtimeModel: string, effort?: string): 
     : undefined;
 }
 
+/** Return the legacy Flash downgrade candidate before checking current catalog availability. */
 function legacyFallbackRuntimeModel(runtimeModel: string, effort?: string): string | undefined {
   if (runtimeModel.startsWith("gemini-3.8-flash-")) {
     return runtimeModel.replace("gemini-3.8-flash-", "gemini-3.7-flash-");
