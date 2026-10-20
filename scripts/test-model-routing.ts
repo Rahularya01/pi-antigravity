@@ -1426,12 +1426,15 @@ const fallbackPersona = buildRequest(flash37Model, dummyContext, "test-proj", {}
 assert.equal(fallbackPersona.request.systemInstruction.parts.length, 2);
 assert.match(fallbackPersona.request.systemInstruction.parts[0]?.text || "", /You are Antigravity/);
 
+// Models carry their own published list price, not one shared placeholder.
 const flashCost = ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.7-flash")?.cost;
-assert.equal(flashCost?.input, 0.1);
-assert.equal(flashCost?.output, 0.4);
+assert.equal(flashCost?.input, 0.75);
+assert.equal(flashCost?.output, 3.75);
+assert.equal(flashCost?.cacheRead, 0.075);
 const opusCost = ANTIGRAVITY_MODELS.find((m) => m.id === "claude-opus-4-6")?.cost;
-assert.equal(opusCost?.input, 15);
-assert.equal(opusCost?.output, 75);
+assert.equal(opusCost?.input, 5);
+assert.equal(opusCost?.output, 25);
+assert.equal(opusCost?.cacheRead, 0.5);
 
 // Wire fingerprint: User-Agent format (pure agy CLI)
 assert.equal(
