@@ -2,6 +2,7 @@ import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 import { ThinkingEffort } from "../types/enums.js";
 import type { AntigravityRouting, ModelInfoRaw } from "../types/types.js";
 import { isRecord } from "../utils/util.js";
+import { getAntigravityModelCost } from "./models.js";
 
 export type AntigravityCatalog = {
   models: ProviderModelConfig[];
@@ -279,7 +280,9 @@ function synthesizeModel(
       reasoning,
       thinkingLevelMap: reasoning ? thinkingLevelMapFromLevels(advertisedLevels) : undefined,
       input: supportsImages ? ["text", "image"] : ["text"],
-      cost: template?.cost ?? ZERO_COST,
+      // Prefer this model's own published price over the family template's, so a
+      // newly discovered Flash variant is not billed at another Flash's rate.
+      cost: getAntigravityModelCost(group.publicId) ?? template?.cost ?? ZERO_COST,
       contextWindow: group.contextWindow ?? template?.contextWindow ?? 128000,
       maxTokens: group.maxOutputTokens ?? template?.maxTokens ?? 8192,
     },
