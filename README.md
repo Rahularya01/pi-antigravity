@@ -117,6 +117,18 @@ Model availability, entitlement, quota groups, and resets are returned by the se
 
 The extension also registers a `generate_image` tool the model can call. Images are written inside the project directory (default `.pi/generated-images/`). Image generation defaults to `gemini-3.1-flash-image`; model availability is account-dependent. Requests use the direct image endpoint, with the legacy streaming endpoint tried on HTTP 404. Existing model and endpoint fallbacks remain available.
 
+The `generate_image` tool accepts an optional `referenceImages` array of project-relative paths. Reference images are sent to Google alongside the prompt; only include images you intend to upload. PNG, JPEG, WebP, and GIF are supported, with MIME types detected from file contents. Paths must remain inside the working directory, including symlink targets. For example:
+
+```json
+{
+  "prompt": "Design a deep bowl using the colors and artwork in these references",
+  "referenceImages": ["references/oatmeal.png", "references/plate.jpg"],
+  "path": "designs/bowl.png"
+}
+```
+
+Omit `referenceImages` (or pass `[]`) for text-only generation. `/antigravity.image` remains text-only; reference paths are supported by the tool, not the slash command.
+
 It also registers a `google_search` tool allowing models to perform real-time web search and URL analysis using Google Search Grounding over Cloud Code Assist. The default model is `gemini-3.5-flash-lite` (fallbacks: `gemini-3.1-flash-lite`, `gemini-3-flash`) and the default reply is a short evidence brief. It supports optional lead agent directives (`instruction`), specific target URLs (`urls`), and deep reasoning (`thinking: true` or `/antigravity.search --thinking`).
 
 ### Native image API
