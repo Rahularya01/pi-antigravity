@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Deferred extra tools:** `ANTIGRAVITY_DEFER_TOOLS=1` keeps enabled `google_search` and `generate_image` tools available to codemode without declaring them to the model on Pi 0.99.2+. Direct exposure remains the default; tool-disable controls still take precedence.
+
 ## [0.11.0] - 2026-10-16
 
 ### Added
