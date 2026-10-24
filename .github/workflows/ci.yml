@@ -16,8 +16,11 @@ env:
 
 jobs:
   check:
-    name: Check
+    name: Check (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ["22.19.0", "24"]
     steps:
       # v5
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -27,7 +30,7 @@ jobs:
       # before Corepack can activate Yarn 4 from packageManager.
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
-          node-version-file: .nvmrc
+          node-version: ${{ matrix.node }}
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn check

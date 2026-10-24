@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { register, registerHooks } from "node:module";
+import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
 
 function resolveJsToTs(specifier, context, nextResolve) {
@@ -16,8 +16,4 @@ function resolveJsToTs(specifier, context, nextResolve) {
   return nextResolve(specifier, context);
 }
 
-if (typeof registerHooks === "function") {
-  registerHooks({ resolve: resolveJsToTs });
-} else {
-  register("./ts-hooks.mjs", import.meta.url);
-}
+registerHooks({ resolve: resolveJsToTs });

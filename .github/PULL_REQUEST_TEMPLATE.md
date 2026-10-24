@@ -7,7 +7,7 @@
 ## Validation
 
 - [ ] `yarn check`
-- [ ] Tests added or updated when behavior changed
+- [ ] Tests added or updated in this pull request when behavior changed, not only local probes
 - [ ] Documentation updated when commands, auth, config, or models changed
 
 ## Security

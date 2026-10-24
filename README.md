@@ -20,6 +20,7 @@ Want to equip Pi with MCP, web access, subagents, and todos? Install [`pi-essent
 - [Quick start](#quick-start)
 - [Authentication and credential safety](#authentication-and-credential-safety)
 - [Commands](#commands)
+- [Tools](#tools)
 - [Models and routing](#models-and-routing)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
@@ -27,6 +28,7 @@ Want to equip Pi with MCP, web access, subagents, and todos? Install [`pi-essent
 
 ## Requirements
 
+- Node **22.19.0 or later**
 - Pi Coding Agent and Pi AI version **0.80.0 or later**
 - A Google account that can use the relevant Cloud Code Assist / Antigravity services
 - A browser to complete the Google sign-in. Same-machine is best (the browser hits the local callback automatically); on a remote/headless machine, complete sign-in anywhere and paste the resulting callback URL back into Pi (see [Troubleshooting](#troubleshooting)).
@@ -112,12 +114,33 @@ Review these permissions before approving access. If your credentials expire or 
 | `/antigravity.doctor` | Show sanitized provider diagnostics, including the endpoint, status, and resolved runtime model. |
 | `/antigravity.image <prompt>` | Generate an image via Antigravity and save it under `.pi/generated-images/`. Optional `--ratio 16:9`, `--model`, `--path`. |
 | `/antigravity.search <query>` | Search the web using Google Search Grounding via Antigravity. Optional `--thinking`, `--url <url>`. |
+| `/antigravity.fetch <url>` | Read a public web page through the Antigravity fetch service and print it as markdown. Optional `--raw` keeps the crawled source. |
 
 Model availability, entitlement, quota groups, and resets are returned by the service and can differ by account. The quota percentage shown for a model can represent a shared pool, not a private per-model allowance.
 
-The extension also registers a `generate_image` tool the model can call. Images are written inside the project directory (default `.pi/generated-images/`). Image generation defaults to `gemini-3.1-flash-image`; model availability is account-dependent. Requests use the direct image endpoint, with the legacy streaming endpoint tried on HTTP 404. Existing model and endpoint fallbacks remain available.
+## Tools
 
-It also registers a `google_search` tool allowing models to perform real-time web search and URL analysis using Google Search Grounding over Cloud Code Assist. The default model is `gemini-3.5-flash-lite` (fallbacks: `gemini-3.1-flash-lite`, `gemini-3-flash`) and the default reply is a short evidence brief. It supports optional lead agent directives (`instruction`), specific target URLs (`urls`), and deep reasoning (`thinking: true` or `/antigravity.search --thinking`).
+### Image generation
+
+The extension registers a `generate_image` tool the model can call. Images are written inside the project directory (default `.pi/generated-images/`). Image generation defaults to `gemini-3.1-flash-image`; model availability is account-dependent. Requests use the direct image endpoint, with the legacy streaming endpoint tried on HTTP 404. Existing model and endpoint fallbacks remain available.
+
+### Search
+
+The `google_search` tool allows models to perform real-time web search and URL analysis using Google Search Grounding over Cloud Code Assist. The default model is `gemini-3.5-flash-lite` (fallbacks: `gemini-3.1-flash-lite`, `gemini-3-flash`) and the default reply is a short evidence brief. It supports optional lead agent directives (`instruction`), specific target URLs (`urls`), and deep reasoning (`thinking: true` or `/antigravity.search --thinking`).
+
+### Read a page
+
+Use the reader when you already know the page URL; use `google_search` to find sources. The answer is Google's crawled copy and can be stale or incomplete. For login pages, interactive applications, and unsupported formats, use a browser or another permitted local tool. Check `/antigravity.doctor` after a failed or degraded read. The [reader guarantees](docs/reader-guarantees.md) map its limits to offline regression checks.
+
+The `read_url_content` tool reads public pages. Fetching runs through Google's Cloud Code Assist endpoints, so the machine never contacts the target site. The character budget covers returned text and serialized details; small budgets may omit older attempt details, with an explicit omission count. `/antigravity.doctor` retains the bounded retrieval history. The tool resolves redirects with `v1internal:rewriteUri`, reads `v1internal:fetchFromTrawlerCache`, and retries with `liveFetch: true` when the cache is missing, clearly cut off, empty, or suspected to contain only a shell or access wall. A shared 10-second network deadline bounds redirects, endpoint failover, and recovery; useful content is retained if the deadline expires or recovery fails. Short readable fragments with unknown completeness do not trigger a retry. Endpoint failover is limited to transport failures; a read makes at most ten Google requests and tries at most one publisher representation URL. HTML conversion accepts at most 2,000,000 characters, 50,000 markup tokens, and 128 nested elements. More complex pages are not converted; Google's HTML is saved to a temp file instead.
+
+Before converting HTML to Markdown, the tool reads page metadata, bounded JSON-LD matched to the article, and advertised alternate representations. If cache and live results are inadequate, it tries at most one same-origin Markdown or supported article-JSON representation, preferring the page language and then Markdown; a mismatched-language fallback updates the reported language and retrieval outcome. JSON recovery supports GitHub Docs article bodies and WordPress single-post responses with matching article identity. Inadequate MDN copies can use the publisher's same-origin `index.json` representation within the same one-representation budget. Cut-off Wikipedia articles use Wikipedia's parse API for the same article, and cut-off `raw.githubusercontent.com` files use the full line list from the matching GitHub file page; both are used only when they name the requested article or file. Wikipedia titles are matched the way MediaWiki does (first letter capitalized, redirects followed); revisions, queries, and special pages are not recovered. These copies are tried even when Google cannot serve the original URL. MDN's JSON may supply a canonical article URL within the same origin and locale's `/docs/` prefix; results report that redirect. Recovery requires verified publisher identity and complete supported article sections; if Google cuts only the later sidebar JSON, the source is still reported as incomplete. Unknown section types or a cut-off article body are not silently repaired. Results report the article URL, any alternate representation URL, retrieval attempts, and available title, author, publication date, modification date, and language. Structured data is parsed, never executed.
+
+Conversion keeps headings, lists, links, code blocks, and data tables. Table grids are limited to 10,000 cells per page; nested or oversized grids are flattened without expanding their spans. It removes navigation and hidden decorations (a block named like chrome, such as `sidebar` or `menu`, is kept when it holds the article or most of the page's text), then selects a substantive `<main>`, `role="main"`, or `<article>` region, skipping empty placeholders. Source completeness, suspected content problems, and our own output truncation are reported separately. A closed HTML document is not proof that Google supplied the entire article. Empty results do not establish that the page requires JavaScript: Google's response may be cut off, blocked, or a shell.
+
+Output is capped by `ANTIGRAVITY_WEB_FETCH_MAX_CHARS` (default 60000), including the provenance header and saved-page footer. A long URL is elided inside the header so provenance cannot take the page's share of the budget away. Page-controlled metadata is stripped of line breaks and bounded before it reaches the header. When a page does not fit, the tool returns its beginning and saves the full Markdown, with the provenance header, to a private temp file (`pi-url-*/page.md`, mode 0600), the same way Pi saves long tool output. The answer ends with the file path, and `details.fullOutputPath` holds it; the agent reads or searches that file instead of fetching again. Pages beyond the conversion limits are refused, and Google's unconverted HTML is saved to `page.html` for searching. Raw mode is not bound by those limits: it returns the crawled source as it is, so the page's size limits the answer, not the read. A raw page that does not fit is saved as the source alone, without the provenance header. If a page cannot be saved (for example, the temp directory is not writable), the answer says so and still shows the beginning. Temp files are not deleted automatically. Service responses over 5 MB are refused before parsing. A live 401/403 or other recovery failure keeps an already usable cached copy.
+
+`/antigravity.fetch [--raw] <url>` exposes the same fetch interactively. Raw mode preserves the requested page's crawled source and does not substitute alternate representations. Literal private/local addresses, local hostnames, non-HTTP URLs, and URLs with embedded username/password are refused. Known sensitive query and fragment values, and token-shaped values, are redacted from provenance, progress messages, and errors, but remain part of the request sent to the fetch service. DNS names are resolved by Google's service rather than locally, so this check is a filter for obvious local/private targets, not a guarantee against every name that resolves internally. The service resolves the initial redirect chain, so local validation sees the final URI it reports rather than every remote hop: a final URI that names a private or local address fails closed and aborts the read, while a malformed one is ignored and the requested page is read. Explicit non-HTTP or credential-bearing redirects are refused. PDF URLs, PDF content types, and line-start PDF signatures within the first 1024 characters fail with guidance to download the URL directly and read the local file with an available PDF reader, subject to normal permissions. Alternate `.pdf` links are ignored rather than substituted. The tool itself does not download or extract PDFs. This remains a best-effort Google crawler tool, without a local HTTP or browser fallback, cookies, or login support.
 
 ### Native image API
 
@@ -194,11 +217,13 @@ All primary environment variables start with `ANTIGRAVITY_`. The legacy `NOAGY_`
 | `ANTIGRAVITY_CLIENT_SECRET` | Use a custom Google OAuth client secret. Keep it out of source control and shell history. |
 | `ANTIGRAVITY_NO_KEEPALIVE` | Set to `1` to skip the keep-alive connection pool. |
 | `ANTIGRAVITY_NO_PREWARM` | Set to `1` to skip the TLS pre-warm request made on the first Antigravity request. |
-| `ANTIGRAVITY_NO_EXTRA_TOOLS` | Set to `1` to stop registering the model-facing `google_search` and `generate_image` tools. The `/antigravity.search` and `/antigravity.image` commands stay available. |
+| `ANTIGRAVITY_NO_EXTRA_TOOLS` | Set to `1` to stop registering the model-facing `google_search`, `read_url_content`, and `generate_image` tools. The `/antigravity.search`, `/antigravity.fetch`, and `/antigravity.image` commands stay available. |
 | `ANTIGRAVITY_NO_SEARCH_TOOL` | Set to `1` to skip only the `google_search` tool, e.g. when another extension provides web search. |
+| `ANTIGRAVITY_NO_FETCH_TOOL` | Set to `1` to skip only the `read_url_content` tool, e.g. when another extension already fetches URLs. |
 | `ANTIGRAVITY_NO_IMAGE_TOOL` | Set to `1` to skip only the `generate_image` tool. |
+| `ANTIGRAVITY_WEB_FETCH_MAX_CHARS` | Character budget for one `read_url_content` result. Defaults to 60000, roughly 15k tokens. |
 
-`pi config` can disable each model-facing tool without disabling the provider. The package loads three extension resources: `src/index.ts` (provider, OAuth, and slash commands), `src/features/google-search.ts` (`google_search`), and `src/features/generate-image.ts` (`generate_image`). Turn off a feature resource there to stop registering that tool. `/antigravity.search` and `/antigravity.image` stay available from the provider extension.
+`pi config` can disable each model-facing tool without disabling the provider. The package loads four extension resources: `src/index.ts` (provider, OAuth, and slash commands), `src/features/google-search.ts` (`google_search`), `src/features/read-url-content.ts` (`read_url_content`), and `src/features/generate-image.ts` (`generate_image`). Turn off a feature resource there to stop registering that tool. `/antigravity.search`, `/antigravity.fetch`, and `/antigravity.image` stay available from the provider extension.
 
 Environment variables still force a loaded tool off, including in scripts and headless runs. They cannot turn a resource back on after `pi config` disables it, because that file is not loaded. Either control is enough to hide the tool from the model. Run `/reload` after changing `pi config` or the environment in an active session; a new Pi process also picks the change up. A restart is not required when `/reload` succeeds.
 
@@ -228,9 +253,11 @@ This repo uses [Yarn 4](https://yarnpkg.com/) via Corepack for install, scripts,
 
 ```bash
 corepack enable
-yarn install
+yarn install --immutable
 yarn check
 ```
+
+For an optional live fetch check, run `yarn smoke:fetch` after `/login antigravity`. It exercises the registered tool on three public URLs and checks that reading a saved page needs neither network nor credentials. Missing expected page text is a failure unless explicit retrieval failures explain a degraded copy, which is an upstream-availability warning. An unobserved MDN canonical alias is also a warning; when that alias is observed, redirect provenance is checked. It uses saved Pi credentials (`PI_AUTH_PATH` can select another auth file), leaves saved pages in the temp directory, and is excluded from `yarn check` and default CI. Exit codes: 0 for successful coverage, 1 for integration failures, 2 when upstream availability limits coverage, no page passes, or no saved page can be checked.
 
 Installs are hardened against common supply-chain attacks: lifecycle scripts are off, lockfile checksums must match the npm registry, and package versions younger than three days are rejected. Do not add a second registry or enable `enableScripts` without a review.
 

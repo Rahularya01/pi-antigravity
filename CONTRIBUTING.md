@@ -12,11 +12,11 @@ Thanks for improving `pi-antigravity`.
 
 ```bash
 corepack enable
-yarn install
+yarn install --immutable
 yarn check
 ```
 
-This repo uses [Yarn 4](https://yarnpkg.com/) through Corepack (Node 22+). `yarn check` runs TypeScript, ESLint, Prettier, tests, and `yarn npm audit`. Installs disable lifecycle scripts, verify lockfile checksums against the npm registry, and refuse package versions newer than three days. Run it before opening a pull request.
+This repo uses [Yarn 4](https://yarnpkg.com/) through Corepack (Node 22.19.0 or later). `yarn check` runs TypeScript, ESLint, Prettier, tests, and `yarn npm audit`. Installs disable lifecycle scripts, verify lockfile checksums against the npm registry, and refuse package versions newer than three days. Run it before opening a pull request.
 
 ## Pull requests
 

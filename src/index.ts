@@ -23,6 +23,19 @@ import { getLastDiagnostics, runWithDiagnostics } from "./diagnostics/index.js";
 import { generateAntigravityImage, parseImageCommandArgs } from "./image/index.js";
 import { executeAntigravitySearch, parseSearchCommandArgs } from "./search/index.js";
 import {
+  executeAntigravityWebFetch,
+  discardSavedPage,
+  formatWebFetchHeader,
+  formatWebFetchResult,
+  looksLikeHtml,
+  parseFetchCommandArgs,
+  savePage,
+  savedPageNote,
+  type SavedPage,
+  withSavedCopy,
+  validateFetchTarget,
+} from "./web-fetch/index.js";
+import {
   applyAntigravityCatalog,
   discoverAntigravityModels,
   getCurrentAntigravityCatalog,
@@ -313,10 +326,11 @@ export default function (pi: ExtensionAPI): void {
         `activeAccount=${activeLabel || "none"}`,
         ...(d.latencyMs !== undefined ? [`lastLatencyMs=${d.latencyMs}`] : []),
         `toolSchemaWarnings=${d.toolSchemaWarnings || "none"}`,
+        ...(d.fetchTrace ? [`lastFetch=${d.fetchTrace}`] : []),
         `lastError=${d.error ? redactSecrets(d.error) : "none"}`,
         "transport=native-streamSimple",
         "runtimeCli=not-used",
-        "commands=/antigravity.usage /antigravity.models /antigravity.accounts /antigravity.refresh /antigravity.doctor /antigravity.image /antigravity.search",
+        "commands=/antigravity.usage /antigravity.models /antigravity.accounts /antigravity.refresh /antigravity.doctor /antigravity.image /antigravity.search /antigravity.fetch",
       ];
       emitCommandOutput(ctx, `Antigravity doctor\n${lines.join("\n")}`);
     },
@@ -396,6 +410,60 @@ export default function (pi: ExtensionAPI): void {
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         emitCommandOutput(ctx, `Antigravity search failed: ${redactSecrets(msg)}`, "warning");
+      }
+    },
+  });
+
+  pi.registerCommand("antigravity.fetch", {
+    description:
+      "Read a public web page via the Antigravity crawler (usage: /antigravity.fetch [--raw] <url>)",
+    handler: async (args, ctx) => {
+      const parsed = parseFetchCommandArgs(args || "");
+      if (!parsed.url) {
+        emitCommandOutput(ctx, "Usage: /antigravity.fetch [--raw] <url>", "warning");
+        return;
+      }
+      try {
+        const url = validateFetchTarget(parsed.url);
+        const apiKey = await resolveApiKeyFromContext(ctx);
+        if (!apiKey) {
+          emitCommandOutput(
+            ctx,
+            "No Antigravity credentials. Run /login antigravity first.",
+            "warning",
+          );
+          return;
+        }
+        if (ctx.hasUI) ctx.ui.notify("Reading page via Antigravity…", "info");
+        const result = await executeAntigravityWebFetch({
+          apiKey,
+          url,
+          raw: parsed.raw,
+        });
+        const whole = result.content;
+        let footer = "";
+        let saved: SavedPage | undefined;
+        if (formatWebFetchHeader(result).length + whole.length > (result.maxChars ?? 0)) {
+          // Raw output is the crawled source itself; converted output keeps its provenance.
+          saved = parsed.raw
+            ? await savePage(whole, looksLikeHtml(whole) ? "html" : "txt")
+            : await savePage(formatWebFetchHeader(result) + whole, "md");
+          footer = savedPageNote(saved, whole.length, "Open it to read the rest.");
+        }
+        try {
+          emitCommandOutput(ctx, formatWebFetchResult(result, footer));
+        } catch (error) {
+          if (saved) await discardSavedPage(saved);
+          throw error;
+        }
+      } catch (caught) {
+        const error = await withSavedCopy(caught);
+        const msg = error instanceof Error ? error.message : String(error);
+        const guidance = msg.replace(
+          "Do not retry this URL with read_url_content. If permitted, use an available download tool or terminal to download it directly, then read the local file with a PDF reader.",
+          "If you have permission, download the URL directly and open the local file with a PDF reader.",
+        );
+        emitCommandOutput(ctx, redactSecrets(guidance), "warning");
       }
     },
   });

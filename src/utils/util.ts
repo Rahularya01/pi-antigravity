@@ -6,11 +6,12 @@ export function antigravityEnv(name: string): string | undefined {
 }
 
 /**
- * Whether a model-facing extra tool (`google_search`, `generate_image`) is registered.
- * `ANTIGRAVITY_NO_EXTRA_TOOLS=1` disables both; `ANTIGRAVITY_NO_SEARCH_TOOL=1` and
- * `ANTIGRAVITY_NO_IMAGE_TOOL=1` disable one, e.g. to avoid clashing with another search provider.
+ * Whether a model-facing extra tool (`google_search`, `read_url_content`,
+ * `generate_image`) is registered. `ANTIGRAVITY_NO_EXTRA_TOOLS=1` disables all of them;
+ * `ANTIGRAVITY_NO_SEARCH_TOOL=1`, `ANTIGRAVITY_NO_FETCH_TOOL=1`, and
+ * `ANTIGRAVITY_NO_IMAGE_TOOL=1` disable one, e.g. to avoid clashing with another provider.
  */
-export function isExtraToolEnabled(tool: "SEARCH" | "IMAGE"): boolean {
+export function isExtraToolEnabled(tool: "SEARCH" | "IMAGE" | "FETCH"): boolean {
   return antigravityEnv("NO_EXTRA_TOOLS") !== "1" && antigravityEnv(`NO_${tool}_TOOL`) !== "1";
 }
 

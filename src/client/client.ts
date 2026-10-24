@@ -84,7 +84,7 @@ export function jsonOrTextError(text: string): string {
     const parsed = JSON.parse(text) as {
       error?: { message?: string; status?: string; code?: number };
     };
-    if (parsed.error?.message) return parsed.error.message;
+    if (typeof parsed.error?.message === "string") return parsed.error.message;
   } catch {
     // not JSON
   }
@@ -96,14 +96,19 @@ export function parseApiKey(apiKeyRaw: string | undefined): AntigravityApiKey {
     throw new Error("No Antigravity OAuth credentials. Run /login antigravity.");
   }
   try {
-    const parsed = JSON.parse(apiKeyRaw) as Partial<AntigravityApiKey>;
-    if (!parsed.token || !parsed.projectId) throw new Error("missing token or projectId");
+    const parsed: unknown = JSON.parse(apiKeyRaw);
+    if (
+      !isRecord(parsed) ||
+      typeof parsed.token !== "string" ||
+      !/^[\x21-\x7e]+$/.test(parsed.token) ||
+      typeof parsed.projectId !== "string" ||
+      !/^[\x21-\x7e]+$/.test(parsed.projectId)
+    )
+      throw new Error("missing token or projectId");
     return { token: parsed.token, projectId: parsed.projectId };
-  } catch (error) {
-    throw new Error(
-      `Invalid Antigravity credentials. Run /login antigravity. (${safeError(error)})`,
-      { cause: error },
-    );
+  } catch {
+    // JSON parser errors can quote the credential input. Do not retain that cause.
+    throw new Error("Invalid Antigravity credentials. Run /login antigravity.");
   }
 }
 
@@ -328,7 +333,7 @@ export async function fetchAvailableRuntimeModel(
   projectId: string,
   requestedRuntimeModel: string,
 ): Promise<DynamicModelInfo | undefined> {
-  const cacheKey = `${token}::${projectId}::${requestedRuntimeModel}`;
+  const cacheKey = JSON.stringify([tokenFingerprint(token), projectId, requestedRuntimeModel]);
   const cached = modelCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.result;
 
@@ -505,18 +510,23 @@ async function loadCodeAssistUncached(token: string): Promise<string | undefined
   return undefined;
 }
 
-/** Discover project id with a short in-memory LRU cache keyed by access token. */
+function tokenFingerprint(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+/** Discover project id with a short in-memory LRU cache keyed by a token digest. */
 export async function loadCodeAssist(token: string): Promise<string | undefined> {
-  const cached = projectCache.get(token);
+  const key = tokenFingerprint(token);
+  const cached = projectCache.get(key);
   if (cached && cached.expiresAt > Date.now()) {
     // Refresh LRU order: delete and re-insert so newest is at the end.
-    projectCache.delete(token);
-    projectCache.set(token, cached);
+    projectCache.delete(key);
+    projectCache.set(key, cached);
     return cached.projectId;
   }
 
   const projectId = await loadCodeAssistUncached(token);
-  projectCache.set(token, { projectId, expiresAt: Date.now() + PROJECT_CACHE_TTL_MS });
+  projectCache.set(key, { projectId, expiresAt: Date.now() + PROJECT_CACHE_TTL_MS });
 
   // Evict oldest entry when the cache exceeds 32 entries (O(1) — Map preserves insertion order).
   if (projectCache.size > 32) {

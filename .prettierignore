@@ -1,2 +1,5 @@
 node_modules
 scripts/**
+!scripts/test-web-fetch.ts
+!scripts/test-reader-foundations.ts
+!scripts/smoke-fetch-policy.ts
