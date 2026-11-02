@@ -4,6 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/pi-antigravity?logo=npm)](https://www.npmjs.com/package/pi-antigravity)
 [![license](https://img.shields.io/npm/l/pi-antigravity)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/Rahularya01)
+[![omp status](https://omppackages.com/badge/pi-antigravity.svg)](https://omppackages.com/packages/pi-antigravity)
 
 **pi-antigravity** is a [Pi Coding Agent](https://pi.dev) provider that lets Pi talk directly to Google Antigravity / Cloud Code Assist models — Gemini, plus the Claude and GPT-OSS models Antigravity also advertises. Sign in with Google, pick a model, and go. Under the hood it handles OAuth login, native streaming, model routing, and quota diagnostics itself, so it never shells out to an external Antigravity CLI.
 
