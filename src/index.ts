@@ -34,6 +34,7 @@ import {
 import { ANTIGRAVITY_API, streamAntigravity } from "./stream/index.js";
 import {
   fetchAccountUsage,
+  fetchRemainingCredits,
   formatModelsList,
   formatUsageSummary,
   resolveApiKeyFromContext,
@@ -251,7 +252,7 @@ export default function (pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("antigravity.credits", {
-    description: "Check or toggle AI credit overages (/antigravity.credits [on|off])",
+    description: "Check remaining AI credits or toggle overages (/antigravity.credits [on|off])",
     handler: async (args, ctx) => {
       const mode = args.trim().toLowerCase();
       try {
@@ -259,7 +260,7 @@ export default function (pi: ExtensionAPI): void {
           setCreditsEnabled(true);
           emitCommandOutput(
             ctx,
-            "Antigravity AI credit overages: ENABLED.\nRequests will supply enabledCreditTypes: ['GOOGLE_ONE_AI'] to use credit balance when quota is exhausted.",
+            "Antigravity AI credit overages: ENABLED.\nRequests will supply enabledCreditTypes: ['GOOGLE_ONE_AI'] to use credit balance when standard quota is exhausted.",
             "info",
           );
           return;
@@ -273,19 +274,46 @@ export default function (pi: ExtensionAPI): void {
           );
           return;
         }
-        const status = getCreditsStatus();
-        const lines = [
-          `Antigravity AI Credit Overages: ${status.enabled ? "ENABLED" : "DISABLED"}`,
-          `Config source: ${status.detail}`,
-          "",
-          "Usage:",
-          "  /antigravity.credits on   - Enable fallback to AI credits on quota exhaustion",
-          "  /antigravity.credits off  - Disable fallback to AI credits",
-        ];
+
+        const [apiKey, status] = await Promise.all([
+          resolveApiKeyFromContext(ctx),
+          getCreditsStatus(),
+        ]);
+
+        let creditsInfo: Awaited<ReturnType<typeof fetchRemainingCredits>> | undefined;
+        if (apiKey) {
+          try {
+            creditsInfo = await fetchRemainingCredits(apiKey);
+          } catch {
+            // best effort
+          }
+        }
+
+        const lines: string[] = [];
+        if (creditsInfo?.planLabel) {
+          lines.push(creditsInfo.planLabel);
+        }
+
+        if (creditsInfo?.availableCredits && creditsInfo.availableCredits.length > 0) {
+          for (const c of creditsInfo.availableCredits) {
+            const amt = c.creditAmount !== undefined ? c.creditAmount.toLocaleString() : "0";
+            const typ = c.creditType || "GOOGLE_ONE_AI";
+            lines.push(`Remaining AI Credits: ${amt} (${typ})`);
+          }
+        } else {
+          lines.push("Remaining AI Credits: 0 (or not reported by subscription)");
+        }
+
+        lines.push(`AI Credit Overages: ${status.enabled ? "ENABLED" : "DISABLED"}`);
+        lines.push("");
+        lines.push("Usage:");
+        lines.push("  /antigravity.credits on   - Enable AI credits overage on quota exhaustion");
+        lines.push("  /antigravity.credits off  - Disable AI credits overage");
+
         emitCommandOutput(ctx, lines.join("\n"), "info");
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        emitCommandOutput(ctx, `Failed to update credit settings: ${msg}`, "error");
+        emitCommandOutput(ctx, `Failed to query or update credit settings: ${msg}`, "error");
       }
     },
   });

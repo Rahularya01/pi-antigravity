@@ -22,6 +22,7 @@ import type {
   AccountUsage,
   ApiErrorBody,
   AvailableModelsRaw,
+  CreditBalanceInfo,
   LoadCodeAssistRaw,
   ModelQuotaRow,
   QuotaBucket,
@@ -188,14 +189,38 @@ function parseModels(data: unknown): {
   };
 }
 
+export function parseCredits(list: unknown): CreditBalanceInfo[] | undefined {
+  if (!Array.isArray(list)) return undefined;
+  const result: CreditBalanceInfo[] = [];
+  for (const item of list) {
+    if (!item || !isRecord(item)) continue;
+    const amt = item.creditAmount ?? item.credit_amount;
+    const min = item.minimumCreditAmountForUsage ?? item.minimum_credit_amount_for_usage;
+    const typ = item.creditType ?? item.credit_type;
+    const num =
+      typeof amt === "number" ? amt : typeof amt === "string" ? Number(amt) : undefined;
+    if (num !== undefined && Number.isFinite(num)) {
+      result.push({
+        creditType: typeof typ === "string" ? typ : "GOOGLE_ONE_AI",
+        creditAmount: num,
+        minimumCreditAmountForUsage:
+          typeof min === "number" ? min : typeof min === "string" ? Number(min) : undefined,
+      });
+    }
+  }
+  return result.length ? result : undefined;
+}
+
 function parseTier(value: unknown): TierInfo | undefined {
   if (!isRecord(value)) return undefined;
   const tier = value as TierRaw;
   if (!tier.id && !tier.name) return undefined;
+  const credits = parseCredits(tier.availableCredits ?? tier.available_credits);
   return {
     id: tier.id ? String(tier.id) : undefined,
     name: tier.name ? String(tier.name) : undefined,
     description: tier.description ? String(tier.description) : undefined,
+    availableCredits: credits,
   };
 }
 
@@ -270,6 +295,10 @@ export async function fetchAccountUsage(apiKeyRaw?: string): Promise<AccountUsag
   const assistData = (isRecord(assistResult?.data) ? assistResult.data : {}) as LoadCodeAssistRaw;
   const productTier = parseTier(assistData.currentTier);
   const paidTier = parseTier(assistData.paidTier);
+  const availableCredits =
+    paidTier?.availableCredits ??
+    productTier?.availableCredits ??
+    parseCredits(assistData.availableCredits ?? assistData.available_credits);
 
   // Google returns currentTier=free-tier even for Google AI Pro accounts.
   // The real subscription lives in paidTier (e.g. g1-pro-tier / Google AI Pro).
@@ -285,6 +314,7 @@ export async function fetchAccountUsage(apiKeyRaw?: string): Promise<AccountUsag
     productTier,
     paidTier,
     planLabel,
+    availableCredits,
     groups,
     groupDescription: description,
     quotaSummaryError,
@@ -327,13 +357,35 @@ export function formatUsageSummary(usage: AccountUsage): string {
     }
   }
 
-  const credits = getCreditsStatus();
-  lines.push("");
-  lines.push(
-    `AI Credit Overages: ${credits.enabled ? "ENABLED (fallback: GOOGLE_ONE_AI)" : "DISABLED (run /antigravity.credits on)"}`,
-  );
-
   return lines.join("\n").trimEnd();
+}
+
+export async function fetchRemainingCredits(apiKeyRaw?: string): Promise<{
+  availableCredits?: CreditBalanceInfo[];
+  overagesEnabled: boolean;
+  planLabel?: string;
+}> {
+  const creds = parseApiKey(apiKeyRaw);
+  const assistResult = await loadCodeAssistSafe(creds.token);
+  const assistData = (isRecord(assistResult?.data) ? assistResult.data : {}) as LoadCodeAssistRaw;
+  const productTier = parseTier(assistData.currentTier);
+  const paidTier = parseTier(assistData.paidTier);
+  const availableCredits =
+    paidTier?.availableCredits ??
+    productTier?.availableCredits ??
+    parseCredits(assistData.availableCredits ?? assistData.available_credits);
+  const status = getCreditsStatus();
+  const planLabel = paidTier?.name
+    ? `${paidTier.name}${paidTier.id ? ` (${paidTier.id})` : ""}`
+    : productTier?.name
+      ? `${productTier.name}${productTier.id ? ` (${productTier.id})` : ""}`
+      : undefined;
+
+  return {
+    availableCredits,
+    overagesEnabled: status.enabled,
+    planLabel,
+  };
 }
 
 export function formatModelsList(usage: AccountUsage, opts?: { all?: boolean }): string {
