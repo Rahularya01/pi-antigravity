@@ -126,6 +126,7 @@ export type AntigravityGenerateRequest = {
   requestType: "agent";
   userAgent: "antigravity";
   requestId: string;
+  enabledCreditTypes?: string[];
 };
 
 export type StreamPart = {
@@ -160,6 +161,8 @@ export type StreamResponseData = {
 export type StreamChunk = StreamResponseData & {
   error?: { message?: string; code?: number };
   response?: StreamResponseData;
+  consumedCredits?: unknown;
+  remainingCredits?: unknown;
 };
 
 export type LooseImageBlock = {

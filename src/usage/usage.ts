@@ -14,6 +14,7 @@ import {
   setLastStatus,
 } from "../diagnostics/diagnostics.js";
 import { isRecord } from "../utils/util.js";
+import { getCreditsStatus } from "../utils/credits.js";
 import { safeError } from "../utils/security.js";
 import { antigravityFetch } from "../utils/http.js";
 import { extractRecommendedModelIds } from "../models/grouping.js";
@@ -325,6 +326,12 @@ export function formatUsageSummary(usage: AccountUsage): string {
       );
     }
   }
+
+  const credits = getCreditsStatus();
+  lines.push("");
+  lines.push(
+    `AI Credit Overages: ${credits.enabled ? "ENABLED (fallback: GOOGLE_ONE_AI)" : "DISABLED (run /antigravity.credits on)"}`,
+  );
 
   return lines.join("\n").trimEnd();
 }

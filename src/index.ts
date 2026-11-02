@@ -38,7 +38,13 @@ import {
   formatUsageSummary,
   resolveApiKeyFromContext,
 } from "./usage/index.js";
-import { redactSecrets, maskEmail } from "./utils/index.js";
+import {
+  getCreditsStatus,
+  isCreditsEnabled,
+  setCreditsEnabled,
+  redactSecrets,
+  maskEmail,
+} from "./utils/index.js";
 
 /**
  * Pi's interactive `notify` writes into the chat transcript. `console.log` in that
@@ -244,6 +250,46 @@ export default function (pi: ExtensionAPI): void {
     },
   });
 
+  pi.registerCommand("antigravity.credits", {
+    description: "Check or toggle AI credit overages (/antigravity.credits [on|off])",
+    handler: async (args, ctx) => {
+      const mode = args.trim().toLowerCase();
+      try {
+        if (mode === "on" || mode === "enable" || mode === "true" || mode === "1") {
+          setCreditsEnabled(true);
+          emitCommandOutput(
+            ctx,
+            "Antigravity AI credit overages: ENABLED.\nRequests will supply enabledCreditTypes: ['GOOGLE_ONE_AI'] to use credit balance when quota is exhausted.",
+            "info",
+          );
+          return;
+        }
+        if (mode === "off" || mode === "disable" || mode === "false" || mode === "0") {
+          setCreditsEnabled(false);
+          emitCommandOutput(
+            ctx,
+            "Antigravity AI credit overages: DISABLED.\nRequests will not tap into AI credits.",
+            "info",
+          );
+          return;
+        }
+        const status = getCreditsStatus();
+        const lines = [
+          `Antigravity AI Credit Overages: ${status.enabled ? "ENABLED" : "DISABLED"}`,
+          `Config source: ${status.detail}`,
+          "",
+          "Usage:",
+          "  /antigravity.credits on   - Enable fallback to AI credits on quota exhaustion",
+          "  /antigravity.credits off  - Disable fallback to AI credits",
+        ];
+        emitCommandOutput(ctx, lines.join("\n"), "info");
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        emitCommandOutput(ctx, `Failed to update credit settings: ${msg}`, "error");
+      }
+    },
+  });
+
   pi.registerCommand("antigravity.refresh", {
     description: "Force refresh Antigravity dynamic model catalog",
     handler: async (_args, ctx) => {
@@ -311,12 +357,13 @@ export default function (pi: ExtensionAPI): void {
         `lastProjectId=${d.projectId || "none"}`,
         `linkedAccounts=${accounts.length || "none"}`,
         `activeAccount=${activeLabel || "none"}`,
+        `aiCreditOverages=${isCreditsEnabled() ? "enabled" : "disabled"}`,
         ...(d.latencyMs !== undefined ? [`lastLatencyMs=${d.latencyMs}`] : []),
         `toolSchemaWarnings=${d.toolSchemaWarnings || "none"}`,
         `lastError=${d.error ? redactSecrets(d.error) : "none"}`,
         "transport=native-streamSimple",
         "runtimeCli=not-used",
-        "commands=/antigravity.usage /antigravity.models /antigravity.accounts /antigravity.refresh /antigravity.doctor /antigravity.image /antigravity.search",
+        "commands=/antigravity.usage /antigravity.models /antigravity.accounts /antigravity.credits /antigravity.refresh /antigravity.doctor /antigravity.image /antigravity.search",
       ];
       emitCommandOutput(ctx, `Antigravity doctor\n${lines.join("\n")}`);
     },

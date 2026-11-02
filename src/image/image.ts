@@ -8,6 +8,7 @@ import {
   parseApiKey,
 } from "../client/client.js";
 import { AntigravityRequestType, AntigravityUserAgent, GeminiRole } from "../types/enums.js";
+import { isCreditsEnabled } from "../utils/credits.js";
 import { antigravityFetch } from "../utils/http.js";
 import { safeError } from "../utils/security.js";
 import { sanitizeText } from "../utils/util.js";
@@ -50,6 +51,7 @@ export type ImageGenerateRequest = {
   requestType: "image_gen";
   userAgent: "antigravity";
   requestId: string;
+  enabledCreditTypes?: string[];
 };
 
 export type ImageCommandArgs = {
@@ -177,7 +179,7 @@ export function buildImageGenerateRequest(
   aspectRatio: string,
   inputImages: GeneratedImage[] = [],
 ): ImageGenerateRequest {
-  return {
+  const req: ImageGenerateRequest = {
     project: projectId,
     model,
     request: {
@@ -199,6 +201,10 @@ export function buildImageGenerateRequest(
     userAgent: AntigravityUserAgent.Antigravity,
     requestId: `image_gen/${Date.now()}/${randomUUID()}/1`,
   };
+  if (isCreditsEnabled()) {
+    req.enabledCreditTypes = ["GOOGLE_ONE_AI"];
+  }
+  return req;
 }
 
 function collectImagesFromParts(
