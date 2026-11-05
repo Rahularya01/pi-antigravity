@@ -1176,7 +1176,9 @@ export function streamStallTimeoutMs(): number {
 }
 
 function stallError(stallMs: number): Error {
-  return new Error(`stream stalled: no data for ${stallMs}ms`);
+  // "timed out" is deliberate: pi's retryable provider-error pattern matches
+  // it, so a mid-body stall auto-retries instead of dying as a terminal error.
+  return new Error(`stream stalled: no data for ${stallMs}ms (timed out)`);
 }
 
 /**
