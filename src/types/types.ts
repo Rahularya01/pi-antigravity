@@ -155,6 +155,8 @@ export type StreamCandidate = {
 export type StreamResponseData = {
   candidates?: StreamCandidate[];
   usageMetadata?: StreamUsageMetadata;
+  modelVersion?: string;
+  responseId?: string;
 };
 
 export type StreamChunk = StreamResponseData & {

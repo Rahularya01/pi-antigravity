@@ -144,7 +144,9 @@ export default function (pi: ExtensionAPI): void {
     if (process.env.PI_OFFLINE !== undefined) return;
     if (typeof ctx.modelRegistry?.refresh !== "function") return;
     try {
-      await ctx.modelRegistry.refresh({ providers: [PROVIDER_ID] });
+      const refresh = ctx.modelRegistry.refresh({ providers: [PROVIDER_ID] });
+      if (ctx.hasUI) void refresh.catch(() => {});
+      else await refresh;
     } catch {
       // Last-known-good catalog stays in place. Forced refreshes still report via the command.
     }

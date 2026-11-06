@@ -33,6 +33,8 @@ const BODY =
         thoughtsTokenCount: 3,
         totalTokenCount: 110,
       },
+      modelVersion: "gemini-3.7-flash-n",
+      responseId: "resp-123",
     },
   }) +
   "data: [DONE]\n";
@@ -126,6 +128,11 @@ async function main() {
     assert(output.usage.output === 10, `chunk size ${size}: output ${output.usage.output}`);
     assert(output.usage.reasoning === 3, `chunk size ${size}: reasoning ${output.usage.reasoning}`);
     assert(output.usage.totalTokens === 110, `chunk size ${size}: totalTokens`);
+    assert(
+      output.responseModel === "gemini-3.7-flash-n",
+      `chunk size ${size}: responseModel ${output.responseModel}`,
+    );
+    assert(output.responseId === "resp-123", `chunk size ${size}: responseId ${output.responseId}`);
 
     // Chunk boundaries must not change the emitted event sequence.
     const signature = events.join(",");
