@@ -53,3 +53,9 @@ Live authenticated generation and enterprise regional behavior require account a
 - Secret-pattern scan: zero matching tracked files and zero matching history commits for the tested patterns.
 - `npm pack --dry-run`: inspected allowlisted contents. Node native stripping under node_modules failed as documented above; extracted artifact tests subsequently passed.
 - Offline actual Pi invocation with all three installed extension resources exited successfully with no extension-load error; no models are listed without credentials. Live generation remains untested.
+
+## CodeQL follow-up
+
+Existing high-labelled alerts were triaged before release. Search title enrichment now compares parsed URL hostnames instead of substrings, and Markdown link labels escape backslashes as well as brackets; a regression covers the backslash/bracket combination. Alerts #3 and #4 were dismissed as false positives with explanations: SHA-1 generates stable UUID-style project/session identities and does not authenticate or protect integrity. Alert #6 was dismissed as a false positive: SHA-256 fingerprints a high-entropy OAuth credential for cache invalidation, not password storage. No query, test, or severity threshold was disabled.
+
+The remaining moderate development advisories are explicitly accepted for this release; migrating the host test dependency is tracked by #100. Fresh consumer npm audit after adding TypeBox reports zero vulnerabilities.

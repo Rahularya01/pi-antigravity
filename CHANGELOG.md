@@ -9,6 +9,7 @@ All notable changes to this project are documented in this file.
 ### Security
 
 - Require Undici 8.12.3 and pin the development dependency tree to the patched version.
+- Compare parsed hosts in search title enrichment and escape Markdown link-label backslashes.
 - Reject image output paths through symlinks and open output files without following symlinks.
 - Raise the minimum Node.js version to 22.19.0 to match Undici's supported runtime.
 
