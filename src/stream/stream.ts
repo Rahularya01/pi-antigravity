@@ -1279,7 +1279,11 @@ export async function fetchWithHeaderDeadline(
   const timer =
     timeoutMs > 0
       ? setTimeout(
-          () => controller.abort(new Error(`no response headers within ${timeoutMs}ms`)),
+          () =>
+            controller.abort(
+              // "timed out" keeps the message on pi's retryable-error list (see stallError).
+              new Error(`no response headers within ${timeoutMs}ms (timed out)`),
+            ),
           timeoutMs,
         )
       : undefined;
@@ -1513,6 +1517,34 @@ export async function streamResponse(
   return hasContent;
 }
 
+/**
+ * Per-turn POST counter keyed on (pi session, requestIndex): nonce 0 is the
+ * first-ever request for that turn, anything above is a retry — pi's
+ * auto-retry, a manual /retry, or our own empty-response loop.
+ */
+const turnRequestNonces = new Map<string, number>();
+
+function nextRequestNonce(turnKey: string): number {
+  const nonce = turnRequestNonces.get(turnKey) ?? 0;
+  turnRequestNonces.set(turnKey, nonce + 1);
+  if (turnRequestNonces.size > 64) {
+    const oldest = turnRequestNonces.keys().next().value;
+    if (oldest !== undefined) turnRequestNonces.delete(oldest);
+  }
+  return nonce;
+}
+
+/**
+ * Upstream identity for a retry POST. The backend keys its per-session state on
+ * this int64, and a crashed stream can keep generating server-side while the
+ * backend serializes later same-session requests behind it — the literal retry
+ * then hangs almost deterministically even though a fresh request succeeds.
+ * Every POST after the first for a turn therefore mints a fresh identity.
+ */
+function retrySessionSeed(sessionId: string | undefined, nonce: number): string {
+  return sessionId?.trim() ? `${sessionId}:r${nonce}` : `retry:${crypto.randomUUID()}`;
+}
+
 export function streamAntigravity(
   model: Model<Api>,
   context: Context,
@@ -1561,6 +1593,15 @@ export function streamAntigravity(
 
       let requestHeaders = antigravityHeaders(creds.token);
 
+      // Turn identity mirrors buildRequest's requestIndex (count of successful
+      // assistant messages): it stays constant across retries of one turn and
+      // changes the moment any turn succeeds.
+      const turnKey = `${opts.sessionId ?? "anonymous"}:${
+        context.messages?.filter(
+          (m) => m.role === "assistant" && m.stopReason !== "error" && m.stopReason !== "aborted",
+        ).length ?? 0
+      }`;
+
       let response: Response | undefined;
       let lastText = "";
       let received = false;
@@ -1577,21 +1618,44 @@ export function streamAntigravity(
           runtimeModel = runtimeCandidates[candIdx]!;
           setLastResolvedRuntimeModel(runtimeModel);
           recordStaticRouteDiagnostics(runtimeModel);
-          const body = JSON.stringify(buildRequest(model, context, projectId, opts, runtimeModel));
-
+          response = undefined;
+          let lastEndpointError: Error | undefined;
           for (const endpoint of endpointCandidates()) {
             setLastEndpoint(endpoint);
-            response = await fetchWithHeaderDeadline(
-              `${endpoint}/v1internal:streamGenerateContent?alt=sse`,
-              {
-                method: "POST",
-                headers: requestHeaders,
-                body,
-              },
-              opts.signal,
-              streamHeaderTimeoutMs(),
-              streamStallTimeoutMs(),
+            // Every POST after the first for this turn replays under a fresh
+            // upstream session/trajectory so it cannot queue behind the crashed
+            // attempt's server-side generation (see retrySessionSeed).
+            const nonce = nextRequestNonce(turnKey);
+            const body = JSON.stringify(
+              buildRequest(
+                model,
+                context,
+                projectId,
+                nonce === 0 ? opts : { ...opts, sessionId: retrySessionSeed(opts.sessionId, nonce) },
+                runtimeModel,
+              ),
             );
+            try {
+              response = await fetchWithHeaderDeadline(
+                `${endpoint}/v1internal:streamGenerateContent?alt=sse`,
+                {
+                  method: "POST",
+                  headers: requestHeaders,
+                  body,
+                },
+                opts.signal,
+                streamHeaderTimeoutMs(),
+                streamStallTimeoutMs(),
+              );
+            } catch (error) {
+              // Caller cancellation is not an endpoint failure — propagate it. A
+              // transport failure or our own header deadline abort means this
+              // endpoint may be wedged; ENDPOINT_FALLBACKS exist for that, so
+              // fall through instead of dying without trying them.
+              if (opts.signal?.aborted) throw error;
+              lastEndpointError = error instanceof Error ? error : new Error(String(error));
+              continue;
+            }
             setLastStatus(response.status);
             if (response.ok) break;
             lastText = await response.text();
@@ -1600,6 +1664,11 @@ export function streamAntigravity(
             if (response.status === 429 && !isRetryableRateLimit(lastText)) break;
             if (![403, 404, 429, 500, 502, 503, 504].includes(response.status)) break;
           }
+
+          // Every endpoint threw before sending headers: rethrow the original
+          // transport error so its message (which pi classifies for auto-retry)
+          // survives instead of being masked by the generic failure path below.
+          if (!response && lastEndpointError !== undefined) throw lastEndpointError;
 
           if (response?.ok) break;
           if (response?.status === 404) {
