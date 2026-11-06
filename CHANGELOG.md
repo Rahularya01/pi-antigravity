@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Declare `typebox` as a `"*"` peer dependency instead of a runtime dependency so Pi no longer warns about duplicate host-provided modules (#116).
+
 ## [0.12.0] - 2026-11-06
 
 ### Security
