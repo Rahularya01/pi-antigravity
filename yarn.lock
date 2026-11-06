@@ -2049,6 +2049,7 @@ __metadata:
     eslint-config-prettier: "npm:^10.1.8"
     globals: "npm:^17.7.0"
     prettier: "npm:^3.9.8"
+    typebox: "npm:^1.3.27"
     typescript: "npm:^6.0.3"
     typescript-eslint: "npm:^8.64.0"
     undici: "npm:^8.12.3"
@@ -2248,6 +2249,13 @@ __metadata:
   version: 1.3.27
   resolution: "typebox@npm:1.3.27"
   checksum: 10c0/dc4d47e964ca87b243454156a48a7a12a89836c4ab93c8ae9f72220a0d9dd9634952a9f9c7f669d198e160760668c62bbcf6ef5d16a9ec4135daaee64e101cc1
+  languageName: node
+  linkType: hard
+
+"typebox@npm:^1.3.27":
+  version: 1.4.3
+  resolution: "typebox@npm:1.4.3"
+  checksum: 10c0/3a2df4fd2d74221266cdc458545c1bad26a4d579906b61e97041a6b03d938e2bb2da9b25db053eea768b5fecfbe7c94e094cfcdc7a11fd3ce696048d55c89e44
   languageName: node
   linkType: hard
 

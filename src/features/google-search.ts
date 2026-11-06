@@ -4,7 +4,7 @@
  * and `/antigravity.search` without registering `google_search`.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { executeAntigravitySearch } from "../search/index.js";
 import { extraToolExposure, isExtraToolEnabled, redactSecrets } from "../utils/index.js";
 
