@@ -4,6 +4,33 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-06
+
+### Security
+
+- Require Undici 8.12.3 and pin the development dependency tree to the patched version.
+- Compare parsed hosts in search title enrichment and escape Markdown link-label backslashes.
+- Reject image output paths through symlinks and open output files without following symlinks.
+- Raise the minimum Node.js version to 22.19.0 to match Undici's supported runtime.
+
+### Fixed
+
+- Import schemas from a direct TypeBox dependency so both older supported Pi and current Pi releases load the tools.
+- Respect the refreshed catalog for stale selections and compatibility fallbacks (#101).
+- Refresh models in the background for interactive startup; preserve awaited headless refresh (#107).
+- Mark header and stream-stall timeouts retryable, try alternate endpoints after transport errors, and use fresh upstream identities on retries (#114, #113).
+- Increase the default stream silence timeout to five minutes and document both timeout controls (#98).
+
+### Added
+
+- Optional deferred tool exposure on compatible Pi versions (#105).
+- Oh My Pi community compatibility badge (#111).
+- CI coverage for Node 22.19.0, 24, and 26; updated pinned setup-node action (#99).
+
+### Added
+
+- **Served model tracking:** Assistant messages record the backend `modelVersion` as `responseModel` and the backend `responseId`, so session files show which model actually served a request when it differs from the requested runtime model.
+
 ## [0.11.0] - 2026-10-16
 
 ### Added

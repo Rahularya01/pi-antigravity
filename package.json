@@ -1,6 +1,6 @@
 {
   "name": "pi-antigravity",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Personal Antigravity / Cloud Code Assist provider for Pi Coding Agent",
   "author": "Rahul Arya",
   "license": "MIT",
@@ -30,7 +30,7 @@
   ],
   "packageManager": "yarn@4.18.0+sha512.fcb8716fe7cd0eece141ffc18b92193a9df9204c1ba83189c288835223fc0bbe64af473bab0d5e9927a7daeb5caf2bb07eb2787cc9338ca040ea125f2a1f2f7e",
   "engines": {
-    "node": ">=22.15.0"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -39,7 +39,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "security-check": "node scripts/run-ts.mjs scripts/security-check.ts",
-    "test": "node scripts/run-ts.mjs scripts/test-sanitize-text.ts && node scripts/run-ts.mjs scripts/test-model-routing.ts && node scripts/run-ts.mjs scripts/test-model-discovery.ts && node scripts/run-ts.mjs scripts/test-usage-formatter.ts && node scripts/run-ts.mjs scripts/test-stream-sse.ts && node scripts/run-ts.mjs scripts/test-stream-header-deadline.ts && node scripts/run-ts.mjs scripts/test-http-proxy.ts && node scripts/run-ts.mjs scripts/test-oauth-fetch.ts && node scripts/run-ts.mjs scripts/test-image-gen.ts && node scripts/run-ts.mjs scripts/test-native-images.ts && node scripts/run-ts.mjs scripts/test-transcript-context.ts && node scripts/run-ts.mjs scripts/test-accounts.ts && node scripts/run-ts.mjs scripts/test-search.ts && node scripts/run-ts.mjs scripts/test-search-citations.ts && node scripts/run-ts.mjs scripts/test-extra-tools-toggle.ts && node scripts/run-ts.mjs scripts/test-provider-registration.ts",
+    "test": "node scripts/run-ts.mjs scripts/test-sanitize-text.ts && node scripts/run-ts.mjs scripts/test-model-routing.ts && node scripts/run-ts.mjs scripts/test-model-discovery.ts && node scripts/run-ts.mjs scripts/test-usage-formatter.ts && node scripts/run-ts.mjs scripts/test-stream-sse.ts && node scripts/run-ts.mjs scripts/test-stream-header-deadline.ts && node scripts/run-ts.mjs scripts/test-http-proxy.ts && node scripts/run-ts.mjs scripts/test-oauth-fetch.ts && node scripts/run-ts.mjs scripts/test-image-gen.ts && node scripts/run-ts.mjs scripts/test-native-images.ts && node scripts/run-ts.mjs scripts/test-transcript-context.ts && node scripts/run-ts.mjs scripts/test-accounts.ts && node scripts/run-ts.mjs scripts/test-search.ts && node scripts/run-ts.mjs scripts/test-search-citations.ts && node scripts/run-ts.mjs scripts/test-extra-tools-toggle.ts && node scripts/run-ts.mjs scripts/test-provider-registration.ts && node scripts/run-ts.mjs scripts/test-stream-recovery.ts",
     "smoke:tools": "node scripts/run-ts.mjs scripts/smoke-tool-schema.ts",
     "smoke:models": "node scripts/run-ts.mjs scripts/smoke-all-models.mjs",
     "audit": "yarn npm audit --environment production --recursive && yarn npm audit --severity high --all --recursive",
@@ -69,6 +69,10 @@
     "typescript-eslint": "^8.64.0"
   },
   "dependencies": {
-    "undici": "^8.11.2"
+    "typebox": "^1.3.27",
+    "undici": "^8.12.3"
+  },
+  "resolutions": {
+    "undici": "8.12.3"
   }
 }
