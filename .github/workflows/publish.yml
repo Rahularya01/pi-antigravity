@@ -42,6 +42,11 @@ jobs:
       - name: Run checks
         run: yarn check
 
+      - name: Verify release tag and package contents
+        run: |
+          test "$GITHUB_REF_NAME" = "v$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')"
+          npm pack --dry-run
+
       - name: Publish to npm
         run: npm publish --access public --provenance
         env:

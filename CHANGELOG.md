@@ -14,6 +14,7 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- Import schemas from a direct TypeBox dependency so both older supported Pi and current Pi releases load the tools.
 - Respect the refreshed catalog for stale selections and compatibility fallbacks (#101).
 - Refresh models in the background for interactive startup; preserve awaited headless refresh (#107).
 - Mark header and stream-stall timeouts retryable, try alternate endpoints after transport errors, and use fresh upstream identities on retries (#114, #113).

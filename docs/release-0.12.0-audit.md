@@ -42,3 +42,14 @@ Run yarn check for typechecking, lint, formatting, security assertions, all regr
 Inspect npm pack --dry-run and test the extracted tarball with the repository test harness. The tarball allowlist contains package.json, LICENSE, README.md, tsconfig.json, and src only; scripts, fixtures, workflow files, credentials, and local configuration are excluded. Running the native Node type-strip harness directly under node_modules fails because Node prohibits stripping dependency TypeScript; test the extracted artifact outside node_modules and separately verify Pi's actual extension loader.
 
 Live authenticated generation and enterprise regional behavior require account access and are not covered by mocked tests. No claim of live backend performance testing is made.
+
+## Executed validation results
+
+- `yarn check`: passed after integration (typecheck, lint, formatting, security assertions, all 17 test scripts, both audit gates).
+- Node 22.19.0: routing, startup, and recovery tests passed. Node 24: recovery test passed. CI runs the full suite on all three supported release lines.
+- Extracted 0.12.0 tarball: all 17 test scripts passed against freshly installed current peer dependencies (Pi 1.5.0). This exposed and fixed removal of Pi's TypeBox re-exports; TypeBox is now a direct runtime dependency.
+- Fresh consumer `npm audit --omit=dev`: zero vulnerabilities reported before the TypeBox addition; repeat as part of final verification.
+- CodeRabbit initial integration review: completed with zero findings. Later symlink hardening and compatibility edits were manually reviewed and regression tested.
+- Secret-pattern scan: zero matching tracked files and zero matching history commits for the tested patterns.
+- `npm pack --dry-run`: inspected allowlisted contents. Node native stripping under node_modules failed as documented above; extracted artifact tests subsequently passed.
+- Offline actual Pi invocation with all three installed extension resources exited successfully with no extension-load error; no models are listed without credentials. Live generation remains untested.
