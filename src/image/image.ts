@@ -312,6 +312,12 @@ export async function writeImage(
       throw new Error("Image path must not traverse symlinks");
   }
   const target = join(root, rel);
+  try {
+    if ((await lstat(target)).isSymbolicLink())
+      throw new Error("Image path must not follow symlinks");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
   const handle = await open(
     target,
     constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
