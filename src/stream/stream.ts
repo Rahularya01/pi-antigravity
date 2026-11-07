@@ -88,7 +88,7 @@ const ANTIGRAVITY_SYSTEM_INSTRUCTION =
   "You are pair programming with a user to solve coding tasks. Be concise, practical, and tool-aware.";
 
 const ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION =
-  'CRITICAL: NEVER output rule checks, formatting guidelines, constraint checklists (e.g. "No emdashes"), or your thinking/personality preambles in the final response. Output only the final response.';
+  'CRITICAL: NEVER output rule checks, formatting guidelines, constraint checklists (e.g. "No emdashes"), internal thinking/reasoning preambles, or fake "[Observation from ...]" tool logs in the final response. When calling a tool, emit a real functionCall; never simulate tool calls or tool observations in plain text. Output only the final response.';
 
 const CONTINUATION_TEXT = "Continue the active task using the available instructions and context.";
 let toolCallCounter = 0;
@@ -347,6 +347,9 @@ export function convertMessages(
           });
         } else if (block.type === "thinking" && String(block.thinking || "").trim()) {
           if (!isSameModel) continue;
+          if (requiresSig && !isValidThoughtSignature(block.thinkingSignature) && !groupIsSigned) {
+            continue;
+          }
           parts.push({
             thought: true,
             text: sanitizeText(block.thinking),
@@ -899,6 +902,14 @@ export function buildRequest(
   systemParts.push(...injectedSkills.map((skill) => ({ text: sanitizeText(skill) })));
 
   const contents = convertMessages(model, context, runtimeModel);
+  const hasDegradedToolObservations = contents.some(
+    (turn) =>
+      turn.role === GeminiRole.User &&
+      turn.parts.some((part) => "text" in part && part.text.includes("[Observation from ")),
+  );
+  if (systemPromptText && hasDegradedToolObservations) {
+    systemParts.push({ text: ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION });
+  }
   const hasUserText = contents.some(
     (turn) =>
       turn.role === GeminiRole.User &&
