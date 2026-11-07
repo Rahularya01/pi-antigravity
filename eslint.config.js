@@ -5,7 +5,15 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["node_modules/**", "scripts/**", "dist/**", "eslint.config.js"],
+    ignores: [
+      "node_modules/**",
+      "scripts/**/*",
+      "!scripts/test-web-fetch.ts",
+      "!scripts/test-reader-foundations.ts",
+      "!scripts/smoke-fetch-policy.ts",
+      "dist/**",
+      "eslint.config.js",
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
