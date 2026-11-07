@@ -15,7 +15,6 @@ import {
 } from "../diagnostics/diagnostics.js";
 import { isRecord } from "../utils/util.js";
 import { safeError } from "../utils/security.js";
-import { cleanText } from "../utils/text.js";
 import { antigravityFetch } from "../utils/http.js";
 import { extractRecommendedModelIds } from "../models/grouping.js";
 import type {
@@ -305,7 +304,7 @@ function quotaErrorNote(msg: string): string {
 export function formatUsageSummary(usage: AccountUsage): string {
   const lines: string[] = [];
 
-  if (usage.planLabel) lines.push(cleanText(usage.planLabel, 200)!);
+  if (usage.planLabel) lines.push(usage.planLabel);
 
   if (!usage.groups.length) {
     if (usage.quotaSummaryError) {
@@ -318,11 +317,11 @@ export function formatUsageSummary(usage: AccountUsage): string {
 
   for (const group of usage.groups) {
     if (lines.length) lines.push("");
-    lines.push(cleanText(group.displayName, 200) ?? "Quota group");
+    lines.push(group.displayName);
     for (const bucket of group.buckets) {
       const rem = remainingPercent(bucket.remainingFraction);
       lines.push(
-        `  ${progressBar(bucket.remainingFraction)} ${cleanText(bucket.displayName, 200) ?? "Limit"}: ${rem ?? "?"}% left · resets ${formatReset(bucket.resetTime)}`,
+        `  ${progressBar(bucket.remainingFraction)} ${bucket.displayName}: ${rem ?? "?"}% left · resets ${formatReset(bucket.resetTime)}`,
       );
     }
   }
@@ -333,9 +332,8 @@ export function formatUsageSummary(usage: AccountUsage): string {
 export function formatModelsList(usage: AccountUsage, opts?: { all?: boolean }): string {
   const lines: string[] = [];
   lines.push("Antigravity available models");
-  lines.push(`project=${cleanText(usage.projectId, 200) ?? ""}`);
-  if (usage.defaultAgentModelId)
-    lines.push(`defaultAgentModel=${cleanText(usage.defaultAgentModelId, 200)!}`);
+  lines.push(`project=${usage.projectId}`);
+  if (usage.defaultAgentModelId) lines.push(`defaultAgentModel=${usage.defaultAgentModelId}`);
   lines.push("");
 
   const recommendedIds = extractRecommendedModelIds(usage.agentModelSorts);
@@ -350,7 +348,7 @@ export function formatModelsList(usage: AccountUsage, opts?: { all?: boolean }):
     return lines.join("\n");
   }
 
-  const maxId = Math.max(...rows.map((m) => cleanText(m.modelId, 200)?.length ?? 0), 8);
+  const maxId = Math.max(...rows.map((m) => m.modelId.length), 8);
   for (const m of rows) {
     const rem = remainingPercent(m.remainingFraction);
     const flags = [
@@ -360,12 +358,9 @@ export function formatModelsList(usage: AccountUsage, opts?: { all?: boolean }):
     ]
       .filter(Boolean)
       .join(",");
-    const name =
-      m.displayName && m.displayName !== m.modelId
-        ? `  ${cleanText(m.displayName, 200) ?? ""}`
-        : "";
+    const name = m.displayName && m.displayName !== m.modelId ? `  ${m.displayName}` : "";
     lines.push(
-      `${(cleanText(m.modelId, 200) ?? "").padEnd(maxId)}  rem ${rem === undefined ? "  ?" : String(rem).padStart(5)}%  reset ${formatReset(m.resetTime).padEnd(8)}${flags ? `  [${flags}]` : ""}${name}`,
+      `${m.modelId.padEnd(maxId)}  rem ${rem === undefined ? "  ?" : String(rem).padStart(5)}%  reset ${formatReset(m.resetTime).padEnd(8)}${flags ? `  [${flags}]` : ""}${name}`,
     );
   }
   lines.push("");

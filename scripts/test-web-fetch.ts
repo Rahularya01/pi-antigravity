@@ -11,7 +11,7 @@
 import strictAssert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import registerFetch from "../src/features/read-url-content.js";
-import { isPrivateAddress } from "../src/search/index.js";
+import { isPrivateAddress } from "../src/utils/address.js";
 import { isRecord } from "../src/utils/util.js";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";

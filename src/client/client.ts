@@ -333,7 +333,7 @@ export async function fetchAvailableRuntimeModel(
   projectId: string,
   requestedRuntimeModel: string,
 ): Promise<DynamicModelInfo | undefined> {
-  const cacheKey = JSON.stringify([tokenFingerprint(token), projectId, requestedRuntimeModel]);
+  const cacheKey = `${token}::${projectId}::${requestedRuntimeModel}`;
   const cached = modelCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.result;
 
@@ -510,23 +510,18 @@ async function loadCodeAssistUncached(token: string): Promise<string | undefined
   return undefined;
 }
 
-function tokenFingerprint(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
-
-/** Discover project id with a short in-memory LRU cache keyed by a token digest. */
+/** Discover project id with a short in-memory LRU cache keyed by access token. */
 export async function loadCodeAssist(token: string): Promise<string | undefined> {
-  const key = tokenFingerprint(token);
-  const cached = projectCache.get(key);
+  const cached = projectCache.get(token);
   if (cached && cached.expiresAt > Date.now()) {
     // Refresh LRU order: delete and re-insert so newest is at the end.
-    projectCache.delete(key);
-    projectCache.set(key, cached);
+    projectCache.delete(token);
+    projectCache.set(token, cached);
     return cached.projectId;
   }
 
   const projectId = await loadCodeAssistUncached(token);
-  projectCache.set(key, { projectId, expiresAt: Date.now() + PROJECT_CACHE_TTL_MS });
+  projectCache.set(token, { projectId, expiresAt: Date.now() + PROJECT_CACHE_TTL_MS });
 
   // Evict oldest entry when the cache exceeds 32 entries (O(1) — Map preserves insertion order).
   if (projectCache.size > 32) {

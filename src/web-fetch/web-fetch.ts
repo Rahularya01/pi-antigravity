@@ -44,15 +44,15 @@ import {
   setLastFetchTrace,
 } from "../diagnostics/index.js";
 
-export const REWRITE_URI_PATH = "/v1internal:rewriteUri";
-export const TRAWLER_FETCH_PATH = "/v1internal:fetchFromTrawlerCache";
+const REWRITE_URI_PATH = "/v1internal:rewriteUri";
+const TRAWLER_FETCH_PATH = "/v1internal:fetchFromTrawlerCache";
 
 export { DEFAULT_WEB_FETCH_MAX_CHARS, WEB_FETCH_TIMEOUT_MS } from "./limits.js";
 export { formatWebFetchHeader } from "./header.js";
 
-export type WebFetchSource = "cache" | "live";
+type WebFetchSource = "cache" | "live";
 
-export type WebFetchOptions = {
+type WebFetchOptions = {
   apiKey?: string;
   /** Page to read. */
   url: string;
@@ -163,12 +163,12 @@ function rejectPdfUrl(url: string): void {
 }
 
 /** Request body for the redirect resolver. */
-export function buildRewriteUriRequest(originalUri: string): Record<string, unknown> {
+function buildRewriteUriRequest(originalUri: string): Record<string, unknown> {
   return { originalUri };
 }
 
 /** Request body for the crawl cache, and for the live fetch when the cache misses. */
-export function buildTrawlerFetchRequest(url: string, live = false): Record<string, unknown> {
+function buildTrawlerFetchRequest(url: string, live = false): Record<string, unknown> {
   return live ? { url, liveFetch: true } : { url };
 }
 
@@ -184,7 +184,7 @@ function firstNonEmptyText(...values: unknown[]): string | undefined {
 }
 
 /** Final URI from a rewrite response, when the request was redirected. */
-export function parseRedirectUri(data: unknown): string | undefined {
+function parseRedirectUri(data: unknown): string | undefined {
   const body = unwrapResponse(data);
   if (!isRecord(body)) return undefined;
   const value = firstNonEmptyText(body.redirectUri, body.redirect_uri, body.rewrittenUri);
@@ -192,7 +192,7 @@ export function parseRedirectUri(data: unknown): string | undefined {
 }
 
 /** Page content from a trawler response. */
-export function parseTrawlerContent(data: unknown): string | undefined {
+function parseTrawlerContent(data: unknown): string | undefined {
   const body = unwrapResponse(data);
   if (!isRecord(body)) return undefined;
   const content = firstNonEmptyText(body.content, body.markdownContent);
@@ -200,7 +200,7 @@ export function parseTrawlerContent(data: unknown): string | undefined {
 }
 
 /** Explicit media type from a trawler response, when the service reports one. */
-export function parseTrawlerContentType(data: unknown): string | undefined {
+function parseTrawlerContentType(data: unknown): string | undefined {
   const body = unwrapResponse(data);
   if (!isRecord(body)) return undefined;
   return firstNonEmptyText(body.contentType, body.content_type, body.mimeType, body.mime_type)
@@ -543,7 +543,7 @@ function needsRecovery(candidate: Candidate): boolean {
  * one advertised same-origin article representation. Keep the best usable copy
  * if recovery fails; never splice different versions of an article together.
  */
-export class WebFetchError extends Error {
+class WebFetchError extends Error {
   readonly attempts: NonNullable<WebFetchResult["attempts"]>;
   constructor(url: string, detail: string, attempts: WebFetchResult["attempts"] = []) {
     const trail = formatAttemptTrail(attempts);
@@ -936,7 +936,7 @@ export function formatWebFetchResult(result: WebFetchResult, footer = ""): strin
   }
 }
 
-export type FetchCommandArgs = {
+type FetchCommandArgs = {
   url: string;
   raw: boolean;
 };

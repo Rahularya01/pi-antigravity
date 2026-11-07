@@ -20,7 +20,7 @@ export function repairText(text: string): string {
 }
 
 /** Whether index falls between the two halves of a surrogate pair. */
-export function splitsPair(text: string, index: number): boolean {
+function splitsPair(text: string, index: number): boolean {
   if (index <= 0 || index >= text.length) return false;
   const before = text.charCodeAt(index - 1);
   const after = text.charCodeAt(index);

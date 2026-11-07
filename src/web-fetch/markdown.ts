@@ -302,7 +302,7 @@ export function classifyCopyCompleteness(html: string): CopyCompleteness {
 }
 
 /** Whether the source has an unambiguously unfinished final HTML token. */
-export function isPartialCopy(html: string): boolean {
+function isPartialCopy(html: string): boolean {
   return classifyCopyCompleteness(html) === "incomplete";
 }
 

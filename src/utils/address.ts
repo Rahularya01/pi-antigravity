@@ -11,7 +11,7 @@
 import { isIP } from "node:net";
 
 /** Normalised URLs longer than this are refused rather than echoed or requested. */
-export const MAX_URL_LENGTH = 2_048;
+const MAX_URL_LENGTH = 2_048;
 
 /** IPv4 ranges outside the global unicast space (IANA special-purpose registry). */
 const IPV4_NOT_GLOBAL: Array<[string, number]> = [
@@ -110,7 +110,7 @@ function bareAddress(address: string): string {
 }
 
 /** Whether an IP literal is globally routable. Names are not addresses: false. */
-export function isGloballyRoutable(address: string): boolean {
+function isGloballyRoutable(address: string): boolean {
   const bare = bareAddress(address);
   const version = isIP(bare);
   if (version === 4) return isGlobalIpv4(bare);
@@ -138,7 +138,7 @@ const LOCAL_NAME_SUFFIXES = [
 ];
 
 /** Whether a host name or literal can only mean the local machine or network. */
-export function isLocalHost(hostname: string): boolean {
+function isLocalHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, "");
   if (!host) return true;
   if (isIP(bareAddress(host))) return !isGloballyRoutable(host);

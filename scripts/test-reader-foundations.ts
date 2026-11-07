@@ -18,7 +18,6 @@ import { inspectPage } from "../src/web-fetch/inspect.js";
 import { htmlToMarkdown, looksLikeHtml } from "../src/web-fetch/markdown.js";
 import { inspectMdnRepresentation } from "../src/web-fetch/mdn.js";
 import { formatWebFetchHeader, type WebFetchResult } from "../src/web-fetch/web-fetch.js";
-import { formatSearchResult } from "../src/search/search.js";
 
 assert.equal(repairText("x\ud800\ny\udc00"), "x\ufffd\ny\ufffd");
 assert.equal(cleanText("a\n\ud800\tb", 50), "a \ufffd b");
@@ -385,12 +384,6 @@ const redirected = {
   maxChars: 1000,
 };
 assert.ok(formatWebFetchHeader(redirected).includes("Requested:"));
-const search = formatSearchResult({
-  text: "Result",
-  sources: [{ title: "Source", url: "https://example.com/?token=secret-value" }],
-  queries: [],
-});
-assert.ok(!search.includes("secret-value"));
 const fixtures: Array<[string, string, string, string?]> = [
   ["first-website", "World Wide Web", "complete"],
   ["iana-http-status-codes.xhtml", "Status Code Registry", "complete"],

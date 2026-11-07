@@ -13,7 +13,7 @@ function fromCodePoint(match: string, code: number): string {
 }
 
 /** Replace HTML entities with their characters, leaving whitespace exactly as written. */
-export function decodeEntityText(text: string): string {
+function decodeEntityText(text: string): string {
   return text
     .replace(/&#(\d+);/g, (match, code: string) => fromCodePoint(match, Number(code)))
     .replace(/&#x([0-9a-f]+);/gi, (match, code: string) => fromCodePoint(match, parseInt(code, 16)))

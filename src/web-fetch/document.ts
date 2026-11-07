@@ -3,7 +3,7 @@ import { repairText } from "../utils/text.js";
 
 /** Work limits apply before the recursive DOM parser or converter sees a document. */
 export const MAX_DOCUMENT_CHARS = 2_000_000;
-export const MAX_DOCUMENT_DEPTH = 128;
+const MAX_DOCUMENT_DEPTH = 128;
 export const MAX_DOCUMENT_NODES = 50_000;
 const VOID = new Set(
   "area base br col embed hr img input link meta param source track wbr".split(" "),
