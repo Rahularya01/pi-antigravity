@@ -79,6 +79,7 @@ import {
   resolveSessionTrajectory,
   sanitizeText,
 } from "../utils/util.js";
+import { isCreditsEnabled } from "../utils/credits.js";
 import { antigravityFetch, prewarmConnection } from "../utils/http.js";
 
 export { ANTIGRAVITY_API };
@@ -980,7 +981,7 @@ export function buildRequest(
   request.sessionId = envelope.sessionId;
   request.labels = envelope.labels;
 
-  return {
+  const generateRequest: AntigravityGenerateRequest = {
     project: projectId,
     model: runtimeModel,
     request,
@@ -988,6 +989,11 @@ export function buildRequest(
     userAgent: AntigravityUserAgent.Antigravity,
     requestId: envelope.requestId,
   };
+  if (isCreditsEnabled()) {
+    generateRequest.enabledCreditTypes = ["GOOGLE_ONE_AI"];
+  }
+
+  return generateRequest;
 }
 
 /** Exported for unit tests. */
@@ -1002,6 +1008,7 @@ function isAccountQuota429(text: string): boolean {
   return (
     /Individual quota reached/i.test(text) ||
     /Resets? in /i.test(text) ||
+    /AI credits balance is too low|INSUFFICIENT_G1_CREDITS/i.test(text) ||
     (!/rate.?limit/i.test(text) && /quota exceeded|exceeded your|daily limit/i.test(text))
   );
 }
@@ -1080,9 +1087,15 @@ export function friendlyAntigravityError(status: number | undefined, text: strin
     return "Antigravity reported a conflict for this request. Next: retry once or start a new chat session.";
   }
   if (status === 429) {
+    if (/AI credits balance is too low|INSUFFICIENT_G1_CREDITS/i.test(msg)) {
+      return "Your AI credits balance is exhausted. Please refill credits in Google One or wait for your regular quota to reset. Next: switch models or retry later.";
+    }
     const wait = msg.match(/Resets? in ([^.\n]+)/i)?.[1]?.trim();
     if (/Individual quota reached/i.test(msg)) {
-      return `Quota reached. Please wait ${wait || "for reset"}. Next: switch models or try again after reset.`;
+      const hint = isCreditsEnabled()
+        ? " (AI credits overage active; credit balance may be depleted)"
+        : " (Enable AI credits fallback with /antigravity.credits on)";
+      return `Quota reached. Please wait ${wait || "for reset"}.${hint} Next: switch models or try again after reset.`;
     }
     // Google answers a real quota wall with a "Resets in …" hint, but uses generic
     // RESOURCE_EXHAUSTED ("Resource has been exhausted (e.g. check quota).") for
@@ -1095,7 +1108,10 @@ export function friendlyAntigravityError(status: number | undefined, text: strin
       (!/rate.?limit/i.test(msg) &&
         /quota exceeded|exceeded your|limit reached|reached your|daily limit/i.test(msg));
     if (hardLimit) {
-      return `Quota reached.${wait ? ` Please wait ${wait}.` : ""} Next: switch models or retry later.`;
+      const hint = isCreditsEnabled()
+        ? " (AI credits overage active; credit balance may be depleted)"
+        : " (Enable AI credits fallback with /antigravity.credits on)";
+      return `Quota reached.${wait ? ` Please wait ${wait}.` : ""}${hint} Next: switch models or retry later.`;
     }
     if (/rate.?limit|too many requests/i.test(msg)) {
       return "Rate limited by Antigravity (429 ResourceExhausted). Next: retrying automatically; if it persists, switch models.";

@@ -108,6 +108,7 @@ Review these permissions before approving access. If your credentials expire or 
 | `/antigravity.usage` | Show the server-reported shared quota groups and reset times. |
 | `/antigravity.models` | List available runtime models, remaining shared-pool quota, and capabilities. |
 | `/antigravity.accounts` | List linked accounts; use `switch` or `remove` with an index or email to manage them. |
+| `/antigravity.credits [on\|off]` | Check or toggle automatic fallback to AI credits when standard quotas are exhausted. |
 | `/antigravity.models all` | Include tab/chat models normally hidden from the model list. |
 | `/antigravity.refresh` | Force refresh the dynamic model catalog from Antigravity. |
 | `/antigravity.doctor` | Show sanitized provider diagnostics, including the endpoint, status, and resolved runtime model. |
@@ -198,6 +199,7 @@ All primary environment variables start with `ANTIGRAVITY_`. The legacy `NOAGY_`
 | `ANTIGRAVITY_NO_KEEPALIVE` | Set to `1` to skip the keep-alive connection pool. |
 | `ANTIGRAVITY_NO_PREWARM` | Set to `1` to skip the TLS pre-warm request made on the first Antigravity request. |
 | `ANTIGRAVITY_NO_EXTRA_TOOLS` | Set to `1` to stop registering the model-facing `google_search` and `generate_image` tools. The `/antigravity.search` and `/antigravity.image` commands stay available. |
+| `ANTIGRAVITY_USE_CREDITS` | Set to `1` (or `0`) to explicitly enable (or disable) automatic AI credit overages when standard quota is depleted. Defaults to inheriting `useG1Credits` from `~/.gemini/antigravity-cli/settings.json`. |
 | `ANTIGRAVITY_NO_SEARCH_TOOL` | Set to `1` to skip only the `google_search` tool, e.g. when another extension provides web search. |
 | `ANTIGRAVITY_NO_IMAGE_TOOL` | Set to `1` to skip only the `generate_image` tool. |
 | `ANTIGRAVITY_DEFER_TOOLS` | Set to `1` to register `google_search` and `generate_image` as deferred: they aren't declared to the model, but codemode scripts can call them and `tool_search` can load them. Needs `codemode` or `tool_search` active, e.g. `"defaultTools": ["+codemode"]`. Requires Pi 0.99.2+; older Pi keeps them direct. |
