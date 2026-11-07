@@ -8,10 +8,6 @@ All notable changes to this project are documented in this file.
 
 - **`read_url_content` tool:** Reads public pages through Google's Antigravity fetch service and converts HTML to Markdown. Inadequate cached copies retry live, with useful cached content retained on recovery failure. The tool inspects metadata and article-matched JSON-LD before cleanup, and can recover through one advertised same-origin Markdown or supported article-JSON representation. Results distinguish source completeness, suspected content problems, and output truncation, and report retrieval attempts and provenance. Pages too long for one answer are saved whole to a private temp file named in the answer. `/antigravity.fetch [--raw] <url>` exposes interactive fetching; raw mode preserves the crawled source. Disable with `ANTIGRAVITY_NO_FETCH_TOOL=1`, `ANTIGRAVITY_NO_EXTRA_TOOLS=1`, or the `read-url-content` resource in `pi config`.
 
-### Changed
-
-- **Node requirement:** Node 22.19.0 or later is required, matching the installed runtime dependencies. CI checks that floor and Node 24.
-
 ### Fixed
 
 - **Reader recovery and reporting:** One shared ten-second deadline and a ten-request ceiling bound Google retrieval. Useful cache content survives failed live recovery. Source completeness, heuristic content assessment, publisher metadata, omitted sections, and output truncation are reported separately. Failed and degraded reads leave sanitized diagnostics.
@@ -19,6 +15,33 @@ All notable changes to this project are documented in this file.
 - **URL and credential safety:** Reader and search share a conservative public-URL policy. Explicit unsafe redirects fail closed. Recognized credentials are redacted from rendered URLs, progress, metadata, and errors without corrupting ordinary diagnostics or JSON. Credential parse failures do not quote their input.
 - **Output:** Provenance and the saved-page footer count toward the complete output cap. Consumers own footer space. A budget too small to answer leaves no saved file, and a failed save is reported without losing the page.
 - **MDN article recovery:** Inadequate page copies can use same-origin, identity-matched article JSON. Supported prose and specification sections survive unknown section types, with omissions noted. Incomplete article data is never reconstructed. Cut-off or unavailable Wikipedia articles and raw GitHub files recover through identity-checked publisher copies. Raw mode returns the crawled source whatever its size.
+
+## [0.12.0] - 2026-11-06
+
+### Security
+
+- Require Undici 8.12.3 and pin the development dependency tree to the patched version.
+- Compare parsed hosts in search title enrichment and escape Markdown link-label backslashes.
+- Reject image output paths through symlinks and open output files without following symlinks.
+- Raise the minimum Node.js version to 22.19.0 to match Undici's supported runtime.
+
+### Fixed
+
+- Import schemas from a direct TypeBox dependency so both older supported Pi and current Pi releases load the tools.
+- Respect the refreshed catalog for stale selections and compatibility fallbacks (#101).
+- Refresh models in the background for interactive startup; preserve awaited headless refresh (#107).
+- Mark header and stream-stall timeouts retryable, try alternate endpoints after transport errors, and use fresh upstream identities on retries (#114, #113).
+- Increase the default stream silence timeout to five minutes and document both timeout controls (#98).
+
+### Added
+
+- Optional deferred tool exposure on compatible Pi versions (#105).
+- Oh My Pi community compatibility badge (#111).
+- CI coverage for Node 22.19.0, 24, and 26; updated pinned setup-node action (#99).
+
+### Added
+
+- **Served model tracking:** Assistant messages record the backend `modelVersion` as `responseModel` and the backend `responseId`, so session files show which model actually served a request when it differs from the requested runtime model.
 
 ## [0.11.0] - 2026-10-16
 

@@ -21,6 +21,8 @@ const bytes = (value: string): number => Buffer.byteLength(value, "utf8");
 
 /** Cover citation placement, source labels, and the private-address guard. */
 function main(): void {
+  const escapedLabel = formatSearchResult(build("claim", [{ index: 0, title: "a\\]b", url: "https://example.com" }], []));
+  strictAssert.ok(escapedLabel.includes(String.raw`[a\\\]b]`), escapedLabel);
   // 1. A support whose reported offsets do not match its own text is relocated by
   //    searching the part, instead of being dropped along with its provenance.
   const drifted = formatSearchResult(

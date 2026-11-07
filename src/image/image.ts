@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, mkdir, open, realpath } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   antigravityHeaders,
@@ -288,9 +289,45 @@ export function parseImageResponse(chunk: ImageStreamChunk): {
   return { images, text };
 }
 
-async function writeImage(filePath: string, image: GeneratedImage): Promise<string> {
-  await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, Buffer.from(image.data, "base64"));
+export async function writeImage(
+  filePath: string,
+  image: GeneratedImage,
+  cwd: string,
+): Promise<string> {
+  const root = await realpath(cwd);
+  const rel = relative(resolve(cwd), filePath);
+  if (!rel || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+    throw new Error("Image path must stay inside the working directory");
+  }
+  let parent = root;
+  for (const component of relative(resolve(cwd), dirname(filePath)).split(sep).filter(Boolean)) {
+    parent = join(parent, component);
+    try {
+      await mkdir(parent);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+    const info = await lstat(parent);
+    if (info.isSymbolicLink() || !info.isDirectory())
+      throw new Error("Image path must not traverse symlinks");
+  }
+  const target = join(root, rel);
+  try {
+    if ((await lstat(target)).isSymbolicLink())
+      throw new Error("Image path must not follow symlinks");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const handle = await open(
+    target,
+    constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+    0o600,
+  );
+  try {
+    await handle.writeFile(Buffer.from(image.data, "base64"));
+  } finally {
+    await handle.close();
+  }
   return filePath;
 }
 
@@ -368,6 +405,7 @@ export async function generateAntigravityImage(
           result.images.length > 1 ? index : undefined,
         ),
         image,
+        options.cwd,
       ),
     );
   }

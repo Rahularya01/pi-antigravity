@@ -511,7 +511,12 @@ async function readPageTitle(response: Response): Promise<string> {
  * metadata address, and whatever comes back is shown to the model.
  */
 async function fetchPageTitle(url: string, signal?: AbortSignal): Promise<string> {
-  if (!url || url.includes(GROUNDING_REDIRECT_HOST)) return "";
+  if (!url) return "";
+  try {
+    if (new URL(url).hostname === GROUNDING_REDIRECT_HOST) return "";
+  } catch {
+    return "";
+  }
   // One deadline for the whole chain, so extra hops cannot multiply the wait.
   const deadline = withDeadline(signal, SOURCE_ENRICH_TIMEOUT_MS);
   let current = url;
@@ -609,7 +614,7 @@ async function enrichSources(sources: SearchSource[], signal?: AbortSignal): Pro
 
 /** Keep a label from breaking out of its link slot or its list line. */
 function escapeLinkText(text: string): string {
-  return (cleanText(redactSecrets(text), 300) ?? "").replace(/[[\]]/g, "\\$&");
+  return (cleanText(redactSecrets(text), 300) ?? "").replace(/[\\[\]]/g, "\\$&");
 }
 
 /** Encode characters that would close a Markdown link destination. */

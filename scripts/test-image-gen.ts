@@ -1,8 +1,9 @@
 import { deepStrictEqual, rejects } from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, symlink, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  writeImage,
   DEFAULT_IMAGE_MODEL,
   requestImageResponse,
   parseImageResponse,
@@ -137,6 +138,15 @@ async function main() {
 
   const tmp = await mkdtemp(join(tmpdir(), "pi-antigravity-image-"));
   try {
+    const external = await mkdtemp(join(tmpdir(), "pi-image-outside-"));
+    try {
+      await writeFile(join(external, "secret"), "unchanged");
+      await symlink(external, join(tmp, "escape"));
+      await rejects(writeImage(join(tmp, "escape/secret"), { data: png, mimeType: "image/png" }, tmp), /symlinks/);
+      await symlink(join(external, "secret"), join(tmp, "link.png"));
+      await rejects(writeImage(join(tmp, "link.png"), { data: png, mimeType: "image/png" }, tmp));
+      assert(await readFile(join(external, "secret"), "utf8") === "unchanged", "outside file unchanged");
+    } finally { await rm(external, { recursive: true, force: true }); }
     const saved = resolveImageSavePath(tmp, "out/cat.png");
     assert(saved === join(tmp, "out/cat.png"), `save path ${saved}`);
     const dirSaved = resolveImageSavePath(tmp, "images", "image/jpeg", 0);

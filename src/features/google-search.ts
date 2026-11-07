@@ -4,13 +4,14 @@
  * and `/antigravity.search` without registering `google_search`.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { executeAntigravitySearch } from "../search/index.js";
-import { isExtraToolEnabled, redactSecrets } from "../utils/index.js";
+import { extraToolExposure, isExtraToolEnabled, redactSecrets } from "../utils/index.js";
 
 export default function (pi: ExtensionAPI): void {
   if (!isExtraToolEnabled("SEARCH")) return;
   pi.registerTool({
+    ...extraToolExposure(),
     name: "google_search",
     label: "Google Search",
     description:

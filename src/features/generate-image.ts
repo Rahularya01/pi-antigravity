@@ -4,17 +4,18 @@
  * and `/antigravity.image` without registering `generate_image`.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { StringEnum, Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import {
   DEFAULT_IMAGE_MODEL,
   generateAntigravityImage,
   IMAGE_ASPECT_RATIOS,
 } from "../image/index.js";
-import { isExtraToolEnabled } from "../utils/index.js";
+import { extraToolExposure, isExtraToolEnabled } from "../utils/index.js";
 
 export default function (pi: ExtensionAPI): void {
   if (!isExtraToolEnabled("IMAGE")) return;
   pi.registerTool({
+    ...extraToolExposure(),
     name: "generate_image",
     label: "Generate image",
     description:
@@ -25,7 +26,12 @@ export default function (pi: ExtensionAPI): void {
     ],
     parameters: Type.Object({
       prompt: Type.String({ description: "Image description." }),
-      aspectRatio: Type.Optional(StringEnum(IMAGE_ASPECT_RATIOS)),
+      aspectRatio: Type.Optional(
+        Type.Unsafe<(typeof IMAGE_ASPECT_RATIOS)[number]>({
+          type: "string",
+          enum: [...IMAGE_ASPECT_RATIOS],
+        }),
+      ),
       model: Type.Optional(
         Type.String({
           description: `Image model id. Default: ${DEFAULT_IMAGE_MODEL}.`,
