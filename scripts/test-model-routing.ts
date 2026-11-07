@@ -1241,6 +1241,60 @@ assert.ok(
   convertedUnsigned[0]?.parts.some((p) => "text" in p && p.text.includes("Observation from `read`")),
 );
 
+// Same-model unsigned tool turns must also drop unsigned thinking blocks so orphaned
+// thought-only model turns do not precede degraded [Observation from ...] user turns.
+const sameModelUnsignedToolContext = {
+  messages: [
+    { role: "user", content: "inspect file", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        { type: "thinking", thinking: "let me read main.ts first" },
+        { type: "toolCall", id: "call-unsigned-1", name: "read", arguments: { path: "main.ts" } },
+      ],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "gemini-3.7-flash",
+      usage: zeroUsage,
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call-unsigned-1",
+      toolName: "read",
+      content: [{ type: "text", text: "file content" }],
+      isError: false,
+      timestamp: Date.now(),
+    },
+  ],
+} as unknown as Context;
+const convertedSameModelUnsigned = convertMessages(
+  flash37Model,
+  sameModelUnsignedToolContext,
+  geminiRuntime,
+);
+assert.equal(convertedSameModelUnsigned.length, 1);
+assert.equal(convertedSameModelUnsigned[0]?.role, "user");
+assert.ok(
+  !convertedSameModelUnsigned.some((turn) =>
+    turn.parts.some((part) => "thought" in part && part.thought === true),
+  ),
+  "unsigned thinking block must be dropped when tool turn is unsigned",
+);
+const degradedPromptReq = buildRequest(
+  flash37Model,
+  { ...sameModelUnsignedToolContext, systemPrompt: "You are Pi." },
+  "test-proj",
+  {},
+  geminiRuntime,
+);
+assert.equal(degradedPromptReq.request.systemInstruction.parts.length, 2);
+assert.match(
+  degradedPromptReq.request.systemInstruction.parts[1]?.text || "",
+  /never simulate tool calls/i,
+);
+
 const parallelSignedContext = {
   messages: [
     { role: "user", content: "read two files", timestamp: Date.now() },
