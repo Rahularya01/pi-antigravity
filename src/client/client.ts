@@ -84,7 +84,7 @@ export function jsonOrTextError(text: string): string {
     const parsed = JSON.parse(text) as {
       error?: { message?: string; status?: string; code?: number };
     };
-    if (parsed.error?.message) return parsed.error.message;
+    if (typeof parsed.error?.message === "string") return parsed.error.message;
   } catch {
     // not JSON
   }
@@ -96,14 +96,19 @@ export function parseApiKey(apiKeyRaw: string | undefined): AntigravityApiKey {
     throw new Error("No Antigravity OAuth credentials. Run /login antigravity.");
   }
   try {
-    const parsed = JSON.parse(apiKeyRaw) as Partial<AntigravityApiKey>;
-    if (!parsed.token || !parsed.projectId) throw new Error("missing token or projectId");
+    const parsed: unknown = JSON.parse(apiKeyRaw);
+    if (
+      !isRecord(parsed) ||
+      typeof parsed.token !== "string" ||
+      !/^[\x21-\x7e]+$/.test(parsed.token) ||
+      typeof parsed.projectId !== "string" ||
+      !/^[\x21-\x7e]+$/.test(parsed.projectId)
+    )
+      throw new Error("missing token or projectId");
     return { token: parsed.token, projectId: parsed.projectId };
-  } catch (error) {
-    throw new Error(
-      `Invalid Antigravity credentials. Run /login antigravity. (${safeError(error)})`,
-      { cause: error },
-    );
+  } catch {
+    // JSON parser errors can quote the credential input. Do not retain that cause.
+    throw new Error("Invalid Antigravity credentials. Run /login antigravity.");
   }
 }
 
