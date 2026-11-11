@@ -393,7 +393,9 @@ async function scenarioAlternateOnSecondEndpoint(): Promise<void> {
   handler = (body, url) => {
     if (url.endsWith(":rewriteUri")) return json({});
     // Only transport failure triggers endpoint failover.
-    if (url.includes("daily-cloudcode-pa.googleapis.com")) throw new TypeError("fetch failed");
+    if (new URL(url).hostname === "daily-cloudcode-pa.googleapis.com") {
+      throw new TypeError("fetch failed");
+    }
     if (body.url === "https://example.com/a.md") {
       return json({ content: "# Alternate\n\nRecovered on a later endpoint." });
     }
@@ -415,7 +417,9 @@ async function scenarioRepresentationTransport(): Promise<void> {
   handler = (body, url) => {
     if (url.endsWith(":rewriteUri")) return json({});
     if (body.url === "https://example.com/body.md") {
-      if (url.includes("daily-cloudcode-pa.googleapis.com")) throw new TypeError("fetch failed");
+      if (new URL(url).hostname === "daily-cloudcode-pa.googleapis.com") {
+        throw new TypeError("fetch failed");
+      }
       return json({ content: "# Recovered\n\nRepresentation transport recovered." });
     }
     return json({ content: cutArticle("Original partial.", links) });

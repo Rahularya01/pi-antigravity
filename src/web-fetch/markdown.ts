@@ -41,6 +41,7 @@ markdown.addRule("tableCell", {
     `${node.previousElementSibling ? " " : "| "}${content
       .trim()
       .replace(/\s*\n\s*/g, " ")
+      .replace(/\\/g, "\\\\")
       .replace(/\|/g, "\\|")} |`,
 });
 
