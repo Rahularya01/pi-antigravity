@@ -60,10 +60,10 @@ export function endpointCandidates(): string[] {
   return explicit ? [assertSafeApiBaseUrl(explicit)] : ENDPOINT_FALLBACKS;
 }
 
-// Catalog visibility is gated on this version. 1.2.4 hides Gemini 4 Argon;
-// 1.4.0 is aligned with the current official agy CLI release (#93, #94, #97).
+// Catalog visibility is gated on this version. 1.2.4 hides Gemini 4 Argon.
+// 1.5.5 matches the current official agy CLI release (#122, #123).
 const DEFAULT_USER_AGENT =
-  "antigravity/cli/1.4.0 (aidev_client; os_type=linux; arch=amd64; cl=982146307; auth_method=consumer)";
+  "antigravity/cli/1.5.5 (aidev_client; os_type=linux; arch=amd64; cl=982146307; auth_method=consumer)";
 
 /** Default User-Agent matching pure Antigravity CLI wire fingerprint. */
 export function defaultUserAgent(): string {
@@ -84,7 +84,7 @@ export function jsonOrTextError(text: string): string {
     const parsed = JSON.parse(text) as {
       error?: { message?: string; status?: string; code?: number };
     };
-    if (parsed.error?.message) return parsed.error.message;
+    if (typeof parsed.error?.message === "string") return parsed.error.message;
   } catch {
     // not JSON
   }
@@ -96,14 +96,19 @@ export function parseApiKey(apiKeyRaw: string | undefined): AntigravityApiKey {
     throw new Error("No Antigravity OAuth credentials. Run /login antigravity.");
   }
   try {
-    const parsed = JSON.parse(apiKeyRaw) as Partial<AntigravityApiKey>;
-    if (!parsed.token || !parsed.projectId) throw new Error("missing token or projectId");
+    const parsed: unknown = JSON.parse(apiKeyRaw);
+    if (
+      !isRecord(parsed) ||
+      typeof parsed.token !== "string" ||
+      !/^[\x21-\x7e]+$/.test(parsed.token) ||
+      typeof parsed.projectId !== "string" ||
+      !/^[\x21-\x7e]+$/.test(parsed.projectId)
+    )
+      throw new Error("missing token or projectId");
     return { token: parsed.token, projectId: parsed.projectId };
-  } catch (error) {
-    throw new Error(
-      `Invalid Antigravity credentials. Run /login antigravity. (${safeError(error)})`,
-      { cause: error },
-    );
+  } catch {
+    // JSON parser errors can quote the credential input. Do not retain that cause.
+    throw new Error("Invalid Antigravity credentials. Run /login antigravity.");
   }
 }
 
@@ -409,7 +414,7 @@ export function mergeAvailableModelsResults(
   const mergedModels: Record<string, unknown> = {};
   let defaultAgentModelId: string | undefined;
   let defaultAgentModel: string | undefined;
-  let agentModelSorts: AvailableModelsRaw["agentModelSorts"];
+  const agentModelSortsSources: Array<NonNullable<AvailableModelsRaw["agentModelSorts"]>> = [];
   let lastEndpoint = "";
   let lastStatus = 0;
 
@@ -438,7 +443,9 @@ export function mergeAvailableModelsResults(
       defaultAgentModel = data.defaultAgentModel;
     }
     if (isRecord(data) && Array.isArray(data.agentModelSorts)) {
-      agentModelSorts = data.agentModelSorts as AvailableModelsRaw["agentModelSorts"];
+      agentModelSortsSources.push(
+        data.agentModelSorts as NonNullable<AvailableModelsRaw["agentModelSorts"]>,
+      );
     }
   }
 
@@ -455,9 +462,51 @@ export function mergeAvailableModelsResults(
       models: mergedModels as AvailableModelsRaw["models"],
       defaultAgentModelId,
       defaultAgentModel,
-      agentModelSorts,
+      agentModelSorts: mergeAgentModelSorts(agentModelSortsSources),
     },
   };
+}
+
+/**
+ * Union the curated `agentModelSorts` recommendation lists from every endpoint.
+ * New models roll out on the daily/sandbox endpoints before production (e.g.
+ * Gemini 4 Carbon, #123); a last-endpoint-wins merge lets the production list
+ * hide models the other endpoints already recommend, while the merged `models`
+ * dictionary above is a union. Sorts are matched by `displayName` and groups by
+ * position; first-seen order wins so the primary endpoint keeps its ranking.
+ */
+function mergeAgentModelSorts(
+  sources: Array<NonNullable<AvailableModelsRaw["agentModelSorts"]>>,
+): AvailableModelsRaw["agentModelSorts"] {
+  if (sources.length === 0) return undefined;
+  const seen = new Set<string>();
+  const merged: Array<{ displayName?: unknown; groups: Array<{ modelIds: string[] }> }> = [];
+  for (const sorts of sources) {
+    for (const sort of sorts) {
+      if (!isRecord(sort)) continue;
+      const displayName = typeof sort.displayName === "string" ? sort.displayName : undefined;
+      let target = merged.find((entry) => entry.displayName === displayName);
+      if (!target) {
+        target = { ...(displayName !== undefined ? { displayName } : {}), groups: [] };
+        merged.push(target);
+      }
+      const groups = Array.isArray(sort.groups) ? sort.groups : [];
+      groups.forEach((group, index) => {
+        let targetGroup = target.groups[index];
+        if (!targetGroup) {
+          targetGroup = { modelIds: [] };
+          target.groups[index] = targetGroup;
+        }
+        const modelIds = isRecord(group) && Array.isArray(group.modelIds) ? group.modelIds : [];
+        for (const id of modelIds) {
+          if (typeof id !== "string" || !id || seen.has(id)) continue;
+          seen.add(id);
+          targetGroup.modelIds.push(id);
+        }
+      });
+    }
+  }
+  return merged.length > 0 ? merged : undefined;
 }
 
 /**

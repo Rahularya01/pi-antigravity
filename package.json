@@ -25,6 +25,7 @@
   "files": [
     "LICENSE",
     "README.md",
+    "docs/reader-guarantees.md",
     "src",
     "tsconfig.json"
   ],
@@ -34,12 +35,13 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src",
+    "lint": "eslint src scripts/test-web-fetch.ts scripts/test-reader-foundations.ts scripts/smoke-fetch-policy.ts",
     "lint:fix": "eslint src --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "security-check": "node scripts/run-ts.mjs scripts/security-check.ts",
-    "test": "node scripts/run-ts.mjs scripts/test-sanitize-text.ts && node scripts/run-ts.mjs scripts/test-model-routing.ts && node scripts/run-ts.mjs scripts/test-model-discovery.ts && node scripts/run-ts.mjs scripts/test-usage-formatter.ts && node scripts/run-ts.mjs scripts/test-stream-sse.ts && node scripts/run-ts.mjs scripts/test-stream-header-deadline.ts && node scripts/run-ts.mjs scripts/test-http-proxy.ts && node scripts/run-ts.mjs scripts/test-oauth-fetch.ts && node scripts/run-ts.mjs scripts/test-image-gen.ts && node scripts/run-ts.mjs scripts/test-native-images.ts && node scripts/run-ts.mjs scripts/test-transcript-context.ts && node scripts/run-ts.mjs scripts/test-accounts.ts && node scripts/run-ts.mjs scripts/test-search.ts && node scripts/run-ts.mjs scripts/test-search-citations.ts && node scripts/run-ts.mjs scripts/test-extra-tools-toggle.ts && node scripts/run-ts.mjs scripts/test-provider-registration.ts && node scripts/run-ts.mjs scripts/test-stream-recovery.ts",
+    "test": "node scripts/run-ts.mjs scripts/test-sanitize-text.ts && node scripts/run-ts.mjs scripts/test-model-routing.ts && node scripts/run-ts.mjs scripts/test-model-discovery.ts && node scripts/run-ts.mjs scripts/test-usage-formatter.ts && node scripts/run-ts.mjs scripts/test-model-pricing.ts && node scripts/run-ts.mjs scripts/test-stream-sse.ts && node scripts/run-ts.mjs scripts/test-stream-header-deadline.ts && node scripts/run-ts.mjs scripts/test-http-proxy.ts && node scripts/run-ts.mjs scripts/test-oauth-fetch.ts && node scripts/run-ts.mjs scripts/test-image-gen.ts && node scripts/run-ts.mjs scripts/test-native-images.ts && node scripts/run-ts.mjs scripts/test-transcript-context.ts && node scripts/run-ts.mjs scripts/test-accounts.ts && node scripts/run-ts.mjs scripts/test-search.ts && node scripts/run-ts.mjs scripts/test-search-citations.ts && node scripts/run-ts.mjs scripts/test-web-fetch.ts && node scripts/run-ts.mjs scripts/test-reader-foundations.ts && node scripts/run-ts.mjs scripts/test-extra-tools-toggle.ts && node scripts/run-ts.mjs scripts/test-fetch-tool-toggle.ts && node scripts/run-ts.mjs scripts/test-provider-registration.ts && node scripts/run-ts.mjs scripts/test-stream-recovery.ts && node scripts/run-ts.mjs scripts/test-enterprise-and-capacity.ts",
+    "smoke:fetch": "node scripts/run-ts.mjs scripts/smoke-web-fetch.mjs",
     "smoke:tools": "node scripts/run-ts.mjs scripts/smoke-tool-schema.ts",
     "smoke:models": "node scripts/run-ts.mjs scripts/smoke-all-models.mjs",
     "audit": "yarn npm audit --environment production --recursive && yarn npm audit --severity high --all --recursive",
@@ -49,27 +51,33 @@
     "extensions": [
       "./src/index.ts",
       "./src/features/google-search.ts",
+      "./src/features/read-url-content.ts",
       "./src/features/generate-image.ts"
     ]
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=0.80.0",
-    "@earendil-works/pi-coding-agent": ">=0.80.0"
+    "@earendil-works/pi-coding-agent": ">=0.80.0",
+    "typebox": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "^0.86.1",
     "@earendil-works/pi-coding-agent": "^0.86.1",
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.2",
+    "@types/turndown": "^5.0.6",
     "eslint": "^10.11.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.7.0",
     "prettier": "^3.9.8",
+    "typebox": "^1.3.27",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.64.0"
   },
   "dependencies": {
-    "typebox": "^1.3.27",
+    "@mixmark-io/domino": "^2.2.0",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
     "undici": "^8.12.3"
   },
   "resolutions": {

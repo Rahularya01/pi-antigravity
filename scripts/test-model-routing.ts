@@ -1241,6 +1241,60 @@ assert.ok(
   convertedUnsigned[0]?.parts.some((p) => "text" in p && p.text.includes("Observation from `read`")),
 );
 
+// Same-model unsigned tool turns must also drop unsigned thinking blocks so orphaned
+// thought-only model turns do not precede degraded [Observation from ...] user turns.
+const sameModelUnsignedToolContext = {
+  messages: [
+    { role: "user", content: "inspect file", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        { type: "thinking", thinking: "let me read main.ts first" },
+        { type: "toolCall", id: "call-unsigned-1", name: "read", arguments: { path: "main.ts" } },
+      ],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "gemini-3.7-flash",
+      usage: zeroUsage,
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call-unsigned-1",
+      toolName: "read",
+      content: [{ type: "text", text: "file content" }],
+      isError: false,
+      timestamp: Date.now(),
+    },
+  ],
+} as unknown as Context;
+const convertedSameModelUnsigned = convertMessages(
+  flash37Model,
+  sameModelUnsignedToolContext,
+  geminiRuntime,
+);
+assert.equal(convertedSameModelUnsigned.length, 1);
+assert.equal(convertedSameModelUnsigned[0]?.role, "user");
+assert.ok(
+  !convertedSameModelUnsigned.some((turn) =>
+    turn.parts.some((part) => "thought" in part && part.thought === true),
+  ),
+  "unsigned thinking block must be dropped when tool turn is unsigned",
+);
+const degradedPromptReq = buildRequest(
+  flash37Model,
+  { ...sameModelUnsignedToolContext, systemPrompt: "You are Pi." },
+  "test-proj",
+  {},
+  geminiRuntime,
+);
+assert.equal(degradedPromptReq.request.systemInstruction.parts.length, 2);
+assert.match(
+  degradedPromptReq.request.systemInstruction.parts[1]?.text || "",
+  /never simulate tool calls/i,
+);
+
 const parallelSignedContext = {
   messages: [
     { role: "user", content: "read two files", timestamp: Date.now() },
@@ -1426,17 +1480,20 @@ const fallbackPersona = buildRequest(flash37Model, dummyContext, "test-proj", {}
 assert.equal(fallbackPersona.request.systemInstruction.parts.length, 2);
 assert.match(fallbackPersona.request.systemInstruction.parts[0]?.text || "", /You are Antigravity/);
 
+// Models carry their own published list price, not one shared placeholder.
 const flashCost = ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.7-flash")?.cost;
-assert.equal(flashCost?.input, 0.1);
-assert.equal(flashCost?.output, 0.4);
+assert.equal(flashCost?.input, 0.75);
+assert.equal(flashCost?.output, 3.75);
+assert.equal(flashCost?.cacheRead, 0.075);
 const opusCost = ANTIGRAVITY_MODELS.find((m) => m.id === "claude-opus-4-6")?.cost;
-assert.equal(opusCost?.input, 15);
-assert.equal(opusCost?.output, 75);
+assert.equal(opusCost?.input, 5);
+assert.equal(opusCost?.output, 25);
+assert.equal(opusCost?.cacheRead, 0.5);
 
 // Wire fingerprint: User-Agent format (pure agy CLI)
 assert.equal(
   defaultUserAgent(),
-  "antigravity/cli/1.4.0 (aidev_client; os_type=linux; arch=amd64; cl=982146307; auth_method=consumer)",
+  "antigravity/cli/1.5.5 (aidev_client; os_type=linux; arch=amd64; cl=982146307; auth_method=consumer)",
 );
 
 // Wire fingerprint: Headers hygiene & environment isolation
