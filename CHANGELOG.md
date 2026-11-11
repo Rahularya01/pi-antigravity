@@ -7,6 +7,7 @@ All notable changes to this project are documented in this file.
 ### Fixed
 
 - Declare `typebox` as a `"*"` peer dependency instead of a runtime dependency, as Pi requires for host-provided packages. This clears Pi's "Host-provided extension packages must be declared in peerDependencies" extension warning and avoids installing a duplicate TypeBox copy.
+- **Staggered model rollouts:** Merging `fetchAvailableModels` across endpoints now unions the curated `agentModelSorts` recommendation lists instead of letting the last endpoint overwrite them. Models that launch on the daily/sandbox endpoints before production (e.g. Gemini 4 Carbon) stay selectable after `/antigravity.refresh` (#123).
 
 ## [0.12.0] - 2026-11-06
 

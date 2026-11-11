@@ -409,7 +409,7 @@ export function mergeAvailableModelsResults(
   const mergedModels: Record<string, unknown> = {};
   let defaultAgentModelId: string | undefined;
   let defaultAgentModel: string | undefined;
-  let agentModelSorts: AvailableModelsRaw["agentModelSorts"];
+  const agentModelSortsSources: Array<NonNullable<AvailableModelsRaw["agentModelSorts"]>> = [];
   let lastEndpoint = "";
   let lastStatus = 0;
 
@@ -438,7 +438,9 @@ export function mergeAvailableModelsResults(
       defaultAgentModel = data.defaultAgentModel;
     }
     if (isRecord(data) && Array.isArray(data.agentModelSorts)) {
-      agentModelSorts = data.agentModelSorts as AvailableModelsRaw["agentModelSorts"];
+      agentModelSortsSources.push(
+        data.agentModelSorts as NonNullable<AvailableModelsRaw["agentModelSorts"]>,
+      );
     }
   }
 
@@ -455,9 +457,51 @@ export function mergeAvailableModelsResults(
       models: mergedModels as AvailableModelsRaw["models"],
       defaultAgentModelId,
       defaultAgentModel,
-      agentModelSorts,
+      agentModelSorts: mergeAgentModelSorts(agentModelSortsSources),
     },
   };
+}
+
+/**
+ * Union the curated `agentModelSorts` recommendation lists from every endpoint.
+ * New models roll out on the daily/sandbox endpoints before production (e.g.
+ * Gemini 4 Carbon, #123); a last-endpoint-wins merge lets the production list
+ * hide models the other endpoints already recommend, while the merged `models`
+ * dictionary above is a union. Sorts are matched by `displayName` and groups by
+ * position; first-seen order wins so the primary endpoint keeps its ranking.
+ */
+function mergeAgentModelSorts(
+  sources: Array<NonNullable<AvailableModelsRaw["agentModelSorts"]>>,
+): AvailableModelsRaw["agentModelSorts"] {
+  if (sources.length === 0) return undefined;
+  const seen = new Set<string>();
+  const merged: Array<{ displayName?: unknown; groups: Array<{ modelIds: string[] }> }> = [];
+  for (const sorts of sources) {
+    for (const sort of sorts) {
+      if (!isRecord(sort)) continue;
+      const displayName = typeof sort.displayName === "string" ? sort.displayName : undefined;
+      let target = merged.find((entry) => entry.displayName === displayName);
+      if (!target) {
+        target = { ...(displayName !== undefined ? { displayName } : {}), groups: [] };
+        merged.push(target);
+      }
+      const groups = Array.isArray(sort.groups) ? sort.groups : [];
+      groups.forEach((group, index) => {
+        let targetGroup = target.groups[index];
+        if (!targetGroup) {
+          targetGroup = { modelIds: [] };
+          target.groups[index] = targetGroup;
+        }
+        const modelIds = isRecord(group) && Array.isArray(group.modelIds) ? group.modelIds : [];
+        for (const id of modelIds) {
+          if (typeof id !== "string" || !id || seen.has(id)) continue;
+          seen.add(id);
+          targetGroup.modelIds.push(id);
+        }
+      });
+    }
+  }
+  return merged.length > 0 ? merged : undefined;
 }
 
 /**
