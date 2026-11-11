@@ -177,6 +177,10 @@ After you sign in, the provider refreshes its catalog from Antigravity (`fetchAv
 
 Gemini 4 Argon is advertised only when the client version is current and the account is entitled. After upgrading, run `/antigravity.refresh` (or start any session; print mode refreshes before the prompt) and select `antigravity/gemini-4-argon`. Updating the client version does not grant entitlement. Headless `pi -p` resolves `--model` before extensions run, so the first invocation after an upgrade can still print `Using custom model id`; the request is routed from the refreshed catalog, and the next invocation reads the persisted list.
 
+Long sessions that switch providers are the highest-risk setup for tool-observation mimicry on Gemini 3.x. Foreign tool calls are flattened into `[Observation from ...]` text, and a model can imitate those logs instead of making a real tool call. Finish a task on one provider before switching.
+
+A tier that answers with a generic resource-exhausted error is retried on the other Antigravity endpoints and then on a sibling tier of the same generation (`-low` can move to `-high` or `-medium`). A hard quota message that includes a reset time does not do this.
+
 A successful refresh replaces the catalog with advertised models and routes, removing entries absent from all responding endpoints. Live capabilities and token limits override static defaults; grouped variants use the smallest advertised limits. Known thinking variants such as `gemini-3.8-flash-low` / `-medium` / `-high` become one public model. Unfamiliar suffixes and opaque IDs stay usable as exact runtime IDs when they pass the catalog filters.
 
 Use `/antigravity.refresh` to bypass the four-hour cache, or `/antigravity.models` to view live availability and quota. Account/project changes and older cache formats trigger discovery on the next network-enabled refresh. Failed or unrecognized responses keep the last-known-good catalog; forced refreshes report the error. Arbitrary API schema changes can still require an extension update. `ANTIGRAVITY_USER_AGENT` overrides the default client fingerprint when a newer CLI version is required.
@@ -221,7 +225,11 @@ All primary environment variables start with `ANTIGRAVITY_`. The legacy `NOAGY_`
 <!-- prettier-ignore -->
 | Variable | Purpose |
 | --- | --- |
-| `ANTIGRAVITY_BASE_URL` | Override the API base URL. It must be HTTPS, contain no URL credentials, and target an allowed Google APIs host. |
+| `ANTIGRAVITY_BASE_URL` | Override the API base URL. It must be HTTPS, contain no URL credentials, and target an allowed Google APIs host. Ignored for inference once Gemini Enterprise routing is active. |
+| `ANTIGRAVITY_LOCATION` | `eu`, `us`, or `global`. `eu` and `us` send inference only to `businessaicode.<location>.rep.googleapis.com` and never fall back to the consumer `cloudcode-pa` hosts. Also read from `~/.gemini/antigravity-cli/settings.json` when that file stores `location`. |
+| `ANTIGRAVITY_ENTERPRISE` | Set to `1` to force Gemini Enterprise routing, including `global` (`businessaicode.googleapis.com`). |
+| `ANTIGRAVITY_ENTERPRISE_PROJECT` | Google Cloud project id for the selected Gemini Enterprise license. Required when enterprise routing is on. Also read from the CLI settings `project` / `projectId`. |
+| `ANTIGRAVITY_USER_TIER` | License tier id required with enterprise routing. Also read from the CLI settings `userTier`. |
 | `ANTIGRAVITY_PROJECT_ID` | Use a specific Cloud Code Assist project ID instead of discovery or the stable account fallback. |
 | `ANTIGRAVITY_CALLBACK_HOST` | Bind OAuth callback to `127.0.0.1`, `::1`, or `localhost` only. Defaults to `127.0.0.1`. |
 | `ANTIGRAVITY_USER_AGENT` | Override the request user-agent. |

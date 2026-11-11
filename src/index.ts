@@ -59,6 +59,7 @@ import {
   redactSecrets,
   maskEmail,
 } from "./utils/index.js";
+import { describeEnterpriseRouting } from "./client/enterprise.js";
 
 /**
  * Pi's interactive `notify` writes into the chat transcript. `console.log` in that
@@ -290,10 +291,8 @@ export default function (pi: ExtensionAPI): void {
           return;
         }
 
-        const [apiKey, status] = await Promise.all([
-          resolveApiKeyFromContext(ctx),
-          getCreditsStatus(),
-        ]);
+        const apiKey = await resolveApiKeyFromContext(ctx);
+        const status = getCreditsStatus();
 
         let creditsInfo: Awaited<ReturnType<typeof fetchRemainingCredits>> | undefined;
         if (apiKey) {
@@ -401,6 +400,7 @@ export default function (pi: ExtensionAPI): void {
         `linkedAccounts=${accounts.length || "none"}`,
         `activeAccount=${activeLabel || "none"}`,
         `aiCreditOverages=${isCreditsEnabled() ? "enabled" : "disabled"}`,
+        `routing=${describeEnterpriseRouting()}`,
         ...(d.latencyMs !== undefined ? [`lastLatencyMs=${d.latencyMs}`] : []),
         `toolSchemaWarnings=${d.toolSchemaWarnings || "none"}`,
         ...(d.fetchTrace ? [`lastFetch=${d.fetchTrace}`] : []),

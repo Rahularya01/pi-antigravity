@@ -142,6 +142,12 @@ function isLocalHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, "");
   if (!host) return true;
   if (isIP(bareAddress(host))) return !isGloballyRoutable(host);
+  // Decimal, hex, and short dotted forms (127.1, 0x7f000001) are IP literals too.
+  // Node's URL parser does not always canonicalise them into dotted quads.
+  if (/^(?:0x[0-9a-f]+|\d+)$/i.test(host)) return true;
+  if (/^(?:\d{1,3}|0x[0-9a-f]{1,2})(?:\.(?:\d{1,3}|0x[0-9a-f]{1,2})){1,3}$/i.test(host)) {
+    return true;
+  }
   // A single-label name resolves through a local search domain, never on the internet.
   if (!host.includes(".")) return true;
   return LOCAL_NAME_SUFFIXES.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));

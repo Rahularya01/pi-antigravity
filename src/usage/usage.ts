@@ -197,8 +197,7 @@ export function parseCredits(list: unknown): CreditBalanceInfo[] | undefined {
     const amt = item.creditAmount ?? item.credit_amount;
     const min = item.minimumCreditAmountForUsage ?? item.minimum_credit_amount_for_usage;
     const typ = item.creditType ?? item.credit_type;
-    const num =
-      typeof amt === "number" ? amt : typeof amt === "string" ? Number(amt) : undefined;
+    const num = typeof amt === "number" ? amt : typeof amt === "string" ? Number(amt) : undefined;
     if (num !== undefined && Number.isFinite(num)) {
       result.push({
         creditType: typeof typ === "string" ? typ : "GOOGLE_ONE_AI",

@@ -8,6 +8,7 @@ import {
   jsonOrTextError,
   parseApiKey,
 } from "../client/client.js";
+import { resolveEnterpriseTarget } from "../client/enterprise.js";
 import { AntigravityRequestType, AntigravityUserAgent, GeminiRole } from "../types/enums.js";
 import { isCreditsEnabled } from "../utils/credits.js";
 import { antigravityFetch } from "../utils/http.js";
@@ -345,6 +346,12 @@ export async function generateAntigravityImageContent(
   const prompt = options.prompt.trim();
   if (!prompt && !options.inputImages?.length)
     throw new Error("Image prompt or input image is required.");
+  const enterprise = resolveEnterpriseTarget();
+  if (enterprise) {
+    throw new Error(
+      `Image generation is not sent while Gemini Enterprise routing is active (location=${enterprise.location}). Google documents image generation on the global deployment only, and this extension does not upload prompts or reference images to a second host.`,
+    );
+  }
   if (prompt.length > MAX_PROMPT_CHARS) {
     throw new Error(`Image prompt is too long (max ${MAX_PROMPT_CHARS} characters).`);
   }

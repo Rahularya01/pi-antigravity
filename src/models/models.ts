@@ -457,6 +457,53 @@ function legacyFallbackRuntimeModel(runtimeModel: string, effort?: string): stri
   return undefined;
 }
 
+const RUNTIME_TIER_SUFFIXES = ["-extra-low", "-low", "-medium", "-high", "-max"] as const;
+
+/** Split `gemini-3.8-flash-low` into its family and tier. Thinking-only ids are not tiers. */
+export function runtimeTier(runtimeModel: string): { base: string; suffix: string } | undefined {
+  for (const suffix of RUNTIME_TIER_SUFFIXES) {
+    if (runtimeModel.endsWith(suffix) && runtimeModel.length > suffix.length) {
+      return { base: runtimeModel.slice(0, -suffix.length), suffix };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Same-generation tiers to try after one tier answers with a generic
+ * RESOURCE_EXHAUSTED. Highest remaining tier first, so a dead `-low` route
+ * (Gemini 3.8 Flash with reasoning off, #125) moves to `-high` / `-medium`,
+ * and `gemini-4-argon-high` can step down to `-medium` (#122).
+ */
+export function siblingRuntimeModels(runtimeModel: string): string[] {
+  const tier = runtimeTier(runtimeModel);
+  if (!tier) return [];
+  const preferred = ["-high", "-medium", "-low", "-extra-low", "-max"];
+  return preferred.filter((suffix) => suffix !== tier.suffix).map((suffix) => tier.base + suffix);
+}
+
+/** Sibling tiers this process already knows how to route, capped for dynamic families. */
+export function advertisedSiblingRuntimes(runtimeModel: string): string[] {
+  const candidates = siblingRuntimeModels(runtimeModel);
+  if (!candidates.length) return [];
+  const known = new Set<string>();
+  for (const route of Object.values(currentRouting)) {
+    if (route.off) known.add(route.off);
+    if (route.defaultRequestId) known.add(route.defaultRequestId);
+    for (const id of Object.values(route.routing ?? {})) {
+      if (id) known.add(id);
+    }
+  }
+  const routed = candidates.filter((id) => known.has(id));
+  if (routed.length) return routed;
+  const tier = runtimeTier(runtimeModel);
+  if (!tier) return [];
+  if (tier.base.startsWith("gemini-") || tier.base.startsWith("claude-")) {
+    return candidates.slice(0, 2);
+  }
+  return [];
+}
+
 export type { ThinkingWire };
 
 export const ANTIGRAVITY_MODEL_ENUM: Record<string, string> = {

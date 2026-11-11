@@ -25,6 +25,11 @@ import {
   resolveProjectId,
 } from "../client/client.js";
 import {
+  enterpriseStreamUrl,
+  resolveEnterpriseTarget,
+  toEnterpriseGenerateBody,
+} from "../client/enterprise.js";
+import {
   getCurrentAvailableModels,
   getCurrentEndpoint,
   getCurrentMatchedModelDebug,
@@ -50,6 +55,7 @@ import {
 import {
   getCurrentAntigravityRouting,
   getMaxOutputTokens,
+  advertisedSiblingRuntimes,
   getAntigravityRequestModelId,
   getFallbackRuntimeModel,
   getThinkingConfig,
@@ -1030,6 +1036,17 @@ function isRetryableRateLimit(text: string): boolean {
 }
 
 /**
+ * Generic capacity 429 with no reset hint. Dead tiers and live-but-throttled
+ * tiers share this body (#89, #122, #125). Callers decide whether to walk
+ * endpoints and sibling tiers; the public error stays non-retryable for Pi
+ * once those attempts are exhausted.
+ */
+export function isGenericResourceExhausted(text: string): boolean {
+  if (isAccountQuota429(text) || isRetryableRateLimit(text)) return false;
+  return /resource has been exhausted|RESOURCE_EXHAUSTED/i.test(text);
+}
+
+/**
  * Keep the numeric status out of non-retryable errors. Pi treats the digits 429 as a
  * retryable provider error even when the friendly text says the model is unavailable.
  */
@@ -1082,6 +1099,9 @@ export function friendlyAntigravityError(status: number | undefined, text: strin
     const verifyHint = verifyUrl
       ? ` Open this link in a browser signed in to the same Google account to verify: ${verifyUrl}`
       : "";
+    if (/#3501|do not have a valid license of this product/i.test(msg)) {
+      return "This account's Gemini Enterprise license was not accepted on the consumer endpoint. Next: set ANTIGRAVITY_LOCATION to eu, us, or global, plus ANTIGRAVITY_ENTERPRISE_PROJECT and ANTIGRAVITY_USER_TIER from the license selector, then retry. A regional location is not sent to cloudcode-pa.";
+    }
     if (/permission|forbidden|access/i.test(msg) && !verifyUrl) {
       return "Antigravity access was denied for this account or project. Next: try another model, re-login, or use an account with access.";
     }
@@ -1589,7 +1609,8 @@ export function streamAntigravity(
     try {
       let creds = parseApiKey(opts.apiKey);
       const triedAccessTokens = new Set<string>([creds.token]);
-      const primaryEndpoint = endpointCandidates()[0];
+      const enterpriseTarget = resolveEnterpriseTarget();
+      const primaryEndpoint = enterpriseTarget?.host ?? endpointCandidates()[0];
       if (primaryEndpoint) prewarmConnection(primaryEndpoint);
       // Skip loadCodeAssist roundtrip when credentials already carry a projectId.
       const warmedProject = creds.projectId ? null : await loadCodeAssist(creds.token);
@@ -1621,7 +1642,16 @@ export function streamAntigravity(
         runtimeCandidates.push(fallback);
       }
 
-      let requestHeaders = antigravityHeaders(creds.token);
+      const headersFor = (token: string): Record<string, string> => {
+        const headers = antigravityHeaders(token);
+        if (!enterpriseTarget) return headers;
+        const userAgent = headers["User-Agent"] || "";
+        return {
+          ...headers,
+          "User-Agent": userAgent.replace("auth_method=consumer", "auth_method=gcp"),
+        };
+      };
+      let requestHeaders = headersFor(creds.token);
 
       // Turn identity mirrors buildRequest's requestIndex (count of successful
       // assistant messages): it stays constant across retries of one turn and
@@ -1650,26 +1680,37 @@ export function streamAntigravity(
           recordStaticRouteDiagnostics(runtimeModel);
           response = undefined;
           let lastEndpointError: Error | undefined;
-          for (const endpoint of endpointCandidates()) {
+          const endpoints = enterpriseTarget ? [enterpriseTarget.host] : endpointCandidates();
+          for (const endpoint of endpoints) {
             setLastEndpoint(endpoint);
             // Every POST after the first for this turn replays under a fresh
             // upstream session/trajectory so it cannot queue behind the crashed
             // attempt's server-side generation (see retrySessionSeed).
             const nonce = nextRequestNonce(turnKey);
-            const body = JSON.stringify(
-              buildRequest(
-                model,
-                context,
-                projectId,
-                nonce === 0
-                  ? opts
-                  : { ...opts, sessionId: retrySessionSeed(opts.sessionId, nonce) },
-                runtimeModel,
-              ),
+            const attemptOptions =
+              nonce === 0 ? opts : { ...opts, sessionId: retrySessionSeed(opts.sessionId, nonce) };
+            let payload: unknown = buildRequest(
+              model,
+              context,
+              enterpriseTarget?.projectId || projectId,
+              attemptOptions,
+              runtimeModel,
             );
+            if (enterpriseTarget) {
+              payload = toEnterpriseGenerateBody(
+                payload as AntigravityGenerateRequest,
+                enterpriseTarget,
+              );
+            }
+            const rewritten = await opts.onPayload?.(payload, model);
+            if (rewritten !== undefined) payload = rewritten;
+            const body = JSON.stringify(payload);
+            const url = enterpriseTarget
+              ? enterpriseStreamUrl(enterpriseTarget)
+              : `${endpoint}/v1internal:streamGenerateContent?alt=sse`;
             try {
               response = await fetchWithHeaderDeadline(
-                `${endpoint}/v1internal:streamGenerateContent?alt=sse`,
+                url,
                 {
                   method: "POST",
                   headers: requestHeaders,
@@ -1692,7 +1733,10 @@ export function streamAntigravity(
             if (response.ok) break;
             lastText = await response.text();
             if (response.status === 429 && isAccountQuota429(lastText)) break;
-            // Generic resource exhaustion is a dead model, not a reason to walk every endpoint.
+            // Generic RESOURCE_EXHAUSTED is capacity pressure when another endpoint
+            // or same-generation tier might still be live (#122, #125). A model
+            // that fails every one of those still uses the non-retryable #89 message.
+            if (response.status === 429 && isGenericResourceExhausted(lastText)) continue;
             if (response.status === 429 && !isRetryableRateLimit(lastText)) break;
             if (![403, 404, 429, 500, 502, 503, 504].includes(response.status)) break;
           }
@@ -1721,6 +1765,16 @@ export function streamAntigravity(
                 runtimeCandidates.push(dynamic.id);
                 continue;
               }
+            }
+          }
+          if (response?.status === 429 && isGenericResourceExhausted(lastText)) {
+            const nextSibling = advertisedSiblingRuntimes(runtimeModel).find(
+              (id) => !runtimeCandidates.includes(id),
+            );
+            if (nextSibling && runtimeCandidates.length < 4) {
+              // Same-generation tiers before a cross-generation compatibility fallback.
+              runtimeCandidates.splice(candIdx + 1, 0, nextSibling);
+              continue;
             }
           }
           break;
@@ -1763,7 +1817,7 @@ export function streamAntigravity(
             if (next) {
               triedAccessTokens.add(next.token);
               creds = next;
-              requestHeaders = antigravityHeaders(creds.token);
+              requestHeaders = headersFor(creds.token);
               const switchedProject = creds.projectId ? null : await loadCodeAssist(creds.token);
               projectId = resolveProjectId({
                 token: creds.token,
