@@ -63,6 +63,7 @@ export type ImageCommandArgs = {
 export type GenerateImageOptions = ImageCommandArgs & {
   apiKey: string;
   cwd: string;
+  inputImages?: GeneratedImage[];
   signal?: AbortSignal;
 };
 
@@ -333,7 +334,7 @@ export async function writeImage(
 
 /** Generates in-memory content shared by the native API and file-saving wrapper. */
 export async function generateAntigravityImageContent(
-  options: Omit<GenerateImageOptions, "cwd" | "path"> & { inputImages?: GeneratedImage[] },
+  options: Omit<GenerateImageOptions, "cwd" | "path">,
 ): Promise<Omit<GenerateImageResult, "savedPaths">> {
   const prompt = options.prompt.trim();
   if (!prompt && !options.inputImages?.length)
