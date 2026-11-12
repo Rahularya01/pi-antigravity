@@ -30,4 +30,6 @@ Do not include credentials, access tokens, refresh tokens, OAuth client secrets,
 
 ## Releases
 
-Maintainers publish releases by pushing a version tag (`vX.Y.Z`). Contributors must not publish the package or modify release credentials.
+Maintainers publish releases by pushing a version tag (`vX.Y.Z`). The tag workflow publishes with GitHub Actions OIDC, not `NPM_TOKEN`. Contributors must not publish the package or modify release credentials.
+
+npm still needs a trusted publisher on the package: GitHub user `Rahularya01`, repository `pi-antigravity`, workflow filename `publish.yml`, with direct `npm publish` allowed. Create it under the package's Trusted publishing settings. The first publish has to succeed within two days of creating that connection. A long-lived token that still requires an authenticator code fails in CI with `EOTP`. To publish an existing tag after a workflow fix, run `gh workflow run publish.yml -f tag=vX.Y.Z`.
