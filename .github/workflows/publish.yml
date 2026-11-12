@@ -26,12 +26,19 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Reject an invalid manual tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+
       - name: Checkout repository
-        # v5
+        # v5. An unqualified ref prefers a branch over a tag of the same name.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
 
       - name: Setup Node
         # v7.1.0 — skip cache: yarn; setup-node would invoke Yarn 1
@@ -68,4 +75,14 @@ jobs:
             mv "$HOME/.npmrc.stripped" "$HOME/.npmrc"
           fi
           unset NODE_AUTH_TOKEN NPM_TOKEN
+          # Provenance reads GITHUB_REF and GITHUB_SHA for the source commit.
+          # A manual run's event ref is main; point those two at the checked-out
+          # tag. Leave GITHUB_WORKFLOW_REF alone so the attestation still names
+          # this workflow on the commit that actually ran.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            export GITHUB_SHA="$(git rev-parse HEAD)"
+            export GITHUB_REF="refs/tags/$RELEASE_TAG"
+          fi
           npm publish --access public --provenance
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
