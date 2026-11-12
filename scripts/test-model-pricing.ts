@@ -57,6 +57,18 @@ assert.ok(
 );
 
 // Models that only appear through dynamic discovery are priced too.
+assert.deepEqual(ANTIGRAVITY_DISCOVERED_MODEL_COSTS["gemini-4-hydrogen"], {
+  input: 1.5,
+  output: 7.5,
+  cacheRead: 0.15,
+  cacheWrite: 1.5,
+});
+assert.deepEqual(getAntigravityModelCost("gemini-4-hydrogen"), {
+  input: 1.5,
+  output: 7.5,
+  cacheRead: 0.15,
+  cacheWrite: 1.5,
+});
 assert.deepEqual(ANTIGRAVITY_DISCOVERED_MODEL_COSTS["gemini-2.5-flash"], {
   input: 0.3,
   output: 2.5,

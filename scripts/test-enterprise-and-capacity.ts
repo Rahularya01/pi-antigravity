@@ -75,6 +75,10 @@ assert.deepEqual(siblingRuntimeModels("gemini-3.8-flash-low").slice(0, 2), [
 ]);
 assert.ok(advertisedSiblingRuntimes("gemini-3.8-flash-low").includes("gemini-3.8-flash-high"));
 assert.deepEqual(siblingRuntimeModels("gemini-4-argon-high").slice(0, 1), ["gemini-4-argon-medium"]);
+assert.deepEqual(siblingRuntimeModels("gemini-4-hydrogen-xhigh").slice(0, 2), [
+  "gemini-4-hydrogen-high",
+  "gemini-4-hydrogen-medium",
+]);
 assert.equal(isGenericResourceExhausted("Resource has been exhausted (e.g. check quota)."), true);
 assert.equal(isGenericResourceExhausted("Quota exceeded. Resets in 2h"), false);
 assert.equal(checkPublicUrl("http://127.1/").ok, false);
@@ -118,7 +122,7 @@ try {
       onPayload: (payload) => ({ ...(payload as object), marker: "from-extension" }),
     },
   ).result();
-  assert.equal(result.stopReason, "stop", result.errorMessage);
+  assert.equal(result.stopReason, "stop", result.errorMessage ?? "");
   assert.ok(
     seen.some((call) => call.model === "gemini-3.8-flash-low"),
     `expected a low-tier attempt, saw ${JSON.stringify(seen)}`,
@@ -150,7 +154,7 @@ try {
     { messages: [{ role: "user", content: "hi", timestamp: 1 }] },
     { ...options, reasoning: "high" },
   ).result();
-  assert.equal(regional.stopReason, "stop", regional.errorMessage);
+  assert.equal(regional.stopReason, "stop", regional.errorMessage ?? "");
   assert.equal(enterpriseCalls.length, 1);
   assert.match(enterpriseCalls[0] || "", /^https:\/\/businessaicode\.eu\.rep\.googleapis\.com\/v1beta\/projects\/enterprise-project-1\/locations\/eu:streamGenerateContent/);
 } finally {
