@@ -672,6 +672,7 @@ assert.match(rateLimitReachedError, /Rate limited by Antigravity \(429 ResourceE
 assert.ok(!/Quota reached/i.test(rateLimitReachedError));
 
 // Verify compatibility with Pi's retry classifier
+// SAFETY: Test fixture mock for AssistantMessage
 assert.equal(
   isRetryableAssistantError({
     role: "assistant",
@@ -681,6 +682,7 @@ assert.equal(
   false,
   "generic resource exhaustion must not be retryable by Pi",
 );
+// SAFETY: Test fixture mock for AssistantMessage
 assert.equal(
   isRetryableAssistantError({
     role: "assistant",
@@ -690,6 +692,7 @@ assert.equal(
   false,
   "quota reset wall must not be retryable by Pi",
 );
+// SAFETY: Test fixture mock for AssistantMessage
 assert.equal(
   isRetryableAssistantError({
     role: "assistant",
@@ -699,6 +702,7 @@ assert.equal(
   false,
   "quota weekly limit must not be retryable by Pi",
 );
+// SAFETY: Test fixture mock for AssistantMessage
 assert.equal(
   isRetryableAssistantError({
     role: "assistant",
@@ -708,6 +712,7 @@ assert.equal(
   true,
   "plain throttle must be retryable by Pi",
 );
+// SAFETY: Test fixture mock for AssistantMessage
 assert.equal(
   isRetryableAssistantError({
     role: "assistant",
@@ -1030,6 +1035,7 @@ const validSig = "QkFTRTY0LXRlc3Qtc2lnbmF0dXJlLXRlc3QxMjM0NTY=";
 const continuationText = "Continue the active task using the available instructions and context.";
 
 // A normal assistant text reply must not leave the Antigravity request ending in a model turn.
+// SAFETY: Test fixture mock for Context
 const assistantTailContext = {
   messages: [
     { role: "user", content: "Summarize this file.", timestamp: Date.now() },
@@ -1067,6 +1073,7 @@ assert.deepEqual(userTailContents, [
   { role: "user", parts: [{ text: "First request." }, { text: "Second request." }] },
 ]);
 
+// SAFETY: Test fixture mock for Context
 const unresolvedToolCallContext = {
   messages: [
     { role: "user", content: "Read package.json.", timestamp: Date.now() },
@@ -1101,6 +1108,7 @@ assert.match(unresolvedToolCallError.message, /missing tool result/i);
 
 // Truncated/compacted history can begin with an assistant function call. Antigravity
 // requires that call turn to have an immediately preceding user boundary.
+// SAFETY: Test fixture mock for Context
 const leadingToolCallContext = {
   messages: [
     {
@@ -1144,6 +1152,7 @@ assert.deepEqual(
 assert.deepEqual(leadingToolCallContents[0]?.parts, [{ text: continuationText }]);
 assert.ok(leadingToolCallContents[1]?.parts.every((part) => "functionCall" in part));
 assert.ok(leadingToolCallContents[2]?.parts.every((part) => "functionResponse" in part));
+// SAFETY: Test fixture mock for Context
 const multimodalResultContext = {
   messages: [
     { role: "user", content: "take screenshot", timestamp: Date.now() },
@@ -1187,6 +1196,7 @@ assert.ok(
   convertedMultimodal[2]?.parts.some((p) => "inlineData" in p && p.inlineData.mimeType === "image/png"),
 );
 
+// SAFETY: Test fixture mock for Context
 const crossThinkingContext = {
   messages: [
     { role: "user", content: "hi", timestamp: Date.now() },
@@ -1209,6 +1219,7 @@ const convertedCross = convertMessages(flash37Model, crossThinkingContext, gemin
 assert.equal(convertedCross[1]?.parts.length, 1);
 assert.deepEqual(convertedCross[1]?.parts[0], { text: "visible answer" });
 
+// SAFETY: Test fixture mock for Context
 const unsignedToolContext = {
   messages: [
     { role: "user", content: "read file", timestamp: Date.now() },
@@ -1243,6 +1254,7 @@ assert.ok(
 
 // Same-model unsigned tool turns must also drop unsigned thinking blocks so orphaned
 // thought-only model turns do not precede degraded [Observation from ...] user turns.
+// SAFETY: Test fixture mock for Context
 const sameModelUnsignedToolContext = {
   messages: [
     { role: "user", content: "inspect file", timestamp: Date.now() },
@@ -1295,6 +1307,7 @@ assert.match(
   /never simulate tool calls/i,
 );
 
+// SAFETY: Test fixture mock for Context
 const parallelSignedContext = {
   messages: [
     { role: "user", content: "read two files", timestamp: Date.now() },
@@ -1350,6 +1363,7 @@ assert.ok(
   "all parallel results remain functionResponses",
 );
 
+// SAFETY: Test fixture mock for Context
 const abortedContext = {
   messages: [
     { role: "user", content: "hi", timestamp: Date.now() },
@@ -1446,6 +1460,7 @@ assert.equal(
 );
 
 // Tool-result-only turns also need no synthetic user text.
+// SAFETY: Test fixture mock for Context
 const toolResultOnlyContext = {
   messages: [
     {

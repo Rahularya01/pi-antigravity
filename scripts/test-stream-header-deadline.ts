@@ -123,7 +123,7 @@ async function main(): Promise<void> {
     silentAfterFirstChunk,
   );
   const reader = abortable.body?.getReader();
-  assert(reader, "abortable response should have a body");
+  if (!reader) throw new Error("abortable response should have a body");
   await reader.read();
   caller.abort(new Error("caller cancelled"));
   let sawCallerAbort = false;

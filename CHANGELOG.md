@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Gemini 4 Hydrogen support:** Added dynamic discovery, pricing ($1.50/M input, $7.50/M output, $0.15/M cache read), 65,536 max output token limits, and `xhigh` thinking level grouping (`-xhigh` runtime suffix, `(X-High)` and `(xhigh)` display names) for Google's Gemini 4 Hydrogen model family. Sibling capacity fallback supports stepping down from `-xhigh` on generic `RESOURCE_EXHAUSTED` responses.
+
 ## [0.13.0] - 2026-11-12
 
 ### Added

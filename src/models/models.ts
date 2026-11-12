@@ -137,6 +137,11 @@ export const RUNTIME_MAX_OUTPUT_TOKENS: Record<string, number> = {
   "gemini-3.5-flash-extra-low": 65536,
   "gemini-3.5-flash-low": 65536,
   "gemini-3-flash-agent": 65536,
+  "gemini-4-hydrogen": 65536,
+  "gemini-4-hydrogen-low": 65536,
+  "gemini-4-hydrogen-medium": 65536,
+  "gemini-4-hydrogen-high": 65536,
+  "gemini-4-hydrogen-xhigh": 65536,
   "gemini-3.1-pro": 65535,
   "gemini-3.1-pro-low": 65535,
   "gemini-3.1-pro-high": 65535,
@@ -185,6 +190,7 @@ export function getMaxOutputTokens(modelId: string, runtimeModel?: string): numb
  * there is no cache-write rate to publish; the input rate is used.
  */
 const gemini38FlashCost = { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0.75 };
+const gemini4HydrogenCost = { input: 1.5, output: 7.5, cacheRead: 0.15, cacheWrite: 1.5 };
 const gemini37FlashCost = { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0.75 };
 const gemini36FlashCost = { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0.75 };
 const gemini35FlashCost = { input: 1.5, output: 9.0, cacheRead: 0.15, cacheWrite: 1.5 };
@@ -206,6 +212,7 @@ export const ANTIGRAVITY_DISCOVERED_MODEL_COSTS: Record<
   string,
   { input: number; output: number; cacheRead: number; cacheWrite: number }
 > = {
+  "gemini-4-hydrogen": gemini4HydrogenCost,
   "gemini-3.5-flash": gemini35FlashCost,
   "gemini-3.5-flash-lite": gemini35FlashLiteCost,
   "gemini-3.1-flash-lite": gemini31FlashLiteCost,
@@ -457,7 +464,7 @@ function legacyFallbackRuntimeModel(runtimeModel: string, effort?: string): stri
   return undefined;
 }
 
-const RUNTIME_TIER_SUFFIXES = ["-extra-low", "-low", "-medium", "-high", "-max"] as const;
+const RUNTIME_TIER_SUFFIXES = ["-extra-low", "-low", "-medium", "-high", "-xhigh", "-max"] as const;
 
 /** Split `gemini-3.8-flash-low` into its family and tier. Thinking-only ids are not tiers. */
 export function runtimeTier(runtimeModel: string): { base: string; suffix: string } | undefined {
@@ -478,7 +485,7 @@ export function runtimeTier(runtimeModel: string): { base: string; suffix: strin
 export function siblingRuntimeModels(runtimeModel: string): string[] {
   const tier = runtimeTier(runtimeModel);
   if (!tier) return [];
-  const preferred = ["-high", "-medium", "-low", "-extra-low", "-max"];
+  const preferred = ["-high", "-medium", "-low", "-xhigh", "-extra-low", "-max"];
   return preferred.filter((suffix) => suffix !== tier.suffix).map((suffix) => tier.base + suffix);
 }
 

@@ -17,11 +17,11 @@ try {
     return new Response('data: {"response":{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}]}}\n\ndata: [DONE]\n\n');
   }) as typeof fetch;
   const first = await streamAntigravity(model, { messages: [] }, options).result();
-  assert.equal(first.stopReason, "stop", first.errorMessage);
+  assert.equal(first.stopReason, "stop", first.errorMessage ?? "");
   assert.equal(calls, 2, "transport errors try the next endpoint");
   assert.notEqual(bodies[0].request.sessionId, bodies[1].request.sessionId);
   const second = await streamAntigravity(model, { messages: [] }, options).result();
-  assert.equal(second.stopReason, "stop", second.errorMessage);
+  assert.equal(second.stopReason, "stop", second.errorMessage ?? "");
   assert.notEqual(bodies[1].request.sessionId, bodies[2].request.sessionId);
 
   globalThis.fetch = (async () => { throw new Error("transport timed out"); }) as typeof fetch;

@@ -228,7 +228,7 @@ for (const agentModels of [
     "gemini-pro-agent": info("Gemini 101 Pro"),
     "gemini-pro-agent-high": info("Gemini 101 Pro (High)"),
   },
-]) {
+] as Record<string, ModelInfoRaw>[]) {
   const grouped = buildAntigravityCatalog(
     {
       "gemini-101-pro-medium": info("Gemini 101 Pro (Medium)"),
@@ -311,7 +311,9 @@ const dynamicCatalog = buildAntigravityCatalog(
 applyAntigravityCatalog(dynamicCatalog);
 clearModelEnumCache();
 registerModelEnum("gemini-9.9-flash-low", "MODEL_DYNAMIC_999");
+// SAFETY: Test fixture mock for stored catalog state
 const stored = {
+  models: [],
   [ANTIGRAVITY_PERSIST_KEY]: {
     catalog: dynamicCatalog,
     checkedAt: Date.now(),
@@ -321,7 +323,7 @@ const stored = {
       .update(JSON.stringify([JSON.stringify({ token: "fake", projectId: "fake" }), "fake"]))
       .digest("hex"),
   },
-};
+} as unknown as Parameters<typeof refreshAntigravityModels>[0]["stored"];
 resetAntigravityCatalogForTests();
 clearModelEnumCache();
 
@@ -390,10 +392,14 @@ for (const change of [
   try {
     const result = await refreshAntigravityModels({
       credential: { type: "api_key", key: JSON.stringify({ token: "fake", projectId: "fake" }) },
+      // SAFETY: Test fixture mock for stored catalog mutation
       stored: {
-        ...stored,
-        [ANTIGRAVITY_PERSIST_KEY]: { ...stored[ANTIGRAVITY_PERSIST_KEY], ...change },
-      },
+        ...(stored as Record<string, unknown>),
+        [ANTIGRAVITY_PERSIST_KEY]: {
+          ...((stored as Record<string, Record<string, unknown>>)[ANTIGRAVITY_PERSIST_KEY] ?? {}),
+          ...change,
+        },
+      } as unknown as Parameters<typeof refreshAntigravityModels>[0]["stored"],
       allowNetwork: true,
       force: false,
       signal: new AbortController().signal,
@@ -613,10 +619,11 @@ try {
   assert(getModelEnum("gemini-4-argon-high") === "MODEL_ARGON_HIGH_TEST", "uses discovered enum");
   resetAntigravityCatalogForTests();
   clearModelEnumCache();
-  const persisted = (argonPersisted as { persist?: Record<string, unknown> }).persist;
+  const persisted = (argonPersisted as { persist?: unknown }).persist;
   const offline = await refreshAntigravityModels({
     credential: undefined,
-    stored: persisted,
+    // SAFETY: Test fixture mock for stored state
+    stored: persisted as unknown as Parameters<typeof refreshAntigravityModels>[0]["stored"],
     allowNetwork: false,
     force: false,
     signal: new AbortController().signal,
@@ -751,7 +758,7 @@ assert.deepEqual(
   ]),
 );
 const stagedCatalog = buildAntigravityCatalog(
-  stagedRollout.data.models,
+  stagedRollout.data.models ?? {},
   fallback,
   stagedRollout.data.agentModelSorts,
 );
@@ -766,5 +773,40 @@ assert.equal(
   undefined,
   "endpoints without recommendation lists stay undefined",
 );
+
+// Gemini 4 Hydrogen discovery, xhigh thinking level, and pricing
+const hydrogenRawModels: Record<string, ModelInfoRaw> = {
+  "gemini-4-hydrogen-low": info("Gemini 4 Hydrogen (Low)"),
+  "gemini-4-hydrogen-medium": info("Gemini 4 Hydrogen (Medium)"),
+  "gemini-4-hydrogen-high": info("Gemini 4 Hydrogen (High)"),
+  "gemini-4-hydrogen-xhigh": info("Gemini 4 Hydrogen (Extra High)"),
+};
+const hydrogenCatalog = buildAntigravityCatalog(hydrogenRawModels, fallback);
+const hydrogen = hydrogenCatalog.models.find((model) => model.id === "gemini-4-hydrogen");
+assert(hydrogen, "discovers gemini-4-hydrogen");
+assert.equal(hydrogen.name, "Gemini 4 Hydrogen (Antigravity)");
+assert.equal(hydrogen.cost?.input, 1.5);
+assert.equal(hydrogen.cost?.output, 7.5);
+assert.equal(hydrogen.cost?.cacheRead, 0.15);
+assert.equal(hydrogen.cost?.cacheWrite, 1.5);
+assert.equal(hydrogen.thinkingLevelMap?.xhigh, "xhigh");
+assert.equal(hydrogenCatalog.routing["gemini-4-hydrogen"]?.routing?.xhigh, "gemini-4-hydrogen-xhigh");
+assert.equal(hydrogenCatalog.routing["gemini-4-hydrogen"]?.routing?.high, "gemini-4-hydrogen-high");
+assert.equal(getMaxOutputTokens("gemini-4-hydrogen"), 65536);
+assert.equal(getMaxOutputTokens("gemini-4-hydrogen", "gemini-4-hydrogen-xhigh"), 65536);
+assert.equal(getFallbackRuntimeModel("gemini-4-hydrogen-xhigh"), undefined);
+assert.equal(getFallbackRuntimeModel("gemini-4-hydrogen-high"), undefined);
+
+// Hydrogen with alternate (X-High) display name pattern
+const hydrogenAltCatalog = buildAntigravityCatalog(
+  {
+    "gemini-4-hydrogen-low": info("Gemini 4 Hydrogen (Low)"),
+    "gemini-4-hydrogen-xhigh": info("Gemini 4 Hydrogen (X-High)"),
+  },
+  fallback,
+);
+const hydrogenAlt = hydrogenAltCatalog.models.find((model) => model.id === "gemini-4-hydrogen");
+assert(hydrogenAlt, "discovers gemini-4-hydrogen with (X-High)");
+assert.equal(hydrogenAltCatalog.routing["gemini-4-hydrogen"]?.routing?.xhigh, "gemini-4-hydrogen-xhigh");
 
 console.log("model discovery: live metadata, routing, validation, persistence, and TTL passed");
