@@ -75,6 +75,10 @@ assert.deepEqual(siblingRuntimeModels("gemini-3.8-flash-low").slice(0, 2), [
 ]);
 assert.ok(advertisedSiblingRuntimes("gemini-3.8-flash-low").includes("gemini-3.8-flash-high"));
 assert.deepEqual(siblingRuntimeModels("gemini-4-argon-high").slice(0, 1), ["gemini-4-argon-medium"]);
+assert.deepEqual(siblingRuntimeModels("gemini-4-hydrogen-xhigh").slice(0, 2), [
+  "gemini-4-hydrogen-high",
+  "gemini-4-hydrogen-medium",
+]);
 assert.equal(isGenericResourceExhausted("Resource has been exhausted (e.g. check quota)."), true);
 assert.equal(isGenericResourceExhausted("Quota exceeded. Resets in 2h"), false);
 assert.equal(checkPublicUrl("http://127.1/").ok, false);
