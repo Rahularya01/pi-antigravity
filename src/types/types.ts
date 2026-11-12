@@ -268,6 +268,7 @@ export type ModelInfoRaw = {
   maxTokens?: unknown;
   maxOutputTokens?: unknown;
   isInternal?: unknown;
+  disabled?: unknown;
   displayName?: unknown;
   label?: unknown;
   modelName?: unknown;

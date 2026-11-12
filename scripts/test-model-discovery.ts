@@ -24,6 +24,7 @@ import {
   getModelEnum,
   getMaxOutputTokens,
   hydrateAntigravityCatalog,
+  isSelectableRuntimeModelId,
   refreshAntigravityModels,
   registerModelEnum,
   resetAntigravityCatalogForTests,
@@ -765,6 +766,59 @@ assert.equal(
   ]).data.agentModelSorts,
   undefined,
   "endpoints without recommendation lists stay undefined",
+);
+
+// -xhigh / (XHigh) variants group into the parent model, and disabled teaser
+// entries (e.g. Ultra-gated models flagged disabled=true) stay filtered out
+// even when listed in agentModelSorts.
+const hydrogenCatalog = buildAntigravityCatalog(
+  {
+    "gemini-4-hydrogen-low": info("Gemini 4 Hydrogen (Low)", { maxOutputTokens: 262144 }),
+    "gemini-4-hydrogen-medium": info("Gemini 4 Hydrogen (Medium)", { maxOutputTokens: 262144 }),
+    "gemini-4-hydrogen-high": info("Gemini 4 Hydrogen (High)", { maxOutputTokens: 262144 }),
+    "gemini-4-hydrogen-xhigh": info("Gemini 4 Hydrogen (XHigh)", { maxOutputTokens: 262144 }),
+    "gemini-4-carbon-disabled": {
+      ...info("Gemini 4 Carbon", { maxOutputTokens: 262144 }),
+      disabled: true,
+    },
+  },
+  fallback,
+  [
+    {
+      displayName: "Recommended",
+      groups: [
+        {
+          modelIds: [
+            "gemini-4-hydrogen-low",
+            "gemini-4-hydrogen-medium",
+            "gemini-4-hydrogen-high",
+            "gemini-4-hydrogen-xhigh",
+            "gemini-4-carbon-disabled",
+          ],
+        },
+      ],
+    },
+  ],
+);
+assert.deepEqual(
+  hydrogenCatalog.models.map((model) => model.id),
+  ["gemini-4-hydrogen"],
+  "xhigh collapses into gemini-4-hydrogen and disabled models are excluded",
+);
+const hydrogenModel = hydrogenCatalog.models[0];
+assert.equal(hydrogenModel?.name, "Gemini 4 Hydrogen (Antigravity)");
+assert.equal(hydrogenModel?.thinkingLevelMap?.xhigh, "xhigh");
+assert.equal(hydrogenModel?.maxTokens, 262144);
+assert.equal(
+  hydrogenCatalog.routing["gemini-4-hydrogen"]?.routing?.xhigh,
+  "gemini-4-hydrogen-xhigh",
+);
+assert.equal(
+  isSelectableRuntimeModelId("gemini-4-carbon-disabled", {
+    displayName: "Gemini 4 Carbon",
+    disabled: true,
+  }),
+  false,
 );
 
 console.log("model discovery: live metadata, routing, validation, persistence, and TTL passed");

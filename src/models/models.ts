@@ -457,7 +457,7 @@ function legacyFallbackRuntimeModel(runtimeModel: string, effort?: string): stri
   return undefined;
 }
 
-const RUNTIME_TIER_SUFFIXES = ["-extra-low", "-low", "-medium", "-high", "-max"] as const;
+const RUNTIME_TIER_SUFFIXES = ["-extra-low", "-xhigh", "-low", "-medium", "-high", "-max"] as const;
 
 /** Split `gemini-3.8-flash-low` into its family and tier. Thinking-only ids are not tiers. */
 export function runtimeTier(runtimeModel: string): { base: string; suffix: string } | undefined {
@@ -478,7 +478,7 @@ export function runtimeTier(runtimeModel: string): { base: string; suffix: strin
 export function siblingRuntimeModels(runtimeModel: string): string[] {
   const tier = runtimeTier(runtimeModel);
   if (!tier) return [];
-  const preferred = ["-high", "-medium", "-low", "-extra-low", "-max"];
+  const preferred = ["-high", "-medium", "-xhigh", "-low", "-extra-low", "-max"];
   return preferred.filter((suffix) => suffix !== tier.suffix).map((suffix) => tier.base + suffix);
 }
 
