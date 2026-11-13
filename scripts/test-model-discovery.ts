@@ -767,4 +767,26 @@ assert.equal(
   "endpoints without recommendation lists stay undefined",
 );
 
+// Hydrogen discovery: xhigh thinking level grouped into gemini-4-hydrogen, disabled models filtered out
+const hydrogenRawModels: Record<string, ModelInfoRaw> = {
+  "gemini-4-hydrogen-low": info("Gemini 4 Hydrogen (Low)", { model: "MODEL_HYDROGEN_LOW" }),
+  "gemini-4-hydrogen-medium": info("Gemini 4 Hydrogen (Medium)", { model: "MODEL_HYDROGEN_MED" }),
+  "gemini-4-hydrogen-high": info("Gemini 4 Hydrogen (High)", { model: "MODEL_HYDROGEN_HIGH" }),
+  "gemini-4-hydrogen-xhigh": info("Gemini 4 Hydrogen (XHigh)", { model: "MODEL_HYDROGEN_XHIGH" }),
+  "gemini-4-carbon-disabled": info("Gemini 4 Carbon", { model: "MODEL_CARBON_DIS", disabled: true }),
+};
+const hydrogenCatalog = buildAntigravityCatalog(hydrogenRawModels, fallback);
+assert.equal(hydrogenCatalog.models.length, 1);
+const hydrogen = hydrogenCatalog.models[0];
+assert.equal(hydrogen.id, "gemini-4-hydrogen");
+assert.equal(hydrogen.name, "Gemini 4 Hydrogen (Antigravity)");
+assert.equal(hydrogen.thinkingLevelMap?.xhigh, "xhigh");
+assert.equal(hydrogen.thinkingLevelMap?.high, "high");
+assert.equal(hydrogen.thinkingLevelMap?.medium, "medium");
+assert.equal(hydrogen.thinkingLevelMap?.low, "low");
+assert.equal(hydrogen.cost?.input, 1.5);
+assert.equal(hydrogen.cost?.output, 7.5);
+assert.equal(hydrogenCatalog.routing["gemini-4-hydrogen"]?.routing?.xhigh, "gemini-4-hydrogen-xhigh");
+assert(!hydrogenCatalog.models.some((m) => m.id.includes("disabled")), "filters out disabled models");
+
 console.log("model discovery: live metadata, routing, validation, persistence, and TTL passed");

@@ -277,6 +277,7 @@ export type ModelInfoRaw = {
   supportsThinking?: unknown;
   supportsImages?: unknown;
   recommended?: unknown;
+  disabled?: unknown;
   quotaInfo?: {
     remainingFraction?: unknown;
     resetTime?: unknown;

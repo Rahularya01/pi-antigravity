@@ -26,6 +26,7 @@ type RuntimeGroup = {
 const THINKING_SUFFIXES: Array<{ suffix: string; level: ThinkingLevel }> = [
   { suffix: "extra-low", level: ThinkingEffort.Low },
   { suffix: "extra-high", level: ThinkingEffort.Xhigh },
+  { suffix: "xhigh", level: ThinkingEffort.Xhigh },
   { suffix: "thinking", level: ThinkingEffort.High },
   { suffix: "minimal", level: ThinkingEffort.Minimal },
   { suffix: "medium", level: ThinkingEffort.Medium },
@@ -36,6 +37,7 @@ const THINKING_SUFFIXES: Array<{ suffix: string; level: ThinkingLevel }> = [
 const DISPLAY_LEVELS: Array<{ pattern: RegExp; level: ThinkingLevel }> = [
   { pattern: /\(\s*extra\s*low\s*\)/i, level: ThinkingEffort.Low },
   { pattern: /\(\s*extra\s*high\s*\)/i, level: ThinkingEffort.Xhigh },
+  { pattern: /\(\s*xhigh\s*\)/i, level: ThinkingEffort.Xhigh },
   { pattern: /\(\s*thinking\s*\)/i, level: ThinkingEffort.High },
   { pattern: /\(\s*minimal\s*\)/i, level: ThinkingEffort.Minimal },
   { pattern: /\(\s*medium\s*\)/i, level: ThinkingEffort.Medium },
@@ -60,6 +62,7 @@ export function isSelectableRuntimeModelId(id: string, info?: ModelInfoRaw): boo
   if (/^(chat_|tab_)/i.test(id)) return false;
   if (/image/i.test(id) || /image/i.test(modelDisplayName(info) ?? "")) return false;
   if (info?.isInternal === true || info?.apiProvider === "API_PROVIDER_INTERNAL") return false;
+  if (info?.disabled === true || id.endsWith("-disabled")) return false;
   return true;
 }
 
@@ -254,7 +257,7 @@ function modelDisplayName(info: ModelInfoRaw | undefined): string | undefined {
 function displayFamily(displayName: string | undefined): string | undefined {
   if (!displayName) return undefined;
   return displayName
-    .replace(/\s*\((?:extra\s*low|extra\s*high|low|medium|high|minimal|thinking)\)\s*$/i, "")
+    .replace(/\s*\((?:extra\s*low|extra\s*high|xhigh|low|medium|high|minimal|thinking)\)\s*$/i, "")
     .trim()
     .toLowerCase();
 }
