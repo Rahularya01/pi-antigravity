@@ -1413,6 +1413,41 @@ const reusedIdContext = {
 const reusedIdResult = convertMessages(flash37Model, reusedIdContext, geminiRuntime).at(-1);
 assert.equal(reusedIdResult?.parts.filter((part) => "functionResponse" in part).length, 2);
 
+// Sanitized aliases must not overwrite or delete another call's raw ID.
+const collidingIdsContext = {
+  messages: [
+    { role: "user", content: "read both", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        { type: "toolCall", id: "call:1", name: "read", arguments: { path: "a" } },
+        { type: "toolCall", id: "call_1", name: "read", arguments: { path: "b" } },
+      ],
+      api: "openai-responses",
+      provider: "openai",
+      model: "gpt-4o",
+      usage: zeroUsage,
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    ...["call:1", "call_1"].map((toolCallId) => ({
+      role: "toolResult",
+      toolCallId,
+      toolName: "read",
+      content: [{ type: "text", text: `result for ${toolCallId}` }],
+      isError: false,
+      timestamp: Date.now(),
+    })),
+  ],
+} as unknown as Context;
+const collidingResults = convertMessages(flash37Model, collidingIdsContext, geminiRuntime).at(-1);
+assert.equal(collidingResults?.parts.length, 2);
+assert.ok(collidingResults?.parts.every((part) => "text" in part));
+assert.match(JSON.stringify(collidingResults?.parts[0]), /result for call:1/);
+assert.match(JSON.stringify(collidingResults?.parts[1]), /result for call_1/);
+assert.match(JSON.stringify(collidingResults?.parts[0]), /path.*a/);
+assert.match(JSON.stringify(collidingResults?.parts[1]), /path.*b/);
+
 const abortedContext = {
   messages: [
     { role: "user", content: "hi", timestamp: Date.now() },

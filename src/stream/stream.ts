@@ -329,6 +329,7 @@ function convertMessagesWithMetadata(
   let hasDegradedToolObservations = false;
   const requiresSig = geminiRequiresThoughtSignature(runtimeModel);
   const droppedToolCallIds = new Map<string, string>();
+  const droppedEmptyToolCalls = new Map<string, string>();
   for (const msg of context.messages) {
     if ((msg.role as string) === "system") continue;
     if (msg.role === "user") {
@@ -383,17 +384,15 @@ function convertMessagesWithMetadata(
             })();
             if (rawId) {
               droppedToolCallIds.set(rawId, argsText);
-              droppedToolCallIds.set(sanitizeToolCallId(rawId, block.name), argsText);
             } else {
-              droppedToolCallIds.set(`empty:${block.name}`, argsText);
+              droppedEmptyToolCalls.set(block.name, argsText);
             }
           } else {
             // Tool call IDs can be reused later in a session; a replayable call
             // must not inherit the dropped status of an earlier call.
             const rawId = block.id || "";
-            droppedToolCallIds.delete(rawId);
-            droppedToolCallIds.delete(sanitizeToolCallId(rawId, block.name));
-            if (!rawId) droppedToolCallIds.delete(`empty:${block.name}`);
+            if (rawId) droppedToolCallIds.delete(rawId);
+            else droppedEmptyToolCalls.delete(block.name);
             parts.push({
               functionCall: {
                 name: block.name,
@@ -424,15 +423,29 @@ function convertMessagesWithMetadata(
       const sanitizedId = toolCallIdNeeded(model.id, runtimeModel)
         ? sanitizeToolCallId(rawId, msg.toolName)
         : rawId;
-      const droppedArgs = requiresSig
-        ? (droppedToolCallIds.get(rawId) ??
-          droppedToolCallIds.get(sanitizedId) ??
-          (rawId === "" ? droppedToolCallIds.get(`empty:${msg.toolName}`) : undefined))
+      let droppedId = rawId;
+      let droppedArgs = requiresSig
+        ? rawId
+          ? droppedToolCallIds.get(rawId)
+          : droppedEmptyToolCalls.get(msg.toolName)
         : undefined;
+      if (
+        requiresSig &&
+        rawId &&
+        droppedArgs === undefined &&
+        toolCallIdNeeded(model.id, runtimeModel)
+      ) {
+        const matches = [...droppedToolCallIds.entries()].filter(
+          ([id]) => sanitizeToolCallId(id, msg.toolName) === sanitizedId,
+        );
+        if (matches.length > 1) {
+          throw new Error("Ambiguous sanitized tool call ID in historical tool results.");
+        }
+        if (matches[0]) [droppedId, droppedArgs] = matches[0];
+      }
       if (droppedArgs !== undefined) {
-        droppedToolCallIds.delete(rawId);
-        droppedToolCallIds.delete(sanitizeToolCallId(rawId, msg.toolName));
-        if (!rawId) droppedToolCallIds.delete(`empty:${msg.toolName}`);
+        if (rawId) droppedToolCallIds.delete(droppedId);
+        else droppedEmptyToolCalls.delete(msg.toolName);
         hasDegradedToolObservations = true;
         const label =
           droppedArgs === "{}" ? `\`${msg.toolName}\`` : `\`${msg.toolName}\` (${droppedArgs})`;
