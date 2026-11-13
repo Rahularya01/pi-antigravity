@@ -4,6 +4,32 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-12
+
+### Added
+
+- **Gemini Enterprise routing:** `ANTIGRAVITY_LOCATION=eu|us` (or `ANTIGRAVITY_ENTERPRISE=1`) sends inference only to the documented Business AI Code host for that location. Consumer `cloudcode-pa` fallback is not used, so a regional license is not retried on the endpoint that returns error #3501. Image prompts and reference images are not uploaded while enterprise routing is active. Requires `ANTIGRAVITY_ENTERPRISE_PROJECT` and `ANTIGRAVITY_USER_TIER` (#106).
+- **`read_url_content` tool:** Reads public pages through Google's Antigravity fetch service and converts HTML to Markdown. Inadequate cached copies retry live, with useful cached content retained on recovery failure. The tool inspects metadata and article-matched JSON-LD before cleanup, and can recover through one advertised same-origin Markdown or supported article-JSON representation. Results distinguish source completeness, suspected content problems, and output truncation, and report retrieval attempts and provenance. Pages too long for one answer are saved whole to a private temp file named in the answer. `/antigravity.fetch [--raw] <url>` exposes interactive fetching; raw mode preserves the crawled source. Disable with `ANTIGRAVITY_NO_FETCH_TOOL=1`, `ANTIGRAVITY_NO_EXTRA_TOOLS=1`, or the `read-url-content` resource in `pi config` (#102).
+- **Google One credit overages:** `/antigravity.credits` checks the reported balance and toggles `enabledCreditTypes: ["GOOGLE_ONE_AI"]`. Overages stay off unless enabled by `ANTIGRAVITY_USE_CREDITS`, Pi settings, or the official CLI settings (#112).
+- **Reference images:** `generate_image` accepts up to four project-relative PNG, JPEG, WebP, or GIF references, 10 MB each. Paths must stay inside the working directory after `realpath` (#104).
+
+### Changed
+
+- **Client fingerprint:** Default User-Agent is `antigravity/cli/1.5.5`, matching the current official `agy` CLI.
+- **Model prices:** Each Gemini and Claude model uses its own published per-million-token rate instead of one shared Flash or Pro placeholder (#103).
+
+### Fixed
+
+- Declare `typebox` as a `"*"` peer dependency instead of a runtime dependency, as Pi requires for host-provided packages. This clears Pi's "Host-provided extension packages must be declared in peerDependencies" extension warning and avoids installing a duplicate TypeBox copy (#116, #119).
+- **Thinking-off and capacity 429s:** A generic `RESOURCE_EXHAUSTED` response now tries the other endpoints and one same-generation sibling tier, so `gemini-3.8-flash` with reasoning off is not stuck on a dead `-low` runtime and `gemini-4-argon-high` can step down while quota remains (#125, #122). Hard quota walls with a reset time are unchanged.
+- **`before_provider_request`:** `streamAntigravity` applies `onPayload` to the final request body before it is sent (#126).
+- **Staggered model rollouts:** Merging `fetchAvailableModels` across endpoints now unions the curated `agentModelSorts` recommendation lists instead of letting the last endpoint overwrite them. Models that launch on the daily/sandbox endpoints before production (e.g. Gemini 4 Carbon) stay selectable after `/antigravity.refresh` (#123).
+- **Reader recovery and reporting:** One shared ten-second deadline and a ten-request ceiling bound Google retrieval. Useful cache content survives failed live recovery. Source completeness, heuristic content assessment, publisher metadata, omitted sections, and output truncation are reported separately. Failed and degraded reads leave sanitized diagnostics.
+- **Page conversion:** HTML conversion has size, depth, and element limits. Independent blocks avoid repeated prefix scans. Content-root selection skips empty placeholders, status reference articles are not mistaken for access walls from their headings alone, and XML/SVG documents remain intact. Unicode repair preserves body structure. Class names such as `has-sidebar`, `menu-open`, or `lg:grid-cols-sidebar-content` no longer remove a wrapper that holds the article, tag names the DOM cannot clone no longer fail a read, relative links honor `<base href>`, and a cut-off copy holding only its title is reported as empty.
+- **URL and credential safety:** Reader and search share a conservative public-URL policy. Explicit unsafe redirects fail closed. Recognized credentials are redacted from rendered URLs, progress, metadata, and errors without corrupting ordinary diagnostics or JSON. Credential parse failures do not quote their input.
+- **Output:** Provenance and the saved-page footer count toward the complete output cap. Consumers own footer space. A budget too small to answer leaves no saved file, and a failed save is reported without losing the page.
+- **MDN article recovery:** Inadequate page copies can use same-origin, identity-matched article JSON. Supported prose and specification sections survive unknown section types, with omissions noted. Incomplete article data is never reconstructed. Cut-off or unavailable Wikipedia articles and raw GitHub files recover through identity-checked publisher copies. Raw mode returns the crawled source whatever its size.
+
 ## [0.12.0] - 2026-11-06
 
 ### Security

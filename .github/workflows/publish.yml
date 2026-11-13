@@ -4,6 +4,14 @@ on:
   push:
     tags:
       - "v*"
+  # Republish an existing tag after the workflow changes. Tag pushes use the
+  # workflow committed on that tag, so a fix on main does not rerun v0.13.0.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish, for example v0.13.0
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -18,20 +26,29 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Reject an invalid manual tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+
       - name: Checkout repository
-        # v5
+        # v5. An unqualified ref prefers a branch over a tag of the same name.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
 
       - name: Setup Node
         # v7.1.0 — skip cache: yarn; setup-node would invoke Yarn 1
         # before Corepack can activate Yarn 4 from packageManager.
+        # No registry-url: that writes an npm token placeholder, and a
+        # token that still requires an OTP is what made publish fail with EOTP.
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
-          registry-url: https://registry.npmjs.org
 
       - name: Enable Corepack
         run: corepack enable
@@ -43,11 +60,29 @@ jobs:
         run: yarn check
 
       - name: Verify release tag and package contents
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
-          test "$GITHUB_REF_NAME" = "v$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')"
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$RELEASE_TAG" = "v$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')"
           npm pack --dry-run
 
       - name: Publish to npm
-        run: npm publish --access public --provenance
+        run: |
+          npm install -g npm@11.21.2
+          if [ -f "$HOME/.npmrc" ]; then
+            grep -v '_authToken' "$HOME/.npmrc" > "$HOME/.npmrc.stripped" || true
+            mv "$HOME/.npmrc.stripped" "$HOME/.npmrc"
+          fi
+          unset NODE_AUTH_TOKEN NPM_TOKEN
+          # Provenance reads GITHUB_REF and GITHUB_SHA for the source commit.
+          # A manual run's event ref is main; point those two at the checked-out
+          # tag. Leave GITHUB_WORKFLOW_REF alone so the attestation still names
+          # this workflow on the commit that actually ran.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            export GITHUB_SHA="$(git rev-parse HEAD)"
+            export GITHUB_REF="refs/tags/$RELEASE_TAG"
+          fi
+          npm publish --access public --provenance
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}

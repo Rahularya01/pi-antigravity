@@ -49,5 +49,5 @@ body:
     id: diagnostics
     attributes:
       label: Sanitized diagnostics
-      description: Include sanitized output from /antigravity.doctor.
+      description: Include sanitized output from /antigravity.doctor. For URL reads, include lastFetch and lastError from the same attempt.
       render: text

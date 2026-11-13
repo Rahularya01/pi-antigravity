@@ -23,6 +23,19 @@ import { getLastDiagnostics, runWithDiagnostics } from "./diagnostics/index.js";
 import { generateAntigravityImage, parseImageCommandArgs } from "./image/index.js";
 import { executeAntigravitySearch, parseSearchCommandArgs } from "./search/index.js";
 import {
+  executeAntigravityWebFetch,
+  discardSavedPage,
+  formatWebFetchHeader,
+  formatWebFetchResult,
+  looksLikeHtml,
+  parseFetchCommandArgs,
+  savePage,
+  savedPageNote,
+  type SavedPage,
+  withSavedCopy,
+  validateFetchTarget,
+} from "./web-fetch/index.js";
+import {
   applyAntigravityCatalog,
   discoverAntigravityModels,
   getCurrentAntigravityCatalog,
@@ -34,11 +47,19 @@ import {
 import { ANTIGRAVITY_API, streamAntigravity } from "./stream/index.js";
 import {
   fetchAccountUsage,
+  fetchRemainingCredits,
   formatModelsList,
   formatUsageSummary,
   resolveApiKeyFromContext,
 } from "./usage/index.js";
-import { redactSecrets, maskEmail } from "./utils/index.js";
+import {
+  getCreditsStatus,
+  isCreditsEnabled,
+  setCreditsEnabled,
+  redactSecrets,
+  maskEmail,
+} from "./utils/index.js";
+import { describeEnterpriseRouting } from "./client/enterprise.js";
 
 /**
  * Pi's interactive `notify` writes into the chat transcript. `console.log` in that
@@ -246,6 +267,71 @@ export default function (pi: ExtensionAPI): void {
     },
   });
 
+  pi.registerCommand("antigravity.credits", {
+    description: "Check remaining AI credits or toggle overages (/antigravity.credits [on|off])",
+    handler: async (args, ctx) => {
+      const mode = args.trim().toLowerCase();
+      try {
+        if (mode === "on" || mode === "enable" || mode === "true" || mode === "1") {
+          setCreditsEnabled(true);
+          emitCommandOutput(
+            ctx,
+            "Antigravity AI credit overages: ENABLED.\nRequests will supply enabledCreditTypes: ['GOOGLE_ONE_AI'] to use credit balance when standard quota is exhausted.",
+            "info",
+          );
+          return;
+        }
+        if (mode === "off" || mode === "disable" || mode === "false" || mode === "0") {
+          setCreditsEnabled(false);
+          emitCommandOutput(
+            ctx,
+            "Antigravity AI credit overages: DISABLED.\nRequests will not tap into AI credits.",
+            "info",
+          );
+          return;
+        }
+
+        const apiKey = await resolveApiKeyFromContext(ctx);
+        const status = getCreditsStatus();
+
+        let creditsInfo: Awaited<ReturnType<typeof fetchRemainingCredits>> | undefined;
+        if (apiKey) {
+          try {
+            creditsInfo = await fetchRemainingCredits(apiKey);
+          } catch {
+            // best effort
+          }
+        }
+
+        const lines: string[] = [];
+        if (creditsInfo?.planLabel) {
+          lines.push(creditsInfo.planLabel);
+        }
+
+        if (creditsInfo?.availableCredits && creditsInfo.availableCredits.length > 0) {
+          for (const c of creditsInfo.availableCredits) {
+            const amt = c.creditAmount !== undefined ? c.creditAmount.toLocaleString() : "0";
+            const typ = c.creditType || "GOOGLE_ONE_AI";
+            lines.push(`Remaining AI Credits: ${amt} (${typ})`);
+          }
+        } else {
+          lines.push("Remaining AI Credits: 0 (or not reported by subscription)");
+        }
+
+        lines.push(`AI Credit Overages: ${status.enabled ? "ENABLED" : "DISABLED"}`);
+        lines.push("");
+        lines.push("Usage:");
+        lines.push("  /antigravity.credits on   - Enable AI credits overage on quota exhaustion");
+        lines.push("  /antigravity.credits off  - Disable AI credits overage");
+
+        emitCommandOutput(ctx, lines.join("\n"), "info");
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        emitCommandOutput(ctx, `Failed to query or update credit settings: ${msg}`, "error");
+      }
+    },
+  });
+
   pi.registerCommand("antigravity.refresh", {
     description: "Force refresh Antigravity dynamic model catalog",
     handler: async (_args, ctx) => {
@@ -313,12 +399,15 @@ export default function (pi: ExtensionAPI): void {
         `lastProjectId=${d.projectId || "none"}`,
         `linkedAccounts=${accounts.length || "none"}`,
         `activeAccount=${activeLabel || "none"}`,
+        `aiCreditOverages=${isCreditsEnabled() ? "enabled" : "disabled"}`,
+        `routing=${describeEnterpriseRouting()}`,
         ...(d.latencyMs !== undefined ? [`lastLatencyMs=${d.latencyMs}`] : []),
         `toolSchemaWarnings=${d.toolSchemaWarnings || "none"}`,
+        ...(d.fetchTrace ? [`lastFetch=${d.fetchTrace}`] : []),
         `lastError=${d.error ? redactSecrets(d.error) : "none"}`,
         "transport=native-streamSimple",
         "runtimeCli=not-used",
-        "commands=/antigravity.usage /antigravity.models /antigravity.accounts /antigravity.refresh /antigravity.doctor /antigravity.image /antigravity.search",
+        "commands=/antigravity.usage /antigravity.models /antigravity.accounts /antigravity.credits /antigravity.refresh /antigravity.doctor /antigravity.image /antigravity.search /antigravity.fetch",
       ];
       emitCommandOutput(ctx, `Antigravity doctor\n${lines.join("\n")}`);
     },
@@ -398,6 +487,60 @@ export default function (pi: ExtensionAPI): void {
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         emitCommandOutput(ctx, `Antigravity search failed: ${redactSecrets(msg)}`, "warning");
+      }
+    },
+  });
+
+  pi.registerCommand("antigravity.fetch", {
+    description:
+      "Read a public web page via the Antigravity crawler (usage: /antigravity.fetch [--raw] <url>)",
+    handler: async (args, ctx) => {
+      const parsed = parseFetchCommandArgs(args || "");
+      if (!parsed.url) {
+        emitCommandOutput(ctx, "Usage: /antigravity.fetch [--raw] <url>", "warning");
+        return;
+      }
+      try {
+        const url = validateFetchTarget(parsed.url);
+        const apiKey = await resolveApiKeyFromContext(ctx);
+        if (!apiKey) {
+          emitCommandOutput(
+            ctx,
+            "No Antigravity credentials. Run /login antigravity first.",
+            "warning",
+          );
+          return;
+        }
+        if (ctx.hasUI) ctx.ui.notify("Reading page via Antigravity…", "info");
+        const result = await executeAntigravityWebFetch({
+          apiKey,
+          url,
+          raw: parsed.raw,
+        });
+        const whole = result.content;
+        let footer = "";
+        let saved: SavedPage | undefined;
+        if (formatWebFetchHeader(result).length + whole.length > (result.maxChars ?? 0)) {
+          // Raw output is the crawled source itself; converted output keeps its provenance.
+          saved = parsed.raw
+            ? await savePage(whole, looksLikeHtml(whole) ? "html" : "txt")
+            : await savePage(formatWebFetchHeader(result) + whole, "md");
+          footer = savedPageNote(saved, whole.length, "Open it to read the rest.");
+        }
+        try {
+          emitCommandOutput(ctx, formatWebFetchResult(result, footer));
+        } catch (error) {
+          if (saved) await discardSavedPage(saved);
+          throw error;
+        }
+      } catch (caught) {
+        const error = await withSavedCopy(caught);
+        const msg = error instanceof Error ? error.message : String(error);
+        const guidance = msg.replace(
+          "Do not retry this URL with read_url_content. If permitted, use an available download tool or terminal to download it directly, then read the local file with a PDF reader.",
+          "If you have permission, download the URL directly and open the local file with a PDF reader.",
+        );
+        emitCommandOutput(ctx, redactSecrets(guidance), "warning");
       }
     },
   });

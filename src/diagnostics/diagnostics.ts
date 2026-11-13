@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { redactSecrets, stripValidationUrls } from "../utils/security.js";
+import { cleanText } from "../utils/text.js";
 
 export type DiagnosticsSnapshot = {
   status?: number;
@@ -13,6 +14,7 @@ export type DiagnosticsSnapshot = {
   maskedEmail?: string;
   tokenExpiry?: string;
   toolSchemaWarnings?: string;
+  fetchTrace?: string;
 };
 
 const storage = new AsyncLocalStorage<DiagnosticsSnapshot>();
@@ -51,6 +53,11 @@ export function getCurrentMatchedModelDebug(): string | undefined {
 
 export function getCurrentAvailableModels(): string | undefined {
   return currentBag().availableModels;
+}
+
+/** The bounded fetch history survives a small model-facing details budget. */
+export function setLastFetchTrace(trace: string): void {
+  currentBag().fetchTrace = cleanText(stripValidationUrls(redactSecrets(trace)), 6_000);
 }
 
 export function setLastStatus(status: number | undefined): void {

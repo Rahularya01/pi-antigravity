@@ -168,11 +168,64 @@ export function getMaxOutputTokens(modelId: string, runtimeModel?: string): numb
   return 8192;
 }
 
-const geminiFlashCost = { input: 0.1, output: 0.4, cacheRead: 0.025, cacheWrite: 0.1 };
-const geminiProCost = { input: 1.25, output: 5.0, cacheRead: 0.3125, cacheWrite: 1.25 };
+/**
+ * Per-model list prices, in USD per million tokens.
+ *
+ * Every Flash model used to share one flat placeholder ($0.10 / $0.40 / $0.025),
+ * which understated Gemini usage by roughly 4-7x. Rates below come from the
+ * LiteLLM public catalog (the same source Pi's own cost reporting uses), which
+ * tracks Google's published per-model pricing:
+ * https://ai.google.dev/gemini-api/docs/pricing
+ *
+ * gemini-3.8-flash sits on Google's 50%-off launch rate ($0.75 / $3.75 / $0.075),
+ * which is valid through 2026-12-31 and becomes $1.50 / $7.50 / $0.15 on
+ * 2027-01-01. Revisit this table when that date passes.
+ *
+ * Gemini bills cached content for storage per hour rather than per token, so
+ * there is no cache-write rate to publish; the input rate is used.
+ */
+const gemini38FlashCost = { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0.75 };
+const gemini37FlashCost = { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0.75 };
+const gemini36FlashCost = { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0.75 };
+const gemini35FlashCost = { input: 1.5, output: 9.0, cacheRead: 0.15, cacheWrite: 1.5 };
+const gemini35FlashLiteCost = { input: 0.3, output: 2.5, cacheRead: 0.03, cacheWrite: 0.3 };
+const gemini31FlashLiteCost = { input: 0.25, output: 1.5, cacheRead: 0.025, cacheWrite: 0.25 };
+const gemini25FlashCost = { input: 0.3, output: 2.5, cacheRead: 0.03, cacheWrite: 0.3 };
+const gemini25FlashLiteCost = { input: 0.1, output: 0.4, cacheRead: 0.01, cacheWrite: 0.1 };
+const gemini31ProCost = { input: 2.0, output: 12.0, cacheRead: 0.2, cacheWrite: 2.0 };
+const gemini25ProCost = { input: 1.25, output: 10.0, cacheRead: 0.125, cacheWrite: 1.25 };
 const claudeSonnetCost = { input: 3.0, output: 15.0, cacheRead: 0.3, cacheWrite: 3.75 };
-const claudeOpusCost = { input: 15.0, output: 75.0, cacheRead: 1.5, cacheWrite: 18.75 };
+const claudeOpusCost = { input: 5.0, output: 25.0, cacheRead: 0.5, cacheWrite: 6.25 };
 const gptOssCost = { input: 0.6, output: 2.4, cacheRead: 0.15, cacheWrite: 0.6 };
+
+/**
+ * Prices for models this package can discover dynamically but does not ship as
+ * a static entry. Keyed by public model id.
+ */
+export const ANTIGRAVITY_DISCOVERED_MODEL_COSTS: Record<
+  string,
+  { input: number; output: number; cacheRead: number; cacheWrite: number }
+> = {
+  "gemini-3.5-flash": gemini35FlashCost,
+  "gemini-3.5-flash-lite": gemini35FlashLiteCost,
+  "gemini-3.1-flash-lite": gemini31FlashLiteCost,
+  "gemini-2.5-flash": gemini25FlashCost,
+  "gemini-2.5-flash-lite": gemini25FlashLiteCost,
+  "gemini-2.5-pro": gemini25ProCost,
+};
+
+/**
+ * Look up a model's list price by public id. Returns undefined when the model
+ * is not priced here, so callers can fall back rather than publish a guess.
+ */
+export function getAntigravityModelCost(
+  publicId: string,
+): { input: number; output: number; cacheRead: number; cacheWrite: number } | undefined {
+  const discovered = ANTIGRAVITY_DISCOVERED_MODEL_COSTS[publicId];
+  if (discovered) return discovered;
+  const staticModel = ANTIGRAVITY_MODELS.find((model) => model.id === publicId);
+  return staticModel?.cost;
+}
 
 // A null entry is intentionally hidden by Pi. Do not collapse levels that happen to
 // route to the same runtime ID: the UI must reflect the levels the backend advertises.
@@ -223,7 +276,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     reasoning: true,
     thinkingLevelMap: thinkingLevelMaps.lowMediumHigh,
     input: ["text", "image"],
-    cost: geminiFlashCost,
+    cost: gemini38FlashCost,
     contextWindow: 1048576,
     maxTokens: 65536,
   },
@@ -233,7 +286,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     reasoning: true,
     thinkingLevelMap: thinkingLevelMaps.lowMediumHigh,
     input: ["text", "image"],
-    cost: geminiFlashCost,
+    cost: gemini37FlashCost,
     contextWindow: 1048576,
     maxTokens: 65536,
   },
@@ -243,7 +296,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     reasoning: true,
     thinkingLevelMap: thinkingLevelMaps.lowMediumHigh,
     input: ["text", "image"],
-    cost: geminiFlashCost,
+    cost: gemini36FlashCost,
     contextWindow: 1048576,
     maxTokens: 65536,
   },
@@ -273,7 +326,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     reasoning: true,
     thinkingLevelMap: thinkingLevelMaps.lowHigh,
     input: ["text", "image"],
-    cost: geminiProCost,
+    cost: gemini31ProCost,
     contextWindow: 1048576,
     maxTokens: 65535,
   },
@@ -283,7 +336,7 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
     reasoning: true,
     thinkingLevelMap: thinkingLevelMaps.lowMediumHigh,
     input: ["text", "image"],
-    cost: geminiFlashCost,
+    cost: gemini35FlashCost,
     contextWindow: 1048576,
     maxTokens: 65536,
   },
@@ -402,6 +455,53 @@ function legacyFallbackRuntimeModel(runtimeModel: string, effort?: string): stri
     return "gemini-3.6-flash-low";
   }
   return undefined;
+}
+
+const RUNTIME_TIER_SUFFIXES = ["-extra-low", "-low", "-medium", "-high", "-max"] as const;
+
+/** Split `gemini-3.8-flash-low` into its family and tier. Thinking-only ids are not tiers. */
+export function runtimeTier(runtimeModel: string): { base: string; suffix: string } | undefined {
+  for (const suffix of RUNTIME_TIER_SUFFIXES) {
+    if (runtimeModel.endsWith(suffix) && runtimeModel.length > suffix.length) {
+      return { base: runtimeModel.slice(0, -suffix.length), suffix };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Same-generation tiers to try after one tier answers with a generic
+ * RESOURCE_EXHAUSTED. Highest remaining tier first, so a dead `-low` route
+ * (Gemini 3.8 Flash with reasoning off, #125) moves to `-high` / `-medium`,
+ * and `gemini-4-argon-high` can step down to `-medium` (#122).
+ */
+export function siblingRuntimeModels(runtimeModel: string): string[] {
+  const tier = runtimeTier(runtimeModel);
+  if (!tier) return [];
+  const preferred = ["-high", "-medium", "-low", "-extra-low", "-max"];
+  return preferred.filter((suffix) => suffix !== tier.suffix).map((suffix) => tier.base + suffix);
+}
+
+/** Sibling tiers this process already knows how to route, capped for dynamic families. */
+export function advertisedSiblingRuntimes(runtimeModel: string): string[] {
+  const candidates = siblingRuntimeModels(runtimeModel);
+  if (!candidates.length) return [];
+  const known = new Set<string>();
+  for (const route of Object.values(currentRouting)) {
+    if (route.off) known.add(route.off);
+    if (route.defaultRequestId) known.add(route.defaultRequestId);
+    for (const id of Object.values(route.routing ?? {})) {
+      if (id) known.add(id);
+    }
+  }
+  const routed = candidates.filter((id) => known.has(id));
+  if (routed.length) return routed;
+  const tier = runtimeTier(runtimeModel);
+  if (!tier) return [];
+  if (tier.base.startsWith("gemini-") || tier.base.startsWith("claude-")) {
+    return candidates.slice(0, 2);
+  }
+  return [];
 }
 
 export type { ThinkingWire };
