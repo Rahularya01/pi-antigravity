@@ -26,6 +26,7 @@ type RuntimeGroup = {
 const THINKING_SUFFIXES: Array<{ suffix: string; level: ThinkingLevel }> = [
   { suffix: "extra-low", level: ThinkingEffort.Low },
   { suffix: "extra-high", level: ThinkingEffort.Xhigh },
+  { suffix: "xhigh", level: ThinkingEffort.Xhigh },
   { suffix: "thinking", level: ThinkingEffort.High },
   { suffix: "minimal", level: ThinkingEffort.Minimal },
   { suffix: "medium", level: ThinkingEffort.Medium },
@@ -87,6 +88,10 @@ export function extractRecommendedModelIds(agentModelSorts: unknown): Set<string
   return ids.size > 0 ? ids : undefined;
 }
 
+export function isExtraAllowedModelId(runtimeId: string): boolean {
+  return /(?:^|-)(?:hydrogen|oxygen)(?:-|$)/i.test(runtimeId);
+}
+
 export function buildAntigravityCatalog(
   rawModels: Record<string, ModelInfoRaw>,
   fallback: AntigravityCatalog,
@@ -100,7 +105,7 @@ export function buildAntigravityCatalog(
     for (const [runtimeId, info] of Object.entries(rawModels)) {
       if (!isSelectableRuntimeModelId(runtimeId, info)) continue;
       if (info?.isInternal) continue;
-      if (filterIds && !filterIds.has(runtimeId)) continue;
+      if (filterIds && !filterIds.has(runtimeId) && !isExtraAllowedModelId(runtimeId)) continue;
 
       const displayName = modelDisplayName(info);
       if (runtimeId.endsWith("-tiered")) {
