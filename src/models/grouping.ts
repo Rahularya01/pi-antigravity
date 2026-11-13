@@ -2,7 +2,7 @@ import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 import { ThinkingEffort } from "../types/enums.js";
 import type { AntigravityRouting, ModelInfoRaw } from "../types/types.js";
 import { isRecord } from "../utils/util.js";
-import { getAntigravityModelCost } from "./models.js";
+import { getAntigravityModelCost, RUNTIME_MAX_OUTPUT_TOKENS } from "./models.js";
 
 export type AntigravityCatalog = {
   models: ProviderModelConfig[];
@@ -26,6 +26,7 @@ type RuntimeGroup = {
 const THINKING_SUFFIXES: Array<{ suffix: string; level: ThinkingLevel }> = [
   { suffix: "extra-low", level: ThinkingEffort.Low },
   { suffix: "extra-high", level: ThinkingEffort.Xhigh },
+  { suffix: "xhigh", level: ThinkingEffort.Xhigh },
   { suffix: "thinking", level: ThinkingEffort.High },
   { suffix: "minimal", level: ThinkingEffort.Minimal },
   { suffix: "medium", level: ThinkingEffort.Medium },
@@ -36,6 +37,7 @@ const THINKING_SUFFIXES: Array<{ suffix: string; level: ThinkingLevel }> = [
 const DISPLAY_LEVELS: Array<{ pattern: RegExp; level: ThinkingLevel }> = [
   { pattern: /\(\s*extra\s*low\s*\)/i, level: ThinkingEffort.Low },
   { pattern: /\(\s*extra\s*high\s*\)/i, level: ThinkingEffort.Xhigh },
+  { pattern: /\(\s*xhigh\s*\)/i, level: ThinkingEffort.Xhigh },
   { pattern: /\(\s*thinking\s*\)/i, level: ThinkingEffort.High },
   { pattern: /\(\s*minimal\s*\)/i, level: ThinkingEffort.Minimal },
   { pattern: /\(\s*medium\s*\)/i, level: ThinkingEffort.Medium },
@@ -60,6 +62,7 @@ export function isSelectableRuntimeModelId(id: string, info?: ModelInfoRaw): boo
   if (/^(chat_|tab_)/i.test(id)) return false;
   if (/image/i.test(id) || /image/i.test(modelDisplayName(info) ?? "")) return false;
   if (info?.isInternal === true || info?.apiProvider === "API_PROVIDER_INTERNAL") return false;
+  if (info?.disabled === true || id.endsWith("-disabled")) return false;
   return true;
 }
 
@@ -254,7 +257,7 @@ function modelDisplayName(info: ModelInfoRaw | undefined): string | undefined {
 function displayFamily(displayName: string | undefined): string | undefined {
   if (!displayName) return undefined;
   return displayName
-    .replace(/\s*\((?:extra\s*low|extra\s*high|low|medium|high|minimal|thinking)\)\s*$/i, "")
+    .replace(/\s*\((?:extra\s*low|extra\s*high|xhigh|low|medium|high|minimal|thinking)\)\s*$/i, "")
     .trim()
     .toLowerCase();
 }
@@ -284,7 +287,11 @@ function synthesizeModel(
       // newly discovered Flash variant is not billed at another Flash's rate.
       cost: getAntigravityModelCost(group.publicId) ?? template?.cost ?? ZERO_COST,
       contextWindow: group.contextWindow ?? template?.contextWindow ?? 128000,
-      maxTokens: group.maxOutputTokens ?? template?.maxTokens ?? 8192,
+      maxTokens:
+        group.maxOutputTokens ??
+        RUNTIME_MAX_OUTPUT_TOKENS[group.publicId] ??
+        template?.maxTokens ??
+        8192,
     },
     routing,
   };
@@ -311,6 +318,7 @@ function routingFromVariants(
     variants[ThinkingEffort.Minimal] ??
     variants[ThinkingEffort.Medium] ??
     variants[ThinkingEffort.High] ??
+    variants[ThinkingEffort.Xhigh] ??
     unsuffixed ??
     publicId;
 
@@ -328,6 +336,7 @@ function routingFromVariants(
       ThinkingEffort.Minimal,
       ThinkingEffort.Medium,
       ThinkingEffort.High,
+      ThinkingEffort.Xhigh,
     ),
     routing: {
       minimal: pick(
@@ -335,24 +344,28 @@ function routingFromVariants(
         ThinkingEffort.Low,
         ThinkingEffort.Medium,
         ThinkingEffort.High,
+        ThinkingEffort.Xhigh,
       ),
       low: pick(
         ThinkingEffort.Low,
         ThinkingEffort.Minimal,
         ThinkingEffort.Medium,
         ThinkingEffort.High,
+        ThinkingEffort.Xhigh,
       ),
       medium: pick(
         ThinkingEffort.Medium,
         ThinkingEffort.Low,
         ThinkingEffort.High,
         ThinkingEffort.Minimal,
+        ThinkingEffort.Xhigh,
       ),
       high: pick(
         ThinkingEffort.High,
         ThinkingEffort.Medium,
         ThinkingEffort.Low,
         ThinkingEffort.Minimal,
+        ThinkingEffort.Xhigh,
       ),
       xhigh: pick(
         ThinkingEffort.Xhigh,
