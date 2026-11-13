@@ -314,6 +314,7 @@ function routingFromVariants(
     variants[ThinkingEffort.Minimal] ??
     variants[ThinkingEffort.Medium] ??
     variants[ThinkingEffort.High] ??
+    variants[ThinkingEffort.Xhigh] ??
     unsuffixed ??
     publicId;
 
@@ -331,6 +332,7 @@ function routingFromVariants(
       ThinkingEffort.Minimal,
       ThinkingEffort.Medium,
       ThinkingEffort.High,
+      ThinkingEffort.Xhigh,
     ),
     routing: {
       minimal: pick(
@@ -338,24 +340,28 @@ function routingFromVariants(
         ThinkingEffort.Low,
         ThinkingEffort.Medium,
         ThinkingEffort.High,
+        ThinkingEffort.Xhigh,
       ),
       low: pick(
         ThinkingEffort.Low,
         ThinkingEffort.Minimal,
         ThinkingEffort.Medium,
         ThinkingEffort.High,
+        ThinkingEffort.Xhigh,
       ),
       medium: pick(
         ThinkingEffort.Medium,
         ThinkingEffort.Low,
         ThinkingEffort.High,
         ThinkingEffort.Minimal,
+        ThinkingEffort.Xhigh,
       ),
       high: pick(
         ThinkingEffort.High,
         ThinkingEffort.Medium,
         ThinkingEffort.Low,
         ThinkingEffort.Minimal,
+        ThinkingEffort.Xhigh,
       ),
       xhigh: pick(
         ThinkingEffort.Xhigh,

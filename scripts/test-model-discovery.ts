@@ -789,4 +789,14 @@ assert.equal(hydrogen.cost?.output, 7.5);
 assert.equal(hydrogenCatalog.routing["gemini-4-hydrogen"]?.routing?.xhigh, "gemini-4-hydrogen-xhigh");
 assert(!hydrogenCatalog.models.some((m) => m.id.includes("disabled")), "filters out disabled models");
 
+// xhigh-only model falls back to xhigh for defaultRequestId, off, and lower efforts
+const xhighOnlyCatalog = buildAntigravityCatalog(
+  { "gemini-4-xhigh-only-xhigh": info("Gemini 4 XHigh Only (XHigh)") },
+  fallback,
+);
+const xhighOnlyRoute = xhighOnlyCatalog.routing["gemini-4-xhigh-only"];
+assert.equal(xhighOnlyRoute?.defaultRequestId, "gemini-4-xhigh-only-xhigh");
+assert.equal(xhighOnlyRoute?.off, "gemini-4-xhigh-only-xhigh");
+assert.equal(xhighOnlyRoute?.routing?.low, "gemini-4-xhigh-only-xhigh");
+
 console.log("model discovery: live metadata, routing, validation, persistence, and TTL passed");
