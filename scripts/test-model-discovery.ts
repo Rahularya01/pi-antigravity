@@ -786,6 +786,18 @@ assert.equal(hydrogen.thinkingLevelMap?.medium, "medium");
 assert.equal(hydrogen.thinkingLevelMap?.low, "low");
 assert.equal(hydrogen.cost?.input, 1.5);
 assert.equal(hydrogen.cost?.output, 7.5);
+assert.equal(hydrogen.maxTokens, 262144);
+applyAntigravityCatalog(hydrogenCatalog);
+assert.equal(getMaxOutputTokens("gemini-4-hydrogen", "gemini-4-hydrogen-low"), 262144);
+resetAntigravityCatalogForTests();
+assert.equal(
+  buildAntigravityCatalog(
+    { "gemini-4-hydrogen-low": info("Gemini 4 Hydrogen (Low)", { maxOutputTokens: 131072 }) },
+    fallback,
+  ).models[0].maxTokens,
+  131072,
+  "explicit discovery maxOutputTokens overrides static limit",
+);
 assert.equal(hydrogenCatalog.routing["gemini-4-hydrogen"]?.routing?.xhigh, "gemini-4-hydrogen-xhigh");
 assert(!hydrogenCatalog.models.some((m) => m.id.includes("disabled")), "filters out disabled models");
 

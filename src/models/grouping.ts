@@ -2,7 +2,7 @@ import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 import { ThinkingEffort } from "../types/enums.js";
 import type { AntigravityRouting, ModelInfoRaw } from "../types/types.js";
 import { isRecord } from "../utils/util.js";
-import { getAntigravityModelCost } from "./models.js";
+import { getAntigravityModelCost, RUNTIME_MAX_OUTPUT_TOKENS } from "./models.js";
 
 export type AntigravityCatalog = {
   models: ProviderModelConfig[];
@@ -287,7 +287,11 @@ function synthesizeModel(
       // newly discovered Flash variant is not billed at another Flash's rate.
       cost: getAntigravityModelCost(group.publicId) ?? template?.cost ?? ZERO_COST,
       contextWindow: group.contextWindow ?? template?.contextWindow ?? 128000,
-      maxTokens: group.maxOutputTokens ?? template?.maxTokens ?? 8192,
+      maxTokens:
+        group.maxOutputTokens ??
+        RUNTIME_MAX_OUTPUT_TOKENS[group.publicId] ??
+        template?.maxTokens ??
+        8192,
     },
     routing,
   };
