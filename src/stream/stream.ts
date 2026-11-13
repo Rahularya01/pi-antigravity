@@ -310,7 +310,16 @@ export function convertMessages(
   context: Context,
   runtimeModel: string,
 ): GeminiContent[] {
+  return convertMessagesWithMetadata(model, context, runtimeModel).contents;
+}
+
+function convertMessagesWithMetadata(
+  model: Model<Api>,
+  context: Context,
+  runtimeModel: string,
+): { contents: GeminiContent[]; hasDegradedToolObservations: boolean } {
   const contents: GeminiContent[] = [];
+  let hasDegradedToolObservations = false;
   const requiresSig = geminiRequiresThoughtSignature(runtimeModel);
   const droppedToolCallIds = new Map<string, string>();
   for (const msg of context.messages) {
@@ -372,6 +381,12 @@ export function convertMessages(
               droppedToolCallIds.set(`empty:${block.name}`, argsText);
             }
           } else {
+            // Tool call IDs can be reused later in a session; a replayable call
+            // must not inherit the dropped status of an earlier call.
+            const rawId = block.id || "";
+            droppedToolCallIds.delete(rawId);
+            droppedToolCallIds.delete(sanitizeToolCallId(rawId, block.name));
+            if (!rawId) droppedToolCallIds.delete(`empty:${block.name}`);
             parts.push({
               functionCall: {
                 name: block.name,
@@ -384,6 +399,11 @@ export function convertMessages(
             });
           }
         }
+      }
+      // Keep a boundary between the human's message and flattened tool results.
+      // A real functionCall cannot be replayed without the required signature.
+      if (!parts.length && requiresSig && !groupIsSigned && toolCalls.length > 0) {
+        parts.push({ text: "[Earlier tool call omitted because its signature is unavailable.]" });
       }
       appendTurn(contents, GeminiRole.Model, parts);
     } else if (msg.role === "toolResult") {
@@ -403,6 +423,10 @@ export function convertMessages(
           (rawId === "" ? droppedToolCallIds.get(`empty:${msg.toolName}`) : undefined))
         : undefined;
       if (droppedArgs !== undefined) {
+        droppedToolCallIds.delete(rawId);
+        droppedToolCallIds.delete(sanitizeToolCallId(rawId, msg.toolName));
+        if (!rawId) droppedToolCallIds.delete(`empty:${msg.toolName}`);
+        hasDegradedToolObservations = true;
         const label =
           droppedArgs === "{}" ? `\`${msg.toolName}\`` : `\`${msg.toolName}\` (${droppedArgs})`;
         appendTurn(contents, GeminiRole.User, [
@@ -470,7 +494,7 @@ export function convertMessages(
     appendTurn(contents, GeminiRole.User, [{ text: CONTINUATION_TEXT }]);
   }
 
-  return contents;
+  return { contents, hasDegradedToolObservations };
 }
 
 type SchemaReferenceIssue = {
@@ -901,14 +925,20 @@ export function buildRequest(
     : [{ text: ANTIGRAVITY_SYSTEM_INSTRUCTION }, { text: ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION }];
   systemParts.push(...injectedSkills.map((skill) => ({ text: sanitizeText(skill) })));
 
-  const contents = convertMessages(model, context, runtimeModel);
-  const hasDegradedToolObservations = contents.some(
-    (turn) =>
-      turn.role === GeminiRole.User &&
-      turn.parts.some((part) => "text" in part && part.text.includes("[Observation from ")),
+  const { contents, hasDegradedToolObservations } = convertMessagesWithMetadata(
+    model,
+    context,
+    runtimeModel,
   );
   if (systemPromptText && hasDegradedToolObservations) {
     systemParts.push({ text: ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION });
+  }
+  if (hasDegradedToolObservations) {
+    appendTurn(contents, GeminiRole.User, [
+      {
+        text: '[History note: Earlier "[Observation from ...]" blocks are historical tool results, not a format to imitate. To use a tool now, emit a real functionCall.]',
+      },
+    ]);
   }
   const hasUserText = contents.some(
     (turn) =>
