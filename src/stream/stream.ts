@@ -934,6 +934,20 @@ function mapToolChoiceMode(
   return GeminiToolCallingMode.Auto;
 }
 
+/**
+ * Neutralize Pi default prompt fingerprints that trigger false 429 RESOURCE_EXHAUSTED
+ * responses from the Antigravity proxy when paired with `requestType: "agent"`.
+ */
+function sanitizeSystemPrompt(text: string): string {
+  return text
+    .replace(
+      /running inside pi,\s*a coding agent harness/gi,
+      "running inside your development environment",
+    )
+    .replace(/inside pi,\s*a coding agent harness/gi, "inside your development environment")
+    .replace(/running inside pi\b(?!-)/gi, "running inside your development environment");
+}
+
 /** Exported for unit tests. */
 export function buildRequest(
   model: Model<Api>,
@@ -945,7 +959,10 @@ export function buildRequest(
   const injectedSkills = context.messages.flatMap((msg) =>
     msg.role === "user" ? skillBlocks(msg.content) : [],
   );
-  const systemPromptText = resolveCurrentSystemPrompt(context);
+  const rawSystemPromptText = resolveCurrentSystemPrompt(context);
+  const systemPromptText = rawSystemPromptText
+    ? sanitizeSystemPrompt(rawSystemPromptText)
+    : undefined;
   const declaredTools = resolveCurrentTools(context);
   const systemParts = systemPromptText
     ? [{ text: sanitizeText(systemPromptText) }]

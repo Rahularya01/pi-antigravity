@@ -1512,6 +1512,38 @@ const withPiPrompt = buildRequest(
 assert.equal(withPiPrompt.request.systemInstruction.parts.length, 1);
 assert.equal(withPiPrompt.request.systemInstruction.parts[0]?.text, "You are Pi. Follow AGENTS.md.");
 
+// Pi default prompt fingerprints that trigger false 429 RESOURCE_EXHAUSTED are neutralized (#137, #139).
+const defaultPiHarnessPrompt = buildRequest(
+  flash37Model,
+  {
+    ...dummyContext,
+    systemPrompt:
+      "You are a coding assistant running inside pi, a coding agent harness. Help users inspect files, run commands, and modify code.",
+  },
+  "test-proj",
+  {},
+  "gemini-3.7-flash-low",
+);
+assert.equal(
+  defaultPiHarnessPrompt.request.systemInstruction.parts[0]?.text,
+  "You are a coding assistant running inside your development environment. Help users inspect files, run commands, and modify code.",
+);
+
+const shortPiPrompt = buildRequest(
+  flash37Model,
+  {
+    ...dummyContext,
+    systemPrompt: "You are a coding assistant running inside pi. Be brief.",
+  },
+  "test-proj",
+  {},
+  "gemini-3.7-flash-low",
+);
+assert.equal(
+  shortPiPrompt.request.systemInstruction.parts[0]?.text,
+  "You are a coding assistant running inside your development environment. Be brief.",
+);
+
 // Skill-only turns are injected instructions, not user prompts. The request remains
 // valid without inventing a user message, and the Skill is preserved as system context.
 const skillOnlyContext = {
