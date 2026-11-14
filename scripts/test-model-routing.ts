@@ -1591,6 +1591,52 @@ assert.ok(
   ),
 );
 
+// Pi-Bolt default prompt ("inside Pi-Bolt, a build of pi (...)") must be neutralized the same way.
+const piBoltPromptCases: Array<[string, string]> = [
+  [
+    "You are a coding assistant running inside Pi-Bolt, a build of pi (a coding agent harness) compiled ahead of time. Help users inspect files, run commands, and modify code.",
+    "You are a coding assistant running inside your development environment. Help users inspect files, run commands, and modify code.",
+  ],
+  [
+    "You are a coding assistant running inside Pi-Bolt. Be brief.",
+    "You are a coding assistant running inside your development environment. Be brief.",
+  ],
+  [
+    "A coding agent inside Pi-Bolt should be concise.",
+    "A coding agent inside your development environment should be concise.",
+  ],
+  [
+    "Keep files running inside pi-bolt.js untouched.",
+    "Keep files running inside pi-bolt.js untouched.",
+  ],
+];
+for (const [input, expected] of piBoltPromptCases) {
+  const res = buildRequest(
+    flash37Model,
+    { ...dummyContext, systemPrompt: input },
+    "test-proj",
+    {},
+    "gemini-3.7-flash-low",
+  );
+  assert.equal(res.request.systemInstruction.parts[0]?.text, expected, input);
+}
+
+const piBoltSubstringReq = buildRequest(
+  flash37Model,
+  {
+    ...dummyContext,
+    systemPrompt: "inside Pi-Bolt, a build of pi (a coding agent harness) compiled ahead of time",
+  },
+  "test-proj",
+  {},
+  "gemini-3.7-flash-low",
+);
+assert.equal(
+  piBoltSubstringReq.request.systemInstruction.parts[0]?.text,
+  "inside your development environment",
+);
+assert.ok(!/inside pi/i.test(piBoltSubstringReq.request.systemInstruction.parts[0]?.text || ""));
+
 // Skill-only turns are injected instructions, not user prompts. The request remains
 // valid without inventing a user message, and the Skill is preserved as system context.
 const skillOnlyContext = {

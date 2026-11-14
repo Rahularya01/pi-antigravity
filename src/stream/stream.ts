@@ -941,16 +941,27 @@ function mapToolChoiceMode(
 export function sanitizeSystemPrompt(text: string): string {
   return text
     .replace(
-      /running inside pi,\s*a coding agent harness/gi,
+      /running inside pi-bolt,\s*a build of pi\s*\(a coding agent harness\)\s*compiled ahead of time/gi,
       "running inside your development environment",
     )
-    .replace(/inside pi,\s*a coding agent harness/gi, "inside your development environment")
     .replace(
-      /(coding assistant )running inside pi(?=[.,!?;:\s]|$)(?!\.\w)/gi,
+      /inside pi-bolt,\s*a build of pi\s*\(a coding agent harness\)\s*compiled ahead of time/gi,
+      "inside your development environment",
+    )
+    .replace(
+      /running inside pi(?:-bolt)?,\s*a coding agent harness/gi,
+      "running inside your development environment",
+    )
+    .replace(
+      /inside pi(?:-bolt)?,\s*a coding agent harness/gi,
+      "inside your development environment",
+    )
+    .replace(
+      /(coding assistant )running inside pi(?:-bolt)?(?=[.,!?;:\s]|$)(?!\.\w)/gi,
       "$1running inside your development environment",
     )
     .replace(
-      /(coding agent )inside pi(?=[.,!?;:\s]|$)(?!\.\w)/gi,
+      /(coding agent )inside pi(?:-bolt)?(?=[.,!?;:\s]|$)(?!\.\w)/gi,
       "$1inside your development environment",
     )
     .replace(/\bpractical,\s*and tool-aware\./gi, "practical, and tool aware.");
