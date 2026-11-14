@@ -8,6 +8,10 @@ All notable changes to this project are documented in this file.
 
 - **Gemini 4 Hydrogen & Oxygen support:** Added dynamic discovery allowlist for selectable Hydrogen and Oxygen variants beyond `agentModelSorts` (#134), `xhigh` thinking level grouping (`-xhigh`, `(XHigh)`, `(X-High)`), fallback routing, list pricing ($1.50/M input, $7.50/M output, $0.075/M cache read), 262,144 output token limit, and `-xhigh` sibling capacity fallback (#132, #133, #136).
 
+### Changed
+
+- **Development dependencies & security:** Updated `@earendil-works/pi-ai` and `@earendil-works/pi-coding-agent` to `^1.5.0` (#128) and resolved `minimatch` to `11.0.3` to remediate GHSA-g3hv-75wg-m249 (`<11.0.1`).
+
 ### Fixed
 
 - **Disabled model filtering:** Exclude backend entries flagged `disabled: true` or suffixed `-disabled` from model discovery even when listed in `agentModelSorts` (#132, #136).
