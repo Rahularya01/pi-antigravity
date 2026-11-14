@@ -1544,6 +1544,21 @@ assert.equal(
   "You are a coding assistant running inside your development environment. Be brief.",
 );
 
+const unrelatedIdentifierPrompt = buildRequest(
+  flash37Model,
+  {
+    ...dummyContext,
+    systemPrompt: "Keep files running inside pi.js untouched.",
+  },
+  "test-proj",
+  {},
+  "gemini-3.7-flash-low",
+);
+assert.equal(
+  unrelatedIdentifierPrompt.request.systemInstruction.parts[0]?.text,
+  "Keep files running inside pi.js untouched.",
+);
+
 // Skill-only turns are injected instructions, not user prompts. The request remains
 // valid without inventing a user message, and the Skill is preserved as system context.
 const skillOnlyContext = {

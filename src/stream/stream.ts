@@ -945,7 +945,10 @@ function sanitizeSystemPrompt(text: string): string {
       "running inside your development environment",
     )
     .replace(/inside pi,\s*a coding agent harness/gi, "inside your development environment")
-    .replace(/running inside pi\b(?!-)/gi, "running inside your development environment");
+    .replace(
+      /(You are a coding assistant )running inside pi(?=[.,!?;:\s]|$)(?!\.\w)/gi,
+      "$1running inside your development environment",
+    );
 }
 
 /** Exported for unit tests. */
