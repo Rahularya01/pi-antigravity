@@ -1559,6 +1559,38 @@ assert.equal(
   "Keep files running inside pi.js untouched.",
 );
 
+// Case variants, "coding agent inside pi", and default fallback instruction tail ("practical, and tool-aware.") (#142).
+for (const variant of [
+  "You are a coding assistant RUNNING INSIDE PI.",
+  "A coding agent inside pi should be concise.",
+]) {
+  const res = buildRequest(
+    flash37Model,
+    { ...dummyContext, systemPrompt: variant },
+    "test-proj",
+    {},
+    "gemini-3.7-flash-low",
+  );
+  assert.ok(!/inside pi/i.test(res.request.systemInstruction.parts[0]?.text || ""), variant);
+}
+
+const fallbackSystemPromptReq = buildRequest(
+  flash37Model,
+  { ...dummyContext, systemPrompt: "" },
+  "test-proj",
+  {},
+  "gemini-3.7-flash-low",
+);
+assert.ok(
+  !/tool-aware\./i.test(fallbackSystemPromptReq.request.systemInstruction.parts[0]?.text || ""),
+  "default ANTIGRAVITY_SYSTEM_INSTRUCTION tail must also be neutralized",
+);
+assert.ok(
+  fallbackSystemPromptReq.request.systemInstruction.parts[0]?.text?.includes(
+    "practical, and tool aware.",
+  ),
+);
+
 // Skill-only turns are injected instructions, not user prompts. The request remains
 // valid without inventing a user message, and the Skill is preserved as system context.
 const skillOnlyContext = {

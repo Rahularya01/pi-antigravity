@@ -935,10 +935,10 @@ function mapToolChoiceMode(
 }
 
 /**
- * Neutralize Pi default prompt fingerprints that trigger false 429 RESOURCE_EXHAUSTED
+ * Neutralize system prompt phrases that trigger false 429 RESOURCE_EXHAUSTED
  * responses from the Antigravity proxy when paired with `requestType: "agent"`.
  */
-function sanitizeSystemPrompt(text: string): string {
+export function sanitizeSystemPrompt(text: string): string {
   return text
     .replace(
       /running inside pi,\s*a coding agent harness/gi,
@@ -946,9 +946,14 @@ function sanitizeSystemPrompt(text: string): string {
     )
     .replace(/inside pi,\s*a coding agent harness/gi, "inside your development environment")
     .replace(
-      /(You are a coding assistant )running inside pi(?=[.,!?;:\s]|$)(?!\.\w)/gi,
+      /(coding assistant )running inside pi(?=[.,!?;:\s]|$)(?!\.\w)/gi,
       "$1running inside your development environment",
-    );
+    )
+    .replace(
+      /(coding agent )inside pi(?=[.,!?;:\s]|$)(?!\.\w)/gi,
+      "$1inside your development environment",
+    )
+    .replace(/\bpractical,\s*and tool-aware\./gi, "practical, and tool aware.");
 }
 
 /** Exported for unit tests. */
@@ -969,7 +974,10 @@ export function buildRequest(
   const declaredTools = resolveCurrentTools(context);
   const systemParts = systemPromptText
     ? [{ text: sanitizeText(systemPromptText) }]
-    : [{ text: ANTIGRAVITY_SYSTEM_INSTRUCTION }, { text: ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION }];
+    : [
+        { text: sanitizeSystemPrompt(ANTIGRAVITY_SYSTEM_INSTRUCTION) },
+        { text: ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION },
+      ];
   systemParts.push(...injectedSkills.map((skill) => ({ text: sanitizeText(skill) })));
 
   const { contents, hasDegradedToolObservations } = convertMessagesWithMetadata(

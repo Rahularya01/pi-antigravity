@@ -17,7 +17,7 @@ All notable changes to this project are documented in this file.
 - **Disabled model filtering:** Exclude backend entries flagged `disabled: true` or suffixed `-disabled` from model discovery even when listed in `agentModelSorts` (#132, #136).
 - **Cross-provider tool observation mimicry:** Keep unsigned tool-call turn boundaries separated, track degraded observations accurately without false triggers on quoted markers, handle reused/colliding tool call IDs, and append a recency history note (#118).
 - **Pi 1.5.x compatibility:** Import `Type` from `typebox` in `read_url_content` instead of `@earendil-works/pi-ai` and narrow `ProviderModelConfig` types for text models.
-- **False 429 on default Pi prompt:** Sanitize Pi harness prompt fingerprints (`"running inside pi, a coding agent harness"` / `"running inside pi"`) in `systemInstruction` to prevent proxy-level `429 RESOURCE_EXHAUSTED` rejections (#137, #139).
+- **False 429 on default Pi prompt:** Sanitize Pi harness prompt fingerprints (`"running inside pi, a coding agent harness"`, `"coding assistant running inside pi"`, `"coding agent inside pi"`) and `"practical, and tool-aware."` in `systemInstruction` (including the default `ANTIGRAVITY_SYSTEM_INSTRUCTION` fallback) to prevent proxy-level `429 RESOURCE_EXHAUSTED` rejections (#137, #139, #142).
 
 ## [0.13.0] - 2026-11-12
 
