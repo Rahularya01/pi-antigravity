@@ -1235,10 +1235,12 @@ const unsignedToolContext = {
   ],
 } as unknown as Context;
 const convertedUnsigned = convertMessages(flash37Model, unsignedToolContext, geminiRuntime);
-assert.equal(convertedUnsigned.length, 1);
-assert.equal(convertedUnsigned[0]?.role, "user");
+assert.equal(convertedUnsigned.length, 3);
+assert.deepEqual(convertedUnsigned[0]?.parts, [{ text: "read file" }]);
+assert.equal(convertedUnsigned[1]?.role, "model");
+assert.equal(convertedUnsigned[2]?.role, "user");
 assert.ok(
-  convertedUnsigned[0]?.parts.some((p) => "text" in p && p.text.includes("Observation from `read`")),
+  convertedUnsigned[2]?.parts.some((p) => "text" in p && p.text.includes("Observation from `read`")),
 );
 
 // Same-model unsigned tool turns must also drop unsigned thinking blocks so orphaned
@@ -1274,8 +1276,10 @@ const convertedSameModelUnsigned = convertMessages(
   sameModelUnsignedToolContext,
   geminiRuntime,
 );
-assert.equal(convertedSameModelUnsigned.length, 1);
+assert.equal(convertedSameModelUnsigned.length, 3);
 assert.equal(convertedSameModelUnsigned[0]?.role, "user");
+assert.equal(convertedSameModelUnsigned[1]?.role, "model");
+assert.equal(convertedSameModelUnsigned[2]?.role, "user");
 assert.ok(
   !convertedSameModelUnsigned.some((turn) =>
     turn.parts.some((part) => "thought" in part && part.thought === true),
@@ -1294,6 +1298,26 @@ assert.match(
   degradedPromptReq.request.systemInstruction.parts[1]?.text || "",
   /never simulate tool calls/i,
 );
+const lastDegradedTurn = degradedPromptReq.request.contents.at(-1);
+assert.equal(lastDegradedTurn?.role, "user");
+assert.match(JSON.stringify(lastDegradedTurn?.parts.at(-1)), /emit a real functionCall/);
+
+// A user quoting the marker is not a degraded tool result.
+const quotedMarkerContext = {
+  systemPrompt: "You are Pi.",
+  messages: [{ role: "user", content: "Explain [Observation from a log]", timestamp: Date.now() }],
+} as unknown as Context;
+const quotedMarkerRequest = buildRequest(
+  flash37Model,
+  quotedMarkerContext,
+  "test-proj",
+  {},
+  geminiRuntime,
+);
+assert.equal(quotedMarkerRequest.request.systemInstruction.parts.length, 1);
+assert.deepEqual(quotedMarkerRequest.request.contents[0]?.parts, [
+  { text: "Explain [Observation from a log]" },
+]);
 
 const parallelSignedContext = {
   messages: [
@@ -1349,6 +1373,80 @@ assert.ok(
   convertedParallel[2]?.parts.every((p) => "functionResponse" in p),
   "all parallel results remain functionResponses",
 );
+const mixedHistoryRequest = buildRequest(
+  flash37Model,
+  {
+    ...parallelSignedContext,
+    systemPrompt: "You are Pi.",
+    messages: [...unsignedToolContext.messages, ...parallelSignedContext.messages],
+  },
+  "test-proj",
+  {},
+  geminiRuntime,
+);
+const mixedLastTurn = mixedHistoryRequest.request.contents.at(-1);
+assert.equal(mixedLastTurn?.role, "user");
+assert.equal(mixedLastTurn?.parts.filter((part) => "functionResponse" in part).length, 2);
+assert.match(JSON.stringify(mixedLastTurn?.parts.at(-1)), /emit a real functionCall/);
+
+// A later signed call can reuse an ID from a previously flattened call.
+const reusedIdContext = {
+  messages: [
+    ...unsignedToolContext.messages,
+    ...parallelSignedContext.messages.map((message) => {
+      if (message.role === "assistant") {
+        return {
+          ...message,
+          content: message.content.map((block) =>
+            block.type === "toolCall" && block.id === "call-1"
+              ? { ...block, id: "call-prev-1" }
+              : block,
+          ),
+        };
+      }
+      return message.role === "toolResult" && message.toolCallId === "call-1"
+        ? { ...message, toolCallId: "call-prev-1" }
+        : message;
+    }),
+  ],
+} as Context;
+const reusedIdResult = convertMessages(flash37Model, reusedIdContext, geminiRuntime).at(-1);
+assert.equal(reusedIdResult?.parts.filter((part) => "functionResponse" in part).length, 2);
+
+// Sanitized aliases must not overwrite or delete another call's raw ID.
+const collidingIdsContext = {
+  messages: [
+    { role: "user", content: "read both", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        { type: "toolCall", id: "call:1", name: "read", arguments: { path: "a" } },
+        { type: "toolCall", id: "call_1", name: "read", arguments: { path: "b" } },
+      ],
+      api: "openai-responses",
+      provider: "openai",
+      model: "gpt-4o",
+      usage: zeroUsage,
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    ...["call:1", "call_1"].map((toolCallId) => ({
+      role: "toolResult",
+      toolCallId,
+      toolName: "read",
+      content: [{ type: "text", text: `result for ${toolCallId}` }],
+      isError: false,
+      timestamp: Date.now(),
+    })),
+  ],
+} as unknown as Context;
+const collidingResults = convertMessages(flash37Model, collidingIdsContext, geminiRuntime).at(-1);
+assert.equal(collidingResults?.parts.length, 2);
+assert.ok(collidingResults?.parts.every((part) => "text" in part));
+assert.match(JSON.stringify(collidingResults?.parts[0]), /result for call:1/);
+assert.match(JSON.stringify(collidingResults?.parts[1]), /result for call_1/);
+assert.match(JSON.stringify(collidingResults?.parts[0]), /path.*a/);
+assert.match(JSON.stringify(collidingResults?.parts[1]), /path.*b/);
 
 const abortedContext = {
   messages: [

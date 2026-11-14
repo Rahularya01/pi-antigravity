@@ -767,4 +767,89 @@ assert.equal(
   "endpoints without recommendation lists stay undefined",
 );
 
+// Hydrogen discovery: xhigh thinking level grouped into gemini-4-hydrogen, disabled models filtered out
+const hydrogenRawModels: Record<string, ModelInfoRaw> = {
+  "gemini-4-hydrogen-low": info("Gemini 4 Hydrogen (Low)", { model: "MODEL_HYDROGEN_LOW" }),
+  "gemini-4-hydrogen-medium": info("Gemini 4 Hydrogen (Medium)", { model: "MODEL_HYDROGEN_MED" }),
+  "gemini-4-hydrogen-high": info("Gemini 4 Hydrogen (High)", { model: "MODEL_HYDROGEN_HIGH" }),
+  "gemini-4-hydrogen-xhigh": info("Gemini 4 Hydrogen (XHigh)", { model: "MODEL_HYDROGEN_XHIGH" }),
+  "gemini-4-carbon-disabled": info("Gemini 4 Carbon", { model: "MODEL_CARBON_DIS", disabled: true }),
+};
+const hydrogenCatalog = buildAntigravityCatalog(hydrogenRawModels, fallback);
+assert.equal(hydrogenCatalog.models.length, 1);
+const hydrogen = hydrogenCatalog.models[0];
+assert.equal(hydrogen.id, "gemini-4-hydrogen");
+assert.equal(hydrogen.name, "Gemini 4 Hydrogen (Antigravity)");
+assert.equal(hydrogen.thinkingLevelMap?.xhigh, "xhigh");
+assert.equal(hydrogen.thinkingLevelMap?.high, "high");
+assert.equal(hydrogen.thinkingLevelMap?.medium, "medium");
+assert.equal(hydrogen.thinkingLevelMap?.low, "low");
+assert.equal(hydrogen.cost?.input, 1.5);
+assert.equal(hydrogen.cost?.output, 7.5);
+assert.equal(hydrogen.maxTokens, 262144);
+applyAntigravityCatalog(hydrogenCatalog);
+assert.equal(getMaxOutputTokens("gemini-4-hydrogen", "gemini-4-hydrogen-low"), 262144);
+resetAntigravityCatalogForTests();
+assert.equal(
+  buildAntigravityCatalog(
+    { "gemini-4-hydrogen-low": info("Gemini 4 Hydrogen (Low)", { maxOutputTokens: 131072 }) },
+    fallback,
+  ).models[0].maxTokens,
+  131072,
+  "explicit discovery maxOutputTokens overrides static limit",
+);
+assert.equal(hydrogenCatalog.routing["gemini-4-hydrogen"]?.routing?.xhigh, "gemini-4-hydrogen-xhigh");
+assert(!hydrogenCatalog.models.some((m) => m.id.includes("disabled")), "filters out disabled models");
+
+// xhigh-only model falls back to xhigh for defaultRequestId, off, and lower efforts
+const xhighOnlyCatalog = buildAntigravityCatalog(
+  { "gemini-4-xhigh-only-xhigh": info("Gemini 4 XHigh Only (XHigh)") },
+  fallback,
+);
+const xhighOnlyRoute = xhighOnlyCatalog.routing["gemini-4-xhigh-only"];
+assert.equal(xhighOnlyRoute?.defaultRequestId, "gemini-4-xhigh-only-xhigh");
+assert.equal(xhighOnlyRoute?.off, "gemini-4-xhigh-only-xhigh");
+assert.equal(xhighOnlyRoute?.routing?.low, "gemini-4-xhigh-only-xhigh");
+
+// Hydrogen and Oxygen models pass through agentModelSorts filtering when selectable,
+// while disabled entries stay excluded, and alternate (X-High) / (Extra High) labels group.
+const extraAllowedCatalog = buildAntigravityCatalog(
+  {
+    "gemini-4-argon-medium": info("Gemini 4 Argon (Medium)"),
+    "gemini-4-hydrogen-low": info("Gemini 4 Hydrogen (Low)"),
+    "gemini-4-hydrogen-xhigh": info("Gemini 4 Hydrogen (X-High)"),
+    "gemini-4-oxygen-high": info("Gemini 4 Oxygen (Extra High)"),
+    "gemini-4-hydrogen-disabled": info("Gemini 4 Hydrogen (Disabled)", { disabled: true }),
+    "gemini-4-oxygen-disabled": info("Gemini 4 Oxygen (Disabled)"),
+    "gemini-4-carbon-disabled": info("Gemini 4 Carbon", { disabled: true }),
+  },
+  fallback,
+  [
+    {
+      displayName: "Recommended",
+      groups: [
+        {
+          modelIds: [
+            "gemini-4-argon-medium",
+            "gemini-4-hydrogen-disabled",
+            "gemini-4-carbon-disabled",
+          ],
+        },
+      ],
+    },
+  ],
+);
+assert.deepEqual(
+  extraAllowedCatalog.models.map((model) => model.id).sort(),
+  ["gemini-4-argon", "gemini-4-hydrogen", "gemini-4-oxygen"],
+);
+assert.equal(
+  extraAllowedCatalog.routing["gemini-4-hydrogen"]?.routing?.xhigh,
+  "gemini-4-hydrogen-xhigh",
+);
+assert.equal(
+  extraAllowedCatalog.routing["gemini-4-oxygen"]?.routing?.xhigh,
+  "gemini-4-oxygen-high",
+);
+
 console.log("model discovery: live metadata, routing, validation, persistence, and TTL passed");
