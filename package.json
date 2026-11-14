@@ -80,6 +80,9 @@
     "turndown-plugin-gfm": "^1.0.2",
     "undici": "^8.12.3"
   },
+  "peerDependencies": {
+    "typebox": "*"
+  },
   "resolutions": {
     "undici": "8.12.3"
   }
