@@ -78,6 +78,7 @@ export async function antigravityFetch(
  * Best-effort: failures are ignored. Subsequent calls are no-ops.
  */
 export function prewarmConnection(url: string): void {
+  if (antigravityEnv("PREWARM") !== "1") return;
   if (antigravityEnv("NO_PREWARM") === "1") return;
   if (prewarmStarted) return;
   prewarmStarted = true;

@@ -99,10 +99,9 @@ export type GeminiToolConfig = {
   };
 };
 
-export type ThinkingWire = {
-  includeThoughts: boolean;
-  thinkingBudget: number;
-};
+export type ThinkingWire =
+  | { includeThoughts: boolean; thinkingBudget: number; thinkingLevel?: never }
+  | { includeThoughts: true; thinkingLevel: "LOW" | "MEDIUM" | "HIGH"; thinkingBudget?: never };
 
 export type GeminiGenerationConfig = {
   temperature?: number;

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   calculateCost,
   createAssistantMessageEventStream,
@@ -65,6 +66,7 @@ import { extractValidationUrl, redactSecrets, safeError } from "../utils/securit
 import {
   ANTIGRAVITY_API,
   type ActiveBlock,
+  type AntigravityApiKey,
   type AntigravityGenerateRequest,
   type AntigravityStreamOptions,
   type ContentBlock,
@@ -1652,6 +1654,95 @@ export async function streamResponse(
  */
 const turnRequestNonces = new Map<string, number>();
 
+/**
+ * Cross-turn memory of the (runtimeModel, endpoint) that actually answered
+ * after a generic-429 capacity walk, keyed by account tag, projectId, and
+ * the initial runtime model (which already encodes model.id and effort).
+ * Without it every turn of a session replays the dead-tier HTTP hops and burns
+ * a fresh retry nonce, which mutates the upstream sessionId and wipes the
+ * prompt cache. Entries expire after 10 minutes and the map is bounded.
+ */
+const CAPACITY_ROUTE_TTL_MS = 10 * 60_000;
+const preferredCapacityRoutes = new Map<
+  string,
+  { runtimeModel: string; endpoint: string; expiresAt: number }
+>();
+
+/** Exported for unit tests. */
+export function clearCapacityRouteCache(): void {
+  preferredCapacityRoutes.clear();
+}
+
+export function rememberCapacityRoute(
+  routeKey: string,
+  runtimeModel: string,
+  endpoint: string,
+  now = Date.now(),
+): void {
+  preferredCapacityRoutes.delete(routeKey);
+  preferredCapacityRoutes.set(routeKey, {
+    runtimeModel,
+    endpoint,
+    expiresAt: now + CAPACITY_ROUTE_TTL_MS,
+  });
+  while (preferredCapacityRoutes.size > 64) {
+    const oldest = preferredCapacityRoutes.keys().next().value;
+    if (oldest === undefined) break;
+    preferredCapacityRoutes.delete(oldest);
+  }
+}
+
+export function rememberedCapacityRoute(
+  routeKey: string,
+  now = Date.now(),
+): { runtimeModel: string; endpoint: string } | undefined {
+  const entry = preferredCapacityRoutes.get(routeKey);
+  if (!entry) return undefined;
+  if (entry.expiresAt <= now) {
+    preferredCapacityRoutes.delete(routeKey);
+    return undefined;
+  }
+  return { runtimeModel: entry.runtimeModel, endpoint: entry.endpoint };
+}
+
+function accountTag(creds: AntigravityApiKey): string {
+  // parseApiKey yields no email/refresh field, so derive a stable,
+  // non-secret tag from the access token instead of keying on it raw.
+  return createHash("sha256").update(creds.token).digest("hex").slice(0, 16);
+}
+
+/** Exported for unit tests. */
+export function resolveCapacityCandidates(
+  creds: AntigravityApiKey,
+  projectId: string,
+  initialRuntimeModel: string,
+  effort: string,
+  allowCapacityCache: boolean,
+): {
+  routeKey: string;
+  cachedRoute: { runtimeModel: string; endpoint: string } | undefined;
+  hasCachedProbe: boolean;
+  maxRuntimeCandidates: number;
+  runtimeCandidates: string[];
+} {
+  const routeKey = `${accountTag(creds)}\0${projectId}\0${initialRuntimeModel}`;
+  const cachedRoute = allowCapacityCache ? rememberedCapacityRoute(routeKey) : undefined;
+  const hasCachedProbe = Boolean(cachedRoute);
+  const maxRuntimeCandidates = hasCachedProbe ? 5 : 4;
+  const runtimeCandidates: string[] = [];
+  if (cachedRoute) runtimeCandidates.push(cachedRoute.runtimeModel);
+  // Always keep initialRuntimeModel as its own candidate after the cached
+  // probe slot, even when it equals the cached runtime (only the endpoint
+  // differed): a failed cached probe must re-check it on the normal
+  // endpoint list in the same turn.
+  runtimeCandidates.push(initialRuntimeModel);
+  const fallback = getFallbackRuntimeModel(initialRuntimeModel, effort);
+  if (fallback && !runtimeCandidates.includes(fallback)) {
+    runtimeCandidates.push(fallback);
+  }
+  return { routeKey, cachedRoute, hasCachedProbe, maxRuntimeCandidates, runtimeCandidates };
+}
+
 function nextRequestNonce(turnKey: string): number {
   const nonce = turnRequestNonces.get(turnKey) ?? 0;
   turnRequestNonces.set(turnKey, nonce + 1);
@@ -1714,11 +1805,11 @@ export function streamAntigravity(
         }
       }
 
-      const runtimeCandidates = [initialRuntimeModel];
-      const fallback = getFallbackRuntimeModel(initialRuntimeModel, effort);
-      if (fallback && fallback !== initialRuntimeModel) {
-        runtimeCandidates.push(fallback);
-      }
+      const allowCapacityCache =
+        !enterpriseTarget && !antigravityEnv("RUNTIME_MODEL") && !antigravityEnv("BASE_URL");
+      const defaultFirstEndpoint = endpointCandidates()[0];
+      let { routeKey, cachedRoute, hasCachedProbe, maxRuntimeCandidates, runtimeCandidates } =
+        resolveCapacityCandidates(creds, projectId, initialRuntimeModel, effort, allowCapacityCache);
 
       const headersFor = (token: string): Record<string, string> => {
         const headers = antigravityHeaders(token);
@@ -1754,11 +1845,19 @@ export function streamAntigravity(
 
         for (let candIdx = 0; candIdx < runtimeCandidates.length; candIdx++) {
           runtimeModel = runtimeCandidates[candIdx]!;
+          const isCachedProbe = hasCachedProbe && candIdx === 0;
           setLastResolvedRuntimeModel(runtimeModel);
           recordStaticRouteDiagnostics(runtimeModel);
           response = undefined;
           let lastEndpointError: Error | undefined;
-          const endpoints = enterpriseTarget ? [enterpriseTarget.host] : endpointCandidates();
+          let endpoints = enterpriseTarget ? [enterpriseTarget.host] : endpointCandidates();
+          if (isCachedProbe && cachedRoute) {
+            // Single-probe semantics: try only the cached endpoint. On failure
+            // the cache is evicted below and the next candidate
+            // (initialRuntimeModel on the normal endpoint list) runs instead of
+            // replaying this runtime against the remaining endpoints.
+            endpoints = [cachedRoute.endpoint];
+          }
           for (const endpoint of endpoints) {
             setLastEndpoint(endpoint);
             // Every POST after the first for this turn replays under a fresh
@@ -1804,11 +1903,28 @@ export function streamAntigravity(
               // endpoint may be wedged; ENDPOINT_FALLBACKS exist for that, so
               // fall through instead of dying without trying them.
               if (opts.signal?.aborted) throw error;
+              if (isCachedProbe) {
+                preferredCapacityRoutes.delete(routeKey);
+                break;
+              }
               lastEndpointError = error instanceof Error ? error : new Error(String(error));
               continue;
             }
             setLastStatus(response.status);
-            if (response.ok) break;
+            if (response.ok) {
+              if (
+                allowCapacityCache &&
+                (runtimeModel !== initialRuntimeModel || endpoint !== defaultFirstEndpoint)
+              ) {
+                rememberCapacityRoute(routeKey, runtimeModel, endpoint);
+              }
+              break;
+            }
+            if (isCachedProbe) {
+              lastText = await response.text();
+              preferredCapacityRoutes.delete(routeKey);
+              break;
+            }
             lastText = await response.text();
             if (response.status === 429 && isAccountQuota429(lastText)) break;
             // Generic RESOURCE_EXHAUSTED is capacity pressure when another endpoint
@@ -1819,6 +1935,7 @@ export function streamAntigravity(
             if (![403, 404, 429, 500, 502, 503, 504].includes(response.status)) break;
           }
 
+          if (isCachedProbe && candIdx + 1 < runtimeCandidates.length && !response?.ok) continue;
           // Every endpoint threw before sending headers: rethrow the original
           // transport error so its message (which pi classifies for auto-retry)
           // survives instead of being masked by the generic failure path below.
@@ -1849,7 +1966,7 @@ export function streamAntigravity(
             const nextSibling = advertisedSiblingRuntimes(runtimeModel).find(
               (id) => !runtimeCandidates.includes(id),
             );
-            if (nextSibling && runtimeCandidates.length < 4) {
+            if (nextSibling && runtimeCandidates.length < maxRuntimeCandidates) {
               // Same-generation tiers before a cross-generation compatibility fallback.
               runtimeCandidates.splice(candIdx + 1, 0, nextSibling);
               continue;
@@ -1903,6 +2020,25 @@ export function streamAntigravity(
                 credentialProjectId: creds.projectId,
               });
               setLastProjectId(projectId);
+              if (!isKnownModel && !antigravityEnv("RUNTIME_MODEL")) {
+                initialRuntimeModel = baseRuntimeModel;
+                const dynamic = await fetchAvailableRuntimeModel(
+                  creds.token,
+                  projectId,
+                  baseRuntimeModel,
+                );
+                if (dynamic?.id && isUsableRuntimeModelId(dynamic.id)) {
+                  initialRuntimeModel = dynamic.id;
+                }
+              }
+              ({ routeKey, cachedRoute, hasCachedProbe, maxRuntimeCandidates, runtimeCandidates } =
+                resolveCapacityCandidates(
+                  creds,
+                  projectId,
+                  initialRuntimeModel,
+                  effort,
+                  allowCapacityCache,
+                ));
               emptyAttempt = -1;
               continue;
             }

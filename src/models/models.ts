@@ -617,6 +617,18 @@ export function getThinkingConfig(
     if (!effort || effort === "off") return { includeThoughts: false, thinkingBudget: 0 };
     return { includeThoughts: true, thinkingBudget: 8192 };
   }
+  if (modelId === "gemini-3.8-flash" || /^gemini-3\.8-flash-(low|medium|high|tiered)$/i.test(modelId)) {
+    if (!effort || effort === "off") return { includeThoughts: false, thinkingBudget: 0 };
+    const tierMatch = /-(low|medium|high)$/i.exec(modelId);
+    const thinkingLevel = tierMatch?.[1]
+      ? (tierMatch[1].toUpperCase() as "LOW" | "MEDIUM" | "HIGH")
+      : effort === "medium"
+        ? "MEDIUM"
+        : effort === "high" || effort === "xhigh"
+          ? "HIGH"
+          : "LOW";
+    return { includeThoughts: true, thinkingLevel };
+  }
   if (modelId.startsWith("gemini-3.5-flash") || modelId === "gemini-3-flash-agent") {
     if (!effort || effort === "off") return { includeThoughts: false, thinkingBudget: 0 };
     const thinkingBudget =
