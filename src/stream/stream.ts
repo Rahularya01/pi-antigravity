@@ -329,7 +329,7 @@ function convertMessagesWithMetadata(
   let hasDegradedToolObservations = false;
   const requiresSig = geminiRequiresThoughtSignature(runtimeModel);
   const droppedToolCallIds = new Map<string, string>();
-  const droppedEmptyToolCalls = new Map<string, string>();
+  const droppedEmptyToolCalls = new Map<string, string[]>();
   for (const msg of context.messages) {
     if ((msg.role as string) === "system") continue;
     if (msg.role === "user") {
@@ -385,7 +385,9 @@ function convertMessagesWithMetadata(
             if (rawId) {
               droppedToolCallIds.set(rawId, argsText);
             } else {
-              droppedEmptyToolCalls.set(block.name, argsText);
+              const queue = droppedEmptyToolCalls.get(block.name) ?? [];
+              queue.push(argsText);
+              droppedEmptyToolCalls.set(block.name, queue);
             }
           } else {
             // Tool call IDs can be reused later in a session; a replayable call
@@ -427,7 +429,7 @@ function convertMessagesWithMetadata(
       let droppedArgs = requiresSig
         ? rawId
           ? droppedToolCallIds.get(rawId)
-          : droppedEmptyToolCalls.get(msg.toolName)
+          : droppedEmptyToolCalls.get(msg.toolName)?.[0]
         : undefined;
       if (
         requiresSig &&
@@ -444,8 +446,13 @@ function convertMessagesWithMetadata(
         if (matches[0]) [droppedId, droppedArgs] = matches[0];
       }
       if (droppedArgs !== undefined) {
-        if (rawId) droppedToolCallIds.delete(droppedId);
-        else droppedEmptyToolCalls.delete(msg.toolName);
+        if (rawId) {
+          droppedToolCallIds.delete(droppedId);
+        } else {
+          const queue = droppedEmptyToolCalls.get(msg.toolName);
+          queue?.shift();
+          if (queue && queue.length === 0) droppedEmptyToolCalls.delete(msg.toolName);
+        }
         hasDegradedToolObservations = true;
         const label =
           droppedArgs === "{}" ? `\`${msg.toolName}\`` : `\`${msg.toolName}\` (${droppedArgs})`;

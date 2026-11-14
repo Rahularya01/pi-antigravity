@@ -1448,6 +1448,41 @@ assert.match(JSON.stringify(collidingResults?.parts[1]), /result for call_1/);
 assert.match(JSON.stringify(collidingResults?.parts[0]), /path.*a/);
 assert.match(JSON.stringify(collidingResults?.parts[1]), /path.*b/);
 
+// Multiple empty-ID calls to the same tool keep ordered per-call arguments and flatten every result.
+const emptyIdsContext = {
+  messages: [
+    { role: "user", content: "read both", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        { type: "toolCall", id: "", name: "read", arguments: { path: "first.ts" } },
+        { type: "toolCall", id: "", name: "read", arguments: { path: "second.ts" } },
+      ],
+      api: "openai-responses",
+      provider: "openai",
+      model: "gpt-4o",
+      usage: zeroUsage,
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    ...["first result", "second result"].map((text) => ({
+      role: "toolResult",
+      toolCallId: "",
+      toolName: "read",
+      content: [{ type: "text", text }],
+      isError: false,
+      timestamp: Date.now(),
+    })),
+  ],
+} as unknown as Context;
+const emptyIdResults = convertMessages(flash37Model, emptyIdsContext, geminiRuntime).at(-1);
+assert.equal(emptyIdResults?.parts.length, 2);
+assert.ok(emptyIdResults?.parts.every((part) => "text" in part));
+assert.match(JSON.stringify(emptyIdResults?.parts[0]), /first\.ts/);
+assert.match(JSON.stringify(emptyIdResults?.parts[0]), /first result/);
+assert.match(JSON.stringify(emptyIdResults?.parts[1]), /second\.ts/);
+assert.match(JSON.stringify(emptyIdResults?.parts[1]), /second result/);
+
 const abortedContext = {
   messages: [
     { role: "user", content: "hi", timestamp: Date.now() },
