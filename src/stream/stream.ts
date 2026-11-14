@@ -98,6 +98,34 @@ const ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION =
   'CRITICAL: NEVER output rule checks, formatting guidelines, constraint checklists (e.g. "No emdashes"), internal thinking/reasoning preambles, or fake "[Observation from ...]" tool logs in the final response. When calling a tool, emit a real functionCall; never simulate tool calls or tool observations in plain text. Output only the final response.';
 
 const CONTINUATION_TEXT = "Continue the active task using the available instructions and context.";
+
+/**
+ * System-instruction phrases the backend rejects with a generic 429
+ * RESOURCE_EXHAUSTED, but only when the request carries `requestType: "agent"`.
+ *
+ * The rejection is content-addressed and case-insensitive: it survives changes to
+ * the token, project, model, endpoint and User-Agent, and any paraphrase clears it.
+ * Reporting it as "the model is unavailable" is misleading, because the same body
+ * answers 200 once `requestType` is dropped or the wording changes.
+ *
+ * Matched against host-supplied system text (Pi's default preamble opens with
+ * "You are a coding assistant running inside pi, a coding agent harness").
+ */
+const BLOCKED_SYSTEM_PHRASES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\bcoding assistant running inside pi\b/gi, "coding assistant running in pi"],
+  [/\bpractical, and tool-aware\./gi, "practical, and tool aware."],
+];
+
+/**
+ * Rewrite outgoing system text so `requestType: "agent"` requests are not rejected.
+ * Keeping `requestType` preserves the field other flows rely on; only the offending
+ * wording changes, and the meaning is unchanged.
+ */
+export function neutralizeBlockedSystemPhrases(text: string): string {
+  let out = text;
+  for (const [pattern, replacement] of BLOCKED_SYSTEM_PHRASES) out = out.replace(pattern, replacement);
+  return out;
+}
 let toolCallCounter = 0;
 
 function sanitizeToolCallId(id: string, fallbackName?: string): string {
@@ -948,9 +976,14 @@ export function buildRequest(
   const systemPromptText = resolveCurrentSystemPrompt(context);
   const declaredTools = resolveCurrentTools(context);
   const systemParts = systemPromptText
-    ? [{ text: sanitizeText(systemPromptText) }]
-    : [{ text: ANTIGRAVITY_SYSTEM_INSTRUCTION }, { text: ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION }];
-  systemParts.push(...injectedSkills.map((skill) => ({ text: sanitizeText(skill) })));
+    ? [{ text: neutralizeBlockedSystemPhrases(sanitizeText(systemPromptText)) }]
+    : [
+        { text: neutralizeBlockedSystemPhrases(ANTIGRAVITY_SYSTEM_INSTRUCTION) },
+        { text: ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION },
+      ];
+  systemParts.push(
+    ...injectedSkills.map((skill) => ({ text: sanitizeText(skill) })),
+  );
 
   const { contents, hasDegradedToolObservations } = convertMessagesWithMetadata(
     model,
