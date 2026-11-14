@@ -4,7 +4,7 @@
  * and `/antigravity.fetch` without registering `read_url_content`.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { isExtraToolEnabled, redactSecrets } from "../utils/index.js";
 import {
   executeAntigravityWebFetch,

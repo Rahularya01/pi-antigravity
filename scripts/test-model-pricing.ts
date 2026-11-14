@@ -69,6 +69,12 @@ assert.deepEqual(getAntigravityModelCost("gemini-2.5-flash-lite"), {
   cacheRead: 0.01,
   cacheWrite: 0.1,
 });
+assert.deepEqual(getAntigravityModelCost("gemini-4-hydrogen"), {
+  input: 1.5,
+  output: 7.5,
+  cacheRead: 0.075,
+  cacheWrite: 1.5,
+});
 
 // A statically shipped model resolves through the same lookup.
 assert.deepEqual(getAntigravityModelCost("gemini-3.8-flash"), costOf("gemini-3.8-flash"));

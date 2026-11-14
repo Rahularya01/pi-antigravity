@@ -1,5 +1,4 @@
-import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
-import type { AntigravityRouting, ThinkingWire } from "../types/types.js";
+import type { AntigravityModelConfig, AntigravityRouting, ThinkingWire } from "../types/types.js";
 import { ThinkingEffort } from "../types/enums.js";
 import type { AntigravityCatalog } from "./grouping.js";
 
@@ -119,6 +118,11 @@ export const ANTIGRAVITY_ROUTING: Record<string, AntigravityRouting> = {
  * Requesting more than these limits returns a 400 Bad Request from the API.
  */
 export const RUNTIME_MAX_OUTPUT_TOKENS: Record<string, number> = {
+  "gemini-4-hydrogen": 262144,
+  "gemini-4-hydrogen-low": 262144,
+  "gemini-4-hydrogen-medium": 262144,
+  "gemini-4-hydrogen-high": 262144,
+  "gemini-4-hydrogen-xhigh": 262144,
   "gemini-3.8-flash": 65536,
   "gemini-3.8-flash-low": 65536,
   "gemini-3.8-flash-medium": 65536,
@@ -185,6 +189,7 @@ export function getMaxOutputTokens(modelId: string, runtimeModel?: string): numb
  * there is no cache-write rate to publish; the input rate is used.
  */
 const gemini38FlashCost = { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0.75 };
+const gemini4HydrogenCost = { input: 1.5, output: 7.5, cacheRead: 0.075, cacheWrite: 1.5 };
 const gemini37FlashCost = { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0.75 };
 const gemini36FlashCost = { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0.75 };
 const gemini35FlashCost = { input: 1.5, output: 9.0, cacheRead: 0.15, cacheWrite: 1.5 };
@@ -206,6 +211,7 @@ export const ANTIGRAVITY_DISCOVERED_MODEL_COSTS: Record<
   string,
   { input: number; output: number; cacheRead: number; cacheWrite: number }
 > = {
+  "gemini-4-hydrogen": gemini4HydrogenCost,
   "gemini-3.5-flash": gemini35FlashCost,
   "gemini-3.5-flash-lite": gemini35FlashLiteCost,
   "gemini-3.1-flash-lite": gemini31FlashLiteCost,
@@ -266,10 +272,10 @@ const thinkingLevelMaps = {
     xhigh: null,
     max: null,
   },
-} satisfies Record<string, ProviderModelConfig["thinkingLevelMap"]>;
+} satisfies Record<string, AntigravityModelConfig["thinkingLevelMap"]>;
 
 /** Same set as `agy models`, collapsed to public Pi model IDs. */
-export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
+export const ANTIGRAVITY_MODELS: AntigravityModelConfig[] = [
   {
     id: "gemini-3.8-flash",
     name: "Gemini 3.8 Flash (Antigravity)",
@@ -352,10 +358,10 @@ export const ANTIGRAVITY_MODELS: ProviderModelConfig[] = [
   },
 ];
 
-let currentModels: ProviderModelConfig[] = ANTIGRAVITY_MODELS;
+let currentModels: AntigravityModelConfig[] = ANTIGRAVITY_MODELS;
 let currentRouting: Record<string, AntigravityRouting> = { ...ANTIGRAVITY_ROUTING };
 
-export function getCurrentAntigravityModels(): ProviderModelConfig[] {
+export function getCurrentAntigravityModels(): AntigravityModelConfig[] {
   return currentModels;
 }
 
@@ -457,7 +463,7 @@ function legacyFallbackRuntimeModel(runtimeModel: string, effort?: string): stri
   return undefined;
 }
 
-const RUNTIME_TIER_SUFFIXES = ["-extra-low", "-low", "-medium", "-high", "-max"] as const;
+const RUNTIME_TIER_SUFFIXES = ["-extra-low", "-low", "-medium", "-high", "-max", "-xhigh"] as const;
 
 /** Split `gemini-3.8-flash-low` into its family and tier. Thinking-only ids are not tiers. */
 export function runtimeTier(runtimeModel: string): { base: string; suffix: string } | undefined {
@@ -478,7 +484,7 @@ export function runtimeTier(runtimeModel: string): { base: string; suffix: strin
 export function siblingRuntimeModels(runtimeModel: string): string[] {
   const tier = runtimeTier(runtimeModel);
   if (!tier) return [];
-  const preferred = ["-high", "-medium", "-low", "-extra-low", "-max"];
+  const preferred = ["-high", "-medium", "-xhigh", "-low", "-extra-low", "-max"];
   return preferred.filter((suffix) => suffix !== tier.suffix).map((suffix) => tier.base + suffix);
 }
 
@@ -507,6 +513,12 @@ export function advertisedSiblingRuntimes(runtimeModel: string): string[] {
 export type { ThinkingWire };
 
 export const ANTIGRAVITY_MODEL_ENUM: Record<string, string> = {
+  // Gemini 4 Hydrogen
+  "gemini-4-hydrogen": "MODEL_PLACEHOLDER_M527",
+  "gemini-4-hydrogen-high": "MODEL_PLACEHOLDER_M525",
+  "gemini-4-hydrogen-xhigh": "MODEL_PLACEHOLDER_M528",
+  "gemini-4-hydrogen-medium": "MODEL_PLACEHOLDER_M526",
+  "gemini-4-hydrogen-low": "MODEL_PLACEHOLDER_M527",
   // Gemini 3.8 Flash
   "gemini-3.8-flash": "MODEL_PLACEHOLDER_M318",
   "gemini-3.8-flash-high": "MODEL_PLACEHOLDER_M318",

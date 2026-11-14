@@ -6,6 +6,7 @@ import type {
   ThinkingContent,
   ToolCall,
 } from "@earendil-works/pi-ai";
+import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 import type { GeminiRole, GeminiToolCallingMode, ThinkingEffort, ToolChoice } from "./enums.js";
 
 // OAuth & Auth Types
@@ -34,6 +35,8 @@ export type CallbackServer = {
 };
 
 // Model Types
+export type AntigravityModelConfig = Extract<ProviderModelConfig, { maxTokens: number }>;
+
 export type AntigravityRouting = {
   off?: string;
   routing?: Partial<Record<ThinkingEffort, string>>;
@@ -44,8 +47,9 @@ export type AntigravityRouting = {
 export const ANTIGRAVITY_API = "antigravity-api" as const;
 export type AntigravityApi = typeof ANTIGRAVITY_API;
 
-export type AntigravityStreamOptions = Omit<SimpleStreamOptions, "toolChoice"> & {
+export type AntigravityStreamOptions = Omit<SimpleStreamOptions, "toolChoice" | "reasoning"> & {
   toolChoice?: ToolChoice;
+  reasoning?: ThinkingEffort;
 };
 
 export type GeminiTextPart = { text: string; thoughtSignature?: string };
@@ -277,6 +281,7 @@ export type ModelInfoRaw = {
   supportsThinking?: unknown;
   supportsImages?: unknown;
   recommended?: unknown;
+  disabled?: unknown;
   quotaInfo?: {
     remainingFraction?: unknown;
     resetTime?: unknown;
