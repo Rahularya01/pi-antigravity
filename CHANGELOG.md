@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-14
+
 ### Added
 
 - **Gemini 4 Hydrogen & Oxygen support:** Added dynamic discovery allowlist for selectable Hydrogen and Oxygen variants beyond `agentModelSorts` (#134), `xhigh` thinking level grouping (`-xhigh`, `(XHigh)`, `(X-High)`), fallback routing, list pricing ($1.50/M input, $7.50/M output, $0.075/M cache read), 262,144 output token limit, and `-xhigh` sibling capacity fallback (#132, #133, #136).
