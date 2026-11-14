@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Gemini 4 Hydrogen & Oxygen support:** Added dynamic discovery allowlist for selectable Hydrogen and Oxygen variants beyond `agentModelSorts` (#134), `xhigh` thinking level grouping (`-xhigh`, `(XHigh)`, `(X-High)`), fallback routing, list pricing ($1.50/M input, $7.50/M output, $0.075/M cache read), 262,144 output token limit, and `-xhigh` sibling capacity fallback (#132, #133, #136).
+
+### Fixed
+
+- **Disabled model filtering:** Exclude backend entries flagged `disabled: true` or suffixed `-disabled` from model discovery even when listed in `agentModelSorts` (#132, #136).
+- **Cross-provider tool observation mimicry:** Keep unsigned tool-call turn boundaries separated, track degraded observations accurately without false triggers on quoted markers, handle reused/colliding tool call IDs, and append a recency history note (#118).
+- **Pi 1.5.x compatibility:** Import `Type` from `typebox` in `read_url_content` instead of `@earendil-works/pi-ai` and narrow `ProviderModelConfig` types for text models.
+
 ## [0.13.0] - 2026-11-12
 
 ### Added

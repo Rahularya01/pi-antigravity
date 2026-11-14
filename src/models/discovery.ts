@@ -6,10 +6,9 @@ import type {
   ModelsStoreEntry,
   RefreshModelsContext,
 } from "@earendil-works/pi-ai";
-import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 import { getApiKey } from "../auth/index.js";
 import { DEFAULT_ENDPOINT, fetchAvailableModelsCatalog, parseApiKey } from "../client/index.js";
-import { ANTIGRAVITY_API } from "../types/types.js";
+import { ANTIGRAVITY_API, type AntigravityModelConfig } from "../types/types.js";
 import { antigravityEnv, isRecord } from "../utils/util.js";
 import { buildAntigravityCatalog, resolvedCatalog, type AntigravityCatalog } from "./grouping.js";
 import {
@@ -78,7 +77,7 @@ export async function discoverAntigravityModels(
 
 export async function refreshAntigravityModels(
   context: RefreshModelsContext,
-): Promise<ProviderModelConfig[]> {
+): Promise<AntigravityModelConfig[]> {
   const checkedAt = hydrateAntigravityCatalog(context.stored);
   const current = getCurrentAntigravityCatalog();
   if (!context.allowNetwork) return current.models;
@@ -167,7 +166,7 @@ function apiKeyFromCredential(credential: Credential | undefined): string | unde
   return undefined;
 }
 
-function toStoredModels(models: ProviderModelConfig[]): Model<Api>[] {
+function toStoredModels(models: AntigravityModelConfig[]): Model<Api>[] {
   return models.map((model) => ({
     ...model,
     api: ANTIGRAVITY_API,
