@@ -81,7 +81,7 @@
     "undici": "^8.12.3"
   },
   "resolutions": {
-    "undici": "8.12.3",
+    "undici": "8.12.4",
     "minimatch": "11.0.3"
   }
 }
