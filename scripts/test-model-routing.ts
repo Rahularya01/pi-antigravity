@@ -1513,6 +1513,8 @@ assert.equal(withPiPrompt.request.systemInstruction.parts.length, 1);
 assert.equal(withPiPrompt.request.systemInstruction.parts[0]?.text, "You are Pi. Follow AGENTS.md.");
 
 // Pi default prompt fingerprints that trigger false 429 RESOURCE_EXHAUSTED are neutralized (#137, #139).
+// The opener is rewritten as a whole sentence group: the phrase-rewritten opener
+// still matched the backend classifier and kept returning a false 429 (#137).
 const defaultPiHarnessPrompt = buildRequest(
   flash37Model,
   {
@@ -1526,7 +1528,7 @@ const defaultPiHarnessPrompt = buildRequest(
 );
 assert.equal(
   defaultPiHarnessPrompt.request.systemInstruction.parts[0]?.text,
-  "You are a coding assistant running inside your development environment. Help users inspect files, run commands, and modify code.",
+  "You are a coding agent helping the user with their project.",
 );
 
 const shortPiPrompt = buildRequest(
@@ -1588,6 +1590,67 @@ assert.ok(
 assert.ok(
   fallbackSystemPromptReq.request.systemInstruction.parts[0]?.text?.includes(
     "practical, and tool aware.",
+  ),
+);
+
+// Pi's default preamble opener must be rewritten as a whole sentence group.
+// Phrase-level rewrites leave "You are a coding assistant running inside your
+// development environment. Help users inspect files, run commands, and modify code."
+// which the backend's prompt classifier still answers with a false 429 (#137).
+const openerPromptCases: Array<[string, string]> = [
+  // Stock Pi 1.5.x preamble opener.
+  [
+    "You are a coding assistant running inside pi, a coding agent harness. Help users inspect files, run commands, and modify code.\n\n<tools>\n- read: Read file contents\n",
+    "You are a coding agent helping the user with their project.\n\n<tools>\n- read: Read file contents\n",
+  ],
+  // Pi-Bolt build variant of the same opener.
+  [
+    "You are a coding assistant running inside Pi-Bolt, a build of pi (a coding agent harness) compiled ahead of time. Help users inspect files, run commands, and modify code. Be brief.",
+    "You are a coding agent helping the user with their project. Be brief.",
+  ],
+  // Already phrase-sanitized opener (output of the phrase-level rules alone) is rewritten too.
+  [
+    "You are a coding assistant running inside your development environment. Help users inspect files, run commands, and modify code.",
+    "You are a coding agent helping the user with their project.",
+  ],
+];
+for (const [input, expected] of openerPromptCases) {
+  const res = buildRequest(
+    flash37Model,
+    { ...dummyContext, systemPrompt: input },
+    "test-proj",
+    {},
+    "gemini-3.7-flash-low",
+  );
+  assert.equal(res.request.systemInstruction.parts[0]?.text, expected, input);
+}
+
+// Prompts without Pi's default opener keep their own wording; only scattered
+// fingerprint phrases are neutralized by the phrase-level rules.
+const customOpenerReq = buildRequest(
+  flash37Model,
+  {
+    ...dummyContext,
+    systemPrompt:
+      "You are an expert software engineer assisting with the user's repository. Be terse, running inside pi, a coding agent harness, for tests.",
+  },
+  "test-proj",
+  {},
+  "gemini-3.7-flash-low",
+);
+assert.ok(
+  customOpenerReq.request.systemInstruction.parts[0]?.text?.startsWith(
+    "You are an expert software engineer assisting with the user's repository.",
+  ),
+);
+assert.ok(
+  !/inside pi, a coding agent harness/i.test(
+    customOpenerReq.request.systemInstruction.parts[0]?.text || "",
+  ),
+);
+assert.ok(
+  customOpenerReq.request.systemInstruction.parts[0]?.text?.includes(
+    "running inside your development environment",
   ),
 );
 

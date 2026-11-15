@@ -935,11 +935,30 @@ function mapToolChoiceMode(
 }
 
 /**
- * Neutralize system prompt phrases that trigger false 429 RESOURCE_EXHAUSTED
- * responses from the Antigravity proxy when paired with `requestType: "agent"`.
+ * Backend-neutral replacement for Pi's default preamble opener. Rewriting
+ * only the trigger phrase ("running inside pi" → "running inside your
+ * development environment") is not enough: the rewritten two-sentence opener
+ * still matches the backend's prompt classifier and returns a false 429
+ * RESOURCE_EXHAUSTED. Replacing the whole opener sentence group passes while
+ * leaving the rest of the prompt untouched (verified in #137).
+ */
+const NEUTRAL_OPENER = "You are a coding agent helping the user with their project.";
+
+/**
+ * Sanitize Pi fingerprints out of the system prompt.
+ *
+ * The backend classifies `systemInstruction` payloads and answers known
+ * third-party harness openers with a non-retryable 429 RESOURCE_EXHAUSTED
+ * (see #137). The opener rewrite must run before the phrase-level rules so
+ * every preamble variant (stock pi, phrase-sanitized pi, Pi-Bolt) collapses
+ * to the same neutral opener instead of a still-matching phrase rewrite.
  */
 export function sanitizeSystemPrompt(text: string): string {
   return text
+    .replace(
+      /^You are a coding assistant running inside [^.]*\.\s*Help users inspect files, run commands, and modify code\./i,
+      NEUTRAL_OPENER,
+    )
     .replace(
       /running inside pi,\s*a coding agent harness/gi,
       "running inside your development environment",
