@@ -18,6 +18,7 @@ function payload(contents: GeminiContent[], system: string): AntigravityGenerate
 }
 
 delete process.env.ANTIGRAVITY_PROMPT_GUARD;
+delete process.env.NOAGY_PROMPT_GUARD;
 
 const normal = payload([{ role: "user", parts: [{ text: "say hi" }] }], "You are Pi.");
 const guarded = applyPromptGuard(normal);
