@@ -956,6 +956,36 @@ export function sanitizeSystemPrompt(text: string): string {
     .replace(/\bpractical,\s*and tool-aware\./gi, "practical, and tool aware.");
 }
 
+/**
+ * Consumer endpoints answer a generic 429 RESOURCE_EXHAUSTED when Pi's prompt is
+ * carried in `systemInstruction` (#137). The backend's matching rule keeps moving,
+ * so rephrasing it is a treadmill: keep only a short system line and prepend the
+ * prompt to the first user turn instead.
+ * This lowers system-prompt priority; remove the guard once the backend accepts
+ * systemInstruction again. ANTIGRAVITY_PROMPT_GUARD=off switches it off.
+ */
+function relocateSystemPrompt(payload: AntigravityGenerateRequest): AntigravityGenerateRequest {
+  const request = payload.request;
+  const text = request.systemInstruction.parts
+    .map((part) => part.text)
+    .join("\n\n")
+    .trim();
+  if (!text) return payload;
+  const firstUser = request.contents.find((turn) => turn.role === GeminiRole.User);
+  const block = `[Operating instructions]\n${text}`;
+  const firstText = firstUser?.parts.find((part): part is GeminiTextPart => "text" in part);
+  if (firstText) firstText.text = `${block}\n\n${firstText.text}`;
+  else if (firstUser) firstUser.parts.unshift({ text: block });
+  else request.contents.unshift({ role: GeminiRole.User, parts: [{ text: block }] });
+  request.systemInstruction.parts = [{ text: "You are a coding agent." }];
+  return payload;
+}
+
+/** Exported for unit tests. */
+export function applyPromptGuard(payload: AntigravityGenerateRequest): AntigravityGenerateRequest {
+  return antigravityEnv("PROMPT_GUARD") === "off" ? payload : relocateSystemPrompt(payload);
+}
+
 /** Exported for unit tests. */
 export function buildRequest(
   model: Model<Api>,
@@ -1767,12 +1797,14 @@ export function streamAntigravity(
             const nonce = nextRequestNonce(turnKey);
             const attemptOptions =
               nonce === 0 ? opts : { ...opts, sessionId: retrySessionSeed(opts.sessionId, nonce) };
-            let payload: unknown = buildRequest(
-              model,
-              context,
-              enterpriseTarget?.projectId || projectId,
-              attemptOptions,
-              runtimeModel,
+            let payload: unknown = applyPromptGuard(
+              buildRequest(
+                model,
+                context,
+                enterpriseTarget?.projectId || projectId,
+                attemptOptions,
+                runtimeModel,
+              ),
             );
             if (enterpriseTarget) {
               payload = toEnterpriseGenerateBody(
@@ -1862,7 +1894,7 @@ export function streamAntigravity(
           if (antigravityEnv("DEBUG_DUMP") === "1") {
             try {
               const body = JSON.stringify(
-                buildRequest(model, context, projectId, opts, runtimeModel),
+                applyPromptGuard(buildRequest(model, context, projectId, opts, runtimeModel)),
               );
               let parsedBody: unknown = body;
               try {
