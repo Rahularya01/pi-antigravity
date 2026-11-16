@@ -27,6 +27,11 @@ const retainedSystem = guarded.request.systemInstruction.parts;
 assert.equal(retainedSystem.length, 1, "one short system line is retained");
 assert.ok(retainedSystem[0].text.trim().length > 0, "the retained line is non-empty");
 assert.ok(retainedSystem[0].text.length < 200, "the retained line stays short");
+assert.notEqual(
+  retainedSystem[0].text,
+  normal.request.systemInstruction.parts[0].text,
+  "the original system prompt is removed from systemInstruction",
+);
 assert.deepEqual(
   guarded.request.contents[0].parts,
   [{ text: "[Operating instructions]\nYou are Pi.\n\nsay hi" }],
