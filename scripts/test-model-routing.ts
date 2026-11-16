@@ -1548,7 +1548,8 @@ const codemodeDocsPrompt = buildRequest(
   flash37Model,
   {
     ...dummyContext,
-    systemPrompt: "When asked about codemode scripts (docs/codemode.md), read the docs.",
+    systemPrompt:
+      "When asked about codemode scripts (docs/codemode.md), read the docs and keep CodeModel untouched.",
   },
   "test-proj",
   {},
@@ -1556,7 +1557,7 @@ const codemodeDocsPrompt = buildRequest(
 );
 assert.equal(
   codemodeDocsPrompt.request.systemInstruction.parts[0]?.text,
-  "When asked about code-mode scripts (docs/code-mode.md), read the docs.",
+  "When asked about code-mode scripts (docs/code-mode.md), read the docs and keep CodeModel untouched.",
 );
 
 const unrelatedIdentifierPrompt = buildRequest(
