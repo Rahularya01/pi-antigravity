@@ -21,6 +21,8 @@ delete process.env.ANTIGRAVITY_PROMPT_GUARD;
 delete process.env.NOAGY_PROMPT_GUARD;
 
 const normal = payload([{ role: "user", parts: [{ text: "say hi" }] }], "You are Pi.");
+// The guard rewrites the payload in place, so snapshot the prompt before calling it.
+const originalSystem = normal.request.systemInstruction.parts[0].text;
 const guarded = applyPromptGuard(normal);
 assert.equal(guarded.request.contents.length, 1, "no extra turn is inserted");
 const retainedSystem = guarded.request.systemInstruction.parts;
@@ -29,7 +31,7 @@ assert.ok(retainedSystem[0].text.trim().length > 0, "the retained line is non-em
 assert.ok(retainedSystem[0].text.length < 200, "the retained line stays short");
 assert.notEqual(
   retainedSystem[0].text,
-  normal.request.systemInstruction.parts[0].text,
+  originalSystem,
   "the original system prompt is removed from systemInstruction",
 );
 assert.deepEqual(
