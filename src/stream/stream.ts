@@ -972,6 +972,7 @@ function relocateSystemPrompt(payload: AntigravityGenerateRequest): AntigravityG
     .trim();
   if (!text) return payload;
   const firstUser = request.contents.find((turn) => turn.role === GeminiRole.User);
+  // `[Operating instructions]` marks the relocation: onPayload / before_provider_request hooks see this body already rewritten and must not relocate twice.
   const block = `[Operating instructions]\n${text}`;
   const firstText = firstUser?.parts.find((part): part is GeminiTextPart => "text" in part);
   if (firstText) firstText.text = `${block}\n\n${firstText.text}`;

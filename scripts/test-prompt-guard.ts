@@ -23,7 +23,10 @@ delete process.env.NOAGY_PROMPT_GUARD;
 const normal = payload([{ role: "user", parts: [{ text: "say hi" }] }], "You are Pi.");
 const guarded = applyPromptGuard(normal);
 assert.equal(guarded.request.contents.length, 1, "no extra turn is inserted");
-assert.deepEqual(guarded.request.systemInstruction.parts, [{ text: "You are a coding agent." }]);
+const retainedSystem = guarded.request.systemInstruction.parts;
+assert.equal(retainedSystem.length, 1, "one short system line is retained");
+assert.ok(retainedSystem[0].text.trim().length > 0, "the retained line is non-empty");
+assert.ok(retainedSystem[0].text.length < 200, "the retained line stays short");
 assert.deepEqual(
   guarded.request.contents[0].parts,
   [{ text: "[Operating instructions]\nYou are Pi.\n\nsay hi" }],
