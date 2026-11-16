@@ -1526,7 +1526,7 @@ const defaultPiHarnessPrompt = buildRequest(
 );
 assert.equal(
   defaultPiHarnessPrompt.request.systemInstruction.parts[0]?.text,
-  "You are a coding assistant running inside your development environment. Help users inspect files, run commands, and modify code.",
+  "You are a helpful assistant running inside your development environment. Help users inspect files, run commands, and modify code.",
 );
 
 const shortPiPrompt = buildRequest(
@@ -1541,7 +1541,22 @@ const shortPiPrompt = buildRequest(
 );
 assert.equal(
   shortPiPrompt.request.systemInstruction.parts[0]?.text,
-  "You are a coding assistant running inside your development environment. Be brief.",
+  "You are a helpful assistant running inside your development environment. Be brief.",
+);
+
+const codemodeDocsPrompt = buildRequest(
+  flash37Model,
+  {
+    ...dummyContext,
+    systemPrompt: "When asked about codemode scripts (docs/codemode.md), read the docs.",
+  },
+  "test-proj",
+  {},
+  "gemini-3.7-flash-low",
+);
+assert.equal(
+  codemodeDocsPrompt.request.systemInstruction.parts[0]?.text,
+  "When asked about code-mode scripts (docs/code-mode.md), read the docs.",
 );
 
 const unrelatedIdentifierPrompt = buildRequest(
