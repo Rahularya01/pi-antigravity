@@ -179,7 +179,7 @@ Gemini 4 Argon is advertised only when the client version is current and the acc
 
 Long sessions that switch providers are the highest-risk setup for tool-observation mimicry on Gemini 3.x. Foreign tool calls are flattened into `[Observation from ...]` text, and a model can imitate those logs instead of making a real tool call. Finish a task on one provider before switching.
 
-A tier that answers with a generic resource-exhausted error is retried on the other Antigravity endpoints and then on a sibling tier of the same generation (`-low` can move to `-high` or `-medium`). A hard quota message that includes a reset time does not do this.
+A tier that answers with a generic resource-exhausted error is retried on the other Antigravity endpoints and then on a sibling tier of the same generation (`-low` can move to `-high` or `-medium`). A hard quota message that includes a reset time does not do this. When every endpoint and tier answers with a load-shaped refusal — generic `429 RESOURCE_EXHAUSTED`, or `503 No capacity available` — the whole set is retried on a backoff ladder (3 s, 8 s, 15 s, 25 s by default) before the turn fails, because such refusals clear on their own while the model pool still reports quota remaining. `ANTIGRAVITY_CAPACITY_BACKOFF_MS` and `ANTIGRAVITY_CAPACITY_ATTEMPTS` resize that ladder.
 
 A successful refresh replaces the catalog with advertised models and routes, removing entries absent from all responding endpoints. Live capabilities and token limits override static defaults; grouped variants use the smallest advertised limits. Known thinking variants such as `gemini-4-hydrogen-low` / `-medium` / `-high` / `-xhigh` become one public model. Unfamiliar suffixes and opaque IDs stay usable as exact runtime IDs when they pass the catalog filters.
 
@@ -238,6 +238,8 @@ All primary environment variables start with `ANTIGRAVITY_`. The legacy `NOAGY_`
 | `ANTIGRAVITY_CLIENT_ID` | Use a custom Google OAuth client ID. |
 | `ANTIGRAVITY_CLIENT_SECRET` | Use a custom Google OAuth client secret. Keep it out of source control and shell history. |
 | `ANTIGRAVITY_STREAM_STALL_TIMEOUT_MS` | Maximum silence between stream chunks; default `300000` ms. Set `0` to disable. |
+| `ANTIGRAVITY_CAPACITY_BACKOFF_MS` | Comma-separated backoff steps in ms for load-shaped refusals (generic `429`, `503 No capacity available`); default `3000,8000,15000,25000`. Invalid entries are ignored. |
+| `ANTIGRAVITY_CAPACITY_ATTEMPTS` | Total attempts across the capacity ladder, `1`–`10`; defaults to the number of backoff steps plus one. |
 | `ANTIGRAVITY_STREAM_HEADER_TIMEOUT_MS` | Response-header deadline; default `180000` ms. Set `0` to disable. |
 | `ANTIGRAVITY_NO_KEEPALIVE` | Set to `1` to skip the keep-alive connection pool. |
 | `ANTIGRAVITY_NO_PREWARM` | Set to `1` to skip the TLS pre-warm request made on the first Antigravity request. |

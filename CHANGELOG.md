@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Capacity retries actually run:** a load-shaped refusal (generic `429 RESOURCE_EXHAUSTED`, `503 No capacity available`) ended the turn immediately, because the retry ladder threw on its first pass and its remaining attempts were unreachable. The whole endpoint/tier set is now retried with backoff (3 s, 8 s, 15 s, 25 s; `ANTIGRAVITY_CAPACITY_BACKOFF_MS`, `ANTIGRAVITY_CAPACITY_ATTEMPTS`), which matches the existing intent that a shared, temporarily throttled pool is worth waiting out. Quota walls with a reset hint and dead models still fail on the first pass, and the terminal message keeps its non-retryable wording (#89).
+
 ## [0.14.0] - 2026-11-14
 
 ### Added

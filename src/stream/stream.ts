@@ -1300,6 +1300,46 @@ export function streamStallTimeoutMs(): number {
   return envTimeoutMs("STREAM_STALL_TIMEOUT_MS", STREAM_STALL_TIMEOUT_DEFAULT_MS);
 }
 
+/**
+ * Backoff ladder for transient capacity refusals, in milliseconds. A free-tier
+ * consumer project answers `429 RESOURCE_EXHAUSTED` (no reset hint) and
+ * `503 No capacity available` while the model pool still reports quota remaining,
+ * and then serves the same request once the queue drains. Waiting is therefore more
+ * useful than reporting the model as unavailable.
+ */
+const CAPACITY_BACKOFF_DEFAULT_MS = [3_000, 8_000, 15_000, 25_000] as const;
+
+function capacityBackoffSchedule(): number[] {
+  const raw = antigravityEnv("CAPACITY_BACKOFF_MS")?.trim();
+  if (!raw) return [...CAPACITY_BACKOFF_DEFAULT_MS];
+  const parsed = raw
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((ms) => Number.isFinite(ms) && ms >= 0 && ms <= 120_000);
+  return parsed.length ? parsed : [...CAPACITY_BACKOFF_DEFAULT_MS];
+}
+
+/** Attempts in the capacity ladder: the first request plus one per backoff step. */
+export function capacityAttemptLimit(): number {
+  const raw = Number(antigravityEnv("CAPACITY_ATTEMPTS")?.trim() ?? "");
+  if (Number.isFinite(raw) && raw >= 1 && raw <= 10) return Math.floor(raw);
+  return capacityBackoffSchedule().length + 1;
+}
+
+function capacityBackoffMs(attempt: number): number {
+  const schedule = capacityBackoffSchedule();
+  const base = schedule[Math.min(attempt - 1, schedule.length - 1)] ?? 0;
+  // Jitter keeps sessions sharing one quota pool from retrying in lockstep.
+  return Math.round(base * (0.9 + Math.random() * 0.2));
+}
+
+/** Capacity refusals that describe load, not a retired model or a quota wall. */
+export function isCapacityFailure(status: number | undefined, text: string): boolean {
+  if (status === 429) return isGenericResourceExhausted(text);
+  if (status === 503) return /no capacity available/i.test(text);
+  return false;
+}
+
 function stallError(stallMs: number): Error {
   // "timed out" is deliberate: pi's retryable provider-error pattern matches
   // it, so a mid-body stall auto-retries instead of dying as a terminal error.
@@ -1745,11 +1785,11 @@ export function streamAntigravity(
       let received = false;
       let runtimeModel = initialRuntimeModel;
 
-      for (let emptyAttempt = 0; emptyAttempt <= 2; emptyAttempt++) {
+      const capacityAttempts = capacityAttemptLimit();
+      for (let emptyAttempt = 0; emptyAttempt < capacityAttempts; emptyAttempt++) {
         if (opts.signal?.aborted) throw new Error("Request was aborted");
         if (emptyAttempt > 0) {
-          const delay = 500 * 2 ** (emptyAttempt - 1);
-          await new Promise((res) => setTimeout(res, delay));
+          await new Promise((res) => setTimeout(res, capacityBackoffMs(emptyAttempt)));
         }
 
         for (let candIdx = 0; candIdx < runtimeCandidates.length; candIdx++) {
@@ -1907,6 +1947,15 @@ export function streamAntigravity(
               continue;
             }
             throw new Error(friendly);
+          }
+          // A capacity refusal says nothing about the model yet: the same request
+          // succeeds once the shared pool drains. Walk the backoff ladder while
+          // attempts remain instead of surfacing a terminal "unavailable".
+          if (
+            isCapacityFailure(response?.status, lastText) &&
+            emptyAttempt < capacityAttempts - 1
+          ) {
+            continue;
           }
           throw new Error(
             `Antigravity API error (${publicErrorStatus(response?.status, friendly)}, ${formatRequestDiagnostics({ projectId, runtimeModel })}): ${friendly}`,
