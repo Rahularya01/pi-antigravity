@@ -1187,6 +1187,85 @@ assert.ok(
   convertedMultimodal[2]?.parts.some((p) => "inlineData" in p && p.inlineData.mimeType === "image/png"),
 );
 
+// Claude / GPT-OSS require every functionResponse in a user turn to appear contiguously
+// before any inlineData/text parts, and require a matching functionResponse even when an
+// earlier toolCall turn was interrupted before its toolResult was recorded.
+const claudeParallelImageAndOrphanedToolContext = {
+  messages: [
+    { role: "user", content: "inspect screenshots", timestamp: Date.now() },
+    {
+      role: "assistant",
+      content: [
+        { type: "toolCall", id: "call-img-1", name: "read", arguments: { path: "a.png" } },
+        { type: "toolCall", id: "call-img-2", name: "read", arguments: { path: "b.png" } },
+      ],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "claude-sonnet-4-6",
+      usage: zeroUsage,
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call-img-1",
+      toolName: "read",
+      content: [
+        { type: "text", text: "Read image file [image/png]" },
+        { type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" },
+      ],
+      isError: false,
+      timestamp: Date.now(),
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call-img-2",
+      toolName: "read",
+      content: [
+        { type: "text", text: "Read image file [image/png]" },
+        { type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" },
+      ],
+      isError: false,
+      timestamp: Date.now(),
+    },
+    {
+      role: "assistant",
+      content: [
+        { type: "toolCall", id: "call-orphaned", name: "bash", arguments: { command: "echo ok" } },
+      ],
+      api: "antigravity-api",
+      provider: "antigravity",
+      model: "claude-sonnet-4-6",
+      usage: zeroUsage,
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+    { role: "user", content: "continue", timestamp: Date.now() },
+  ],
+} as unknown as Context;
+const convertedClaudeParallel = convertMessages(
+  { ...model, id: "claude-sonnet-4-6", maxTokens: 64000 },
+  claudeParallelImageAndOrphanedToolContext,
+  "claude-sonnet-4-6",
+);
+assert.equal(convertedClaudeParallel.length, 5);
+assert.deepEqual(
+  convertedClaudeParallel[2]?.parts.map((p) =>
+    "functionResponse" in p
+      ? `fr:${p.functionResponse.id}`
+      : "inlineData" in p
+        ? "img"
+        : "text",
+  ),
+  ["fr:call-img-1", "fr:call-img-2", "img", "img"],
+);
+assert.deepEqual(
+  convertedClaudeParallel[4]?.parts.map((p) =>
+    "functionResponse" in p ? `fr:${p.functionResponse.id}` : "text",
+  ),
+  ["fr:call-orphaned", "text"],
+);
+
 const crossThinkingContext = {
   messages: [
     { role: "user", content: "hi", timestamp: Date.now() },

@@ -69,6 +69,7 @@ import {
   type AntigravityStreamOptions,
   type ContentBlock,
   type GeminiContent,
+  type GeminiFunctionCallPart,
   type GeminiFunctionDeclaration,
   type GeminiFunctionResponsePart,
   type GeminiGenerationConfig,
@@ -490,6 +491,52 @@ function convertMessagesWithMetadata(
         parts: [{ text: CONTINUATION_TEXT }],
       });
       index += 1;
+    }
+  }
+
+  // Claude and GPT-OSS backends require every functionCall in a model turn to have
+  // a matching functionResponse at the start of the immediately following user turn
+  // before any inlineData/text parts. When parallel tool results include images or
+  // an earlier turn was interrupted before its toolResult was recorded, keep all
+  // functionResponse parts contiguous first and synthesize missing responses.
+  if (toolCallIdNeeded(model.id, runtimeModel)) {
+    for (let index = 0; index < contents.length - 1; index += 1) {
+      const turn = contents[index];
+      if (turn?.role !== GeminiRole.Model) continue;
+      const callParts = turn.parts.filter(
+        (part): part is GeminiFunctionCallPart => "functionCall" in part,
+      );
+      if (callParts.length === 0) continue;
+
+      let nextTurn = contents[index + 1];
+      if (!nextTurn || nextTurn.role !== GeminiRole.User) {
+        nextTurn = { role: GeminiRole.User, parts: [] };
+        contents.splice(index + 1, 0, nextTurn);
+      }
+
+      const responseParts = nextTurn.parts.filter(
+        (part): part is GeminiFunctionResponsePart => "functionResponse" in part,
+      );
+      const nonResponseParts = nextTurn.parts.filter((part) => !("functionResponse" in part));
+      const existingIds = new Set(
+        responseParts.map((part) => part.functionResponse.id).filter(Boolean),
+      );
+
+      for (const callPart of callParts) {
+        const callId = callPart.functionCall.id;
+        if (callId && !existingIds.has(callId)) {
+          responseParts.push({
+            functionResponse: {
+              name: callPart.functionCall.name,
+              id: callId,
+              response: { error: "Tool execution was interrupted before a result was recorded." },
+            },
+          });
+          existingIds.add(callId);
+        }
+      }
+
+      nextTurn.parts = [...responseParts, ...nonResponseParts];
     }
   }
 
