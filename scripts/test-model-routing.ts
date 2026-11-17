@@ -1549,7 +1549,7 @@ const codemodeDocsPrompt = buildRequest(
   {
     ...dummyContext,
     systemPrompt:
-      "When asked about codemode scripts (docs/codemode.md), read the docs and keep CodeModel untouched.",
+      "<tools>\n- codemode: Run JavaScript that calls other tools\n</tools>\n<docs>\n- When asked about: MCP servers (docs/mcp.md), codemode scripts and non-LLM models such as classifiers and image models (docs/codemode.md)\n</docs>",
   },
   "test-proj",
   {},
@@ -1557,7 +1557,7 @@ const codemodeDocsPrompt = buildRequest(
 );
 assert.equal(
   codemodeDocsPrompt.request.systemInstruction.parts[0]?.text,
-  "When asked about code-mode scripts (docs/code-mode.md), read the docs and keep CodeModel untouched.",
+  "<tools>\n- codemode: Run JavaScript that calls other tools\n</tools>\n<docs>\n- When asked about: MCP servers (docs/mcp.md), codemode scripts (docs/codemode.md), non-LLM models such as classifiers and image models (docs/codemode.md)\n</docs>",
 );
 
 const unrelatedIdentifierPrompt = buildRequest(

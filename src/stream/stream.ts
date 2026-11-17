@@ -958,7 +958,10 @@ export function sanitizeSystemPrompt(text: string): string {
       "$1inside your development environment",
     )
     .replace(/\bpractical,\s*and tool-aware\./gi, "practical, and tool aware.")
-    .replace(/\bcodemode\b/gi, "code-mode");
+    .replace(
+      /codemode scripts and non-LLM models/gi,
+      "codemode scripts (docs/codemode.md), non-LLM models",
+    );
 }
 
 /** Exported for unit tests. */
