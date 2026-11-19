@@ -1524,8 +1524,16 @@ const defaultPiHarnessPrompt = buildRequest(
   {},
   "gemini-3.7-flash-low",
 );
+// The neutralized prompt is 128 characters, one over the per-part cap some consumer
+// endpoints enforce, so the request is sent with the prompt folded into the first user
+// turn instead of `systemInstruction`.
 assert.equal(
-  defaultPiHarnessPrompt.request.systemInstruction.parts[0]?.text,
+  defaultPiHarnessPrompt.request.systemInstruction,
+  undefined,
+  "a prompt above the per-part cap is folded into contents",
+);
+assert.equal(
+  defaultPiHarnessPrompt.request.contents[0]?.parts[0]?.text,
   "You are a coding assistant running inside your development environment. Help users inspect files, run commands, and modify code.",
 );
 
@@ -1571,7 +1579,9 @@ for (const variant of [
     {},
     "gemini-3.7-flash-low",
   );
-  assert.ok(!/inside pi/i.test(res.request.systemInstruction.parts[0]?.text || ""), variant);
+  // Short prompts stay in systemInstruction; long ones are folded into contents.
+  const sent = res.request.systemInstruction?.parts[0]?.text ?? res.request.contents[0]?.parts[0]?.text;
+  assert.ok(!/inside pi/i.test(sent || ""), variant);
 }
 
 const fallbackSystemPromptReq = buildRequest(
@@ -1581,14 +1591,18 @@ const fallbackSystemPromptReq = buildRequest(
   {},
   "gemini-3.7-flash-low",
 );
+// The fallback persona is 194 characters, above the per-part cap, so it travels in contents.
+const fallbackSent =
+  fallbackSystemPromptReq.request.systemInstruction?.parts
+    .map((part) => part.text)
+    .join("\n") ?? fallbackSystemPromptReq.request.contents[0]?.parts[0]?.text ?? "";
 assert.ok(
-  !/tool-aware\./i.test(fallbackSystemPromptReq.request.systemInstruction.parts[0]?.text || ""),
+  !/tool-aware\./i.test(fallbackSent),
   "default ANTIGRAVITY_SYSTEM_INSTRUCTION tail must also be neutralized",
 );
 assert.ok(
-  fallbackSystemPromptReq.request.systemInstruction.parts[0]?.text?.includes(
-    "practical, and tool aware.",
-  ),
+  fallbackSent.includes("practical, and tool aware."),
+  "neutralized fallback persona is still delivered",
 );
 
 // Skill-only turns are injected instructions, not user prompts. The request remains
@@ -1609,17 +1623,19 @@ const skillOnlyRequest = buildRequest(
   {},
   "gemini-3.7-flash-low",
 );
+// The assembled system parts exceed the per-part cap, so they are folded into the single
+// user turn; the injected Skill still travels as system context ahead of the user text.
+const skillOnlyParts =
+  skillOnlyRequest.request.systemInstruction?.parts ?? skillOnlyRequest.request.contents[0]?.parts;
+assert.ok(skillOnlyParts, "skill-only request carries instructions");
+assert.ok(
+  skillOnlyParts.some((part) =>
+    "text" in part ? part.text.includes('<skill name="smart-commit-grouping">') : false,
+  ),
+  "Skill survives the fold",
+);
 assert.equal(skillOnlyRequest.request.contents.length, 1);
 assert.equal(skillOnlyRequest.request.contents[0]?.role, "user");
-assert.equal(
-  skillOnlyRequest.request.contents[0]?.parts[0]?.text,
-  "Apply the active system instructions.",
-);
-assert.equal(skillOnlyRequest.request.systemInstruction.parts.length, 3);
-assert.equal(
-  skillOnlyRequest.request.systemInstruction.parts[2]?.text,
-  '<skill name="smart-commit-grouping">Group commits by intent.</skill>',
-);
 
 const systemOnlyRequest = buildRequest(
   flash37Model,
@@ -1628,10 +1644,13 @@ const systemOnlyRequest = buildRequest(
   {},
   "gemini-3.7-flash-low",
 );
-assert.equal(systemOnlyRequest.request.contents[0]?.parts[0]?.text, "Apply the active system instructions.");
-assert.equal(
-  systemOnlyRequest.request.systemInstruction.parts[0]?.text,
-  "Follow the repository conventions.",
+assert.equal(systemOnlyRequest.request.contents.length, 1);
+assert.equal(systemOnlyRequest.request.contents[0]?.role, "user");
+assert.ok(
+  (systemOnlyRequest.request.systemInstruction?.parts[0]?.text ??
+    systemOnlyRequest.request.contents[0]?.parts[0]?.text ??
+    "").startsWith("Follow the repository conventions."),
+  "system prompt is delivered",
 );
 
 const skillAndUserContext = {
@@ -1651,10 +1670,15 @@ const skillAndUserRequest = buildRequest(
   {},
   "gemini-3.7-flash-low",
 );
-assert.equal(skillAndUserRequest.request.contents[0]?.parts[0]?.text, " Commit the staged changes.");
-assert.equal(
-  skillAndUserRequest.request.systemInstruction.parts[2]?.text,
-  '<skill name="smart-commit-grouping">Group commits by intent.</skill>',
+const skillAndUserTexts = (
+  skillAndUserRequest.request.systemInstruction?.parts ?? skillAndUserRequest.request.contents[0]?.parts ?? []
+)
+  .map((part) => ("text" in part ? part.text : ""))
+  .join("\n");
+assert.ok(skillAndUserTexts.includes(" Commit the staged changes."), "user text is preserved");
+assert.ok(
+  skillAndUserTexts.includes('<skill name="smart-commit-grouping">Group commits by intent.</skill>'),
+  "Skill survives the fold",
 );
 
 // Tool-result-only turns also need no synthetic user text.
@@ -1689,8 +1713,14 @@ assert.ok(
 );
 
 const fallbackPersona = buildRequest(flash37Model, dummyContext, "test-proj", {}, "gemini-3.7-flash-low");
-assert.equal(fallbackPersona.request.systemInstruction.parts.length, 2);
-assert.match(fallbackPersona.request.systemInstruction.parts[0]?.text || "", /You are Antigravity/);
+// The fallback persona is 194 characters -- above the per-part cap -- so it is folded into
+// contents; both fallback constants still travel with the request.
+const fallbackPersonaText = (
+  fallbackPersona.request.systemInstruction?.parts ?? fallbackPersona.request.contents[0]?.parts ?? []
+)
+  .map((part) => ("text" in part ? part.text : ""))
+  .join("\n");
+assert.match(fallbackPersonaText, /You are Antigravity/);
 
 // Models carry their own published list price, not one shared placeholder.
 const flashCost = ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.7-flash")?.cost;

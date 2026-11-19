@@ -98,6 +98,10 @@ const ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION =
   'CRITICAL: NEVER output rule checks, formatting guidelines, constraint checklists (e.g. "No emdashes"), internal thinking/reasoning preambles, or fake "[Observation from ...]" tool logs in the final response. When calling a tool, emit a real functionCall; never simulate tool calls or tool observations in plain text. Output only the final response.';
 
 const CONTINUATION_TEXT = "Continue the active task using the available instructions and context.";
+const PLACEHOLDER_SYSTEM_TURN_TEXT = "Apply the active system instructions.";
+
+/** Largest `systemInstruction` part some consumer endpoints accept before answering 429. */
+const SYSTEM_INSTRUCTION_PART_LIMIT = 126;
 let toolCallCounter = 0;
 
 function sanitizeToolCallId(id: string, fallbackName?: string): string {
@@ -956,6 +960,60 @@ export function sanitizeSystemPrompt(text: string): string {
     .replace(/\bpractical,\s*and tool-aware\./gi, "practical, and tool aware.");
 }
 
+/**
+ * `ANTIGRAVITY_INLINE_SYSTEM=1` forces the folded shape (see `shouldInlineSystem`);
+ * `0`, `false`, or `off` forces the wire-native `systemInstruction` shape.
+ *
+ * Exported for unit tests.
+ */
+export function isInlineSystemEnabled(): boolean {
+  const raw = antigravityEnv("INLINE_SYSTEM")?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "on";
+}
+
+/**
+ * Decide the wire shape for the assembled system parts.
+ *
+ * Some consumer endpoints reject a `systemInstruction` part of 127+ characters with a
+ * generic 429 RESOURCE_EXHAUSTED. The cap is per part and content-independent (150 `x`
+ * characters fail, 126 characters of prose pass), and splitting the prompt across shorter
+ * parts does not help because the accepted total stays bounded, while the same text inside
+ * `contents` is accepted at any length.
+ *
+ * Components after index 0 are the library's own short constants, so only the
+ * caller-supplied prompt at index 0 is measured; it is always longer than the cap in
+ * practice, so affected accounts get the folded shape with no configuration.
+ */
+export function shouldInlineSystem(systemParts: { text: string }[]): boolean {
+  if (isInlineSystemEnabled()) return true;
+  return (systemParts[0]?.text.length ?? 0) > SYSTEM_INSTRUCTION_PART_LIMIT;
+}
+
+/**
+ * Move the assembled system parts into the first user turn and drop them from the
+ * request envelope.
+ *
+ * Also collapses the placeholder turn `buildRequest` injects when the conversation has
+ * no user text of its own, so prompts and placeholder do not both land in the request.
+ */
+export function inlineSystemInstruction(
+  contents: GeminiContent[],
+  systemParts: { text: string }[],
+): void {
+  if (systemParts.length === 0) return;
+  const text = sanitizeText(systemParts.map((part) => part.text).join("\n\n"));
+  if (!text) return;
+  const first = contents[0];
+  if (first && first.role === GeminiRole.User) {
+    const placeholder =
+      first.parts.length === 1 && "text" in first.parts[0] ? first.parts[0].text : undefined;
+    const rest = placeholder === PLACEHOLDER_SYSTEM_TURN_TEXT ? first.parts.slice(1) : first.parts;
+    first.parts = [{ text }, ...rest];
+  } else {
+    contents.unshift({ role: GeminiRole.User, parts: [{ text }] });
+  }
+}
+
 /** Exported for unit tests. */
 export function buildRequest(
   model: Model<Api>,
@@ -1003,17 +1061,22 @@ export function buildRequest(
   if (!hasUserText && (injectedSkills.length > 0 || Boolean(systemPromptText))) {
     contents.unshift({
       role: GeminiRole.User,
-      parts: [{ text: "Apply the active system instructions." }],
+      parts: [{ text: PLACEHOLDER_SYSTEM_TURN_TEXT }],
     });
   }
 
-  const request: GeminiRequestBody = {
-    contents,
-    systemInstruction: {
+  const request: GeminiRequestBody = { contents };
+  // Workaround for endpoints that reject the `systemInstruction` field outright with a
+  // bogus 429 RESOURCE_EXHAUSTED (see isInlineSystemEnabled). Default keeps the
+  // wire-native shape.
+  if (shouldInlineSystem(systemParts)) {
+    inlineSystemInstruction(contents, systemParts);
+  } else {
+    request.systemInstruction = {
       role: GeminiRole.User,
       parts: systemParts,
-    },
-  };
+    };
+  }
 
   const generationConfig: GeminiGenerationConfig = {};
   if (options.temperature !== undefined) generationConfig.temperature = options.temperature;

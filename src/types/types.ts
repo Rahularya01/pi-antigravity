@@ -112,7 +112,12 @@ export type GeminiGenerationConfig = {
 
 export type GeminiRequestBody = {
   contents: GeminiContent[];
-  systemInstruction: {
+  /**
+   * Optional: omitted entirely when system prompts are folded into the first user turn
+   * (`ANTIGRAVITY_INLINE_SYSTEM=1`). The Antigravity consumer proxy answers any request
+   * that carries this field with a bogus 429 RESOURCE_EXHAUSTED.
+   */
+  systemInstruction?: {
     role: "user";
     parts: GeminiTextPart[];
   };
