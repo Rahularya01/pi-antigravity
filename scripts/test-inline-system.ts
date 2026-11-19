@@ -3,6 +3,7 @@ import type { Api, Context, Model } from "@earendil-works/pi-ai";
 import {
   buildRequest,
   inlineSystemInstruction,
+  inlineSystemPreference,
   isInlineSystemEnabled,
   shouldInlineSystem,
 } from "../src/stream/stream.ts";
@@ -39,11 +40,32 @@ function contextWithUserTurn(): Context {
   } as unknown as Context;
 }
 
-const saved = process.env.ANTIGRAVITY_INLINE_SYSTEM;
+/**
+ * `antigravityEnv()` falls back to the legacy `NOAGY_` prefix, so an inherited value on
+ * either variable would silently decide the wire shape. Save and clear both.
+ */
+const savedEnv = {
+  ANTIGRAVITY_INLINE_SYSTEM: process.env.ANTIGRAVITY_INLINE_SYSTEM,
+  NOAGY_INLINE_SYSTEM: process.env.NOAGY_INLINE_SYSTEM,
+};
+
+function clearInlineSystemEnv(): void {
+  delete process.env.ANTIGRAVITY_INLINE_SYSTEM;
+  delete process.env.NOAGY_INLINE_SYSTEM;
+}
+
+function restoreInlineSystemEnv(): void {
+  for (const [key, value] of Object.entries(savedEnv)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
+
+clearInlineSystemEnv();
 
 // --- flag parsing -----------------------------------------------------------
 
-delete process.env.ANTIGRAVITY_INLINE_SYSTEM;
+clearInlineSystemEnv();
 assert.equal(isInlineSystemEnabled(), false, "inline system is opt-in");
 
 for (const on of ["1", "true", "TRUE", "on", " On "]) {
@@ -51,14 +73,28 @@ for (const on of ["1", "true", "TRUE", "on", " On "]) {
   assert.equal(isInlineSystemEnabled(), true, `"${on}" enables inline system`);
 }
 
-for (const off of ["0", "false", "off", "", "no", "2"]) {
+for (const off of ["0", "false", "off"]) {
   process.env.ANTIGRAVITY_INLINE_SYSTEM = off;
-  assert.equal(isInlineSystemEnabled(), false, `"${off}" leaves the wire shape unchanged`);
+  assert.equal(isInlineSystemEnabled(), false, `"${off}" disables inline system`);
+  assert.equal(inlineSystemPreference(), "off", `"${off}" is an explicit native override`);
 }
+
+for (const auto of ["", "  ", "no", "2", "auto"]) {
+  process.env.ANTIGRAVITY_INLINE_SYSTEM = auto;
+  assert.equal(isInlineSystemEnabled(), false, `"${auto}" does not force inline`);
+  assert.equal(inlineSystemPreference(), "auto", `"${auto}" leaves the decision to the cap`);
+}
+
+// Legacy prefix: NOAGY_INLINE_SYSTEM behaves like the ANTIGRAVITY_ form.
+clearInlineSystemEnv();
+process.env.NOAGY_INLINE_SYSTEM = "1";
+assert.equal(isInlineSystemEnabled(), true, "legacy NOAGY_ prefix forces inline");
+process.env.NOAGY_INLINE_SYSTEM = "0";
+assert.equal(inlineSystemPreference(), "off", "legacy NOAGY_ prefix can disable inline");
 
 // --- default path is untouched ---------------------------------------------
 
-delete process.env.ANTIGRAVITY_INLINE_SYSTEM;
+clearInlineSystemEnv();
 // A short prompt fits the per-part cap, so the wire-native shape is kept.
 assert.ok(SYSTEM_TEXT.length <= 126, "fixture stays under the cap");
 const defaultReq = buildRequest(model, contextWithUserTurn(), "test-project", {}, "gemini-3.8-flash");
@@ -87,7 +123,7 @@ const longContext = {
   ],
 } as unknown as Context;
 // Without any opt-in, a prompt above the cap is folded automatically.
-delete process.env.ANTIGRAVITY_INLINE_SYSTEM;
+clearInlineSystemEnv();
 assert.equal(isInlineSystemEnabled(), false, "auto-fold does not need the env var");
 assert.equal(shouldInlineSystem([{ text: longSystem }]), true, "long prompt auto-folds");
 assert.equal(shouldInlineSystem([{ text: "x".repeat(126) }]), false, "126 chars stays inline");
@@ -97,6 +133,42 @@ assert.equal(
   "systemInstruction" in longInline.request,
   false,
   "long prompt: systemInstruction omitted without opt-in",
+);
+
+// An explicit native override wins over the length check, for every disable spelling.
+// Sending an oversized part then fails upstream with the 429 documented above; that is
+// the operator's choice, and the assertion documents which shape reaches the wire.
+for (const off of ["0", "false", "off"]) {
+  process.env.ANTIGRAVITY_INLINE_SYSTEM = off;
+  assert.equal(
+    shouldInlineSystem([{ text: longSystem }]),
+    false,
+    `"${off}" keeps native placement for an oversized prompt`,
+  );
+  const nativeLong = buildRequest(model, longContext, "test-project", {}, "gemini-3.8-flash");
+  assert.ok(
+    nativeLong.request.systemInstruction,
+    `"${off}" keeps the systemInstruction field`,
+  );
+  assert.equal(
+    nativeLong.request.systemInstruction?.parts[0]?.text,
+    longSystem,
+    `"${off}" keeps the prompt in systemInstruction`,
+  );
+}
+clearInlineSystemEnv();
+
+// Every part is measured: a long skill block appended after a short prompt must also fold.
+const longSkill = `<skill name="big">${"detail ".repeat(50)}</skill>`;
+assert.equal(
+  shouldInlineSystem([{ text: SYSTEM_TEXT }, { text: longSkill }]),
+  true,
+  "oversized trailing skill block triggers folding",
+);
+assert.equal(
+  shouldInlineSystem([{ text: SYSTEM_TEXT }, { text: "short skill" }]),
+  false,
+  "short trailing parts do not force folding",
 );
 assert.equal("systemInstruction" in longInline.request, false, "long prompt: field omitted");
 const longFirstPart = longInline.request.contents[0]?.parts[0];
@@ -155,12 +227,61 @@ let turns = [{ role: "user", parts: [{ text: "hi" }] }];
 inlineSystemInstruction(turns, [{ text: "SYS" }]);
 assert.deepEqual(turns, [{ role: "user", parts: [{ text: "SYS" }, { text: "hi" }] }]);
 
-turns = [{ role: "user", parts: [{ text: "Apply the active system instructions." }] }];
-inlineSystemInstruction(turns, [{ text: "SYS" }]);
+// An injected placeholder is dropped, but only when the caller says it injected one.
+const PLACEHOLDER = "Apply the active system instructions.";
+turns = [{ role: "user", parts: [{ text: PLACEHOLDER }] }];
+inlineSystemInstruction(turns, [{ text: "SYS" }], true);
 assert.deepEqual(
   turns,
   [{ role: "user", parts: [{ text: "SYS" }] }],
-  "placeholder turn is consumed rather than kept alongside the prompt",
+  "injected placeholder turn is consumed rather than kept alongside the prompt",
+);
+
+// The same words typed by the user are a real message and must survive.
+turns = [{ role: "user", parts: [{ text: PLACEHOLDER }] }];
+inlineSystemInstruction(turns, [{ text: "SYS" }], false);
+assert.deepEqual(
+  turns,
+  [{ role: "user", parts: [{ text: "SYS" }, { text: PLACEHOLDER }] }],
+  "user-authored text that matches the placeholder text is preserved",
+);
+
+// End-to-end: buildRequest only drops the placeholder it injected itself.
+const longSystemOnly = "You are a coding assistant. ".repeat(80);
+const systemOnlyLong = buildRequest(
+  model,
+  { messages: [{ role: "system", content: longSystemOnly, timestamp: Date.now() }] } as unknown as Context,
+  "test-project",
+  {},
+  "gemini-3.8-flash",
+);
+assert.equal(
+  systemOnlyLong.request.contents.length,
+  1,
+  "injected placeholder is not left behind as an extra turn",
+);
+assert.equal(
+  systemOnlyLong.request.contents[0]?.parts.length,
+  1,
+  "only the folded prompt remains in the single user turn",
+);
+
+const userTypedPlaceholder = buildRequest(
+  model,
+  {
+    messages: [
+      { role: "system", content: longSystemOnly, timestamp: Date.now() },
+      { role: "user", content: PLACEHOLDER, timestamp: Date.now() },
+    ],
+  } as unknown as Context,
+  "test-project",
+  {},
+  "gemini-3.8-flash",
+);
+assert.equal(
+  userTypedPlaceholder.request.contents[0]?.parts.length,
+  2,
+  "user text identical to the placeholder text is preserved alongside the prompt",
 );
 
 turns = [{ role: "model", parts: [{ text: "m" }] }];
@@ -190,7 +311,6 @@ assert.deepEqual(turns, [{ role: "user", parts: [{ text: "hi" }] }], "no system 
 
 // --- restore ----------------------------------------------------------------
 
-if (saved === undefined) delete process.env.ANTIGRAVITY_INLINE_SYSTEM;
-else process.env.ANTIGRAVITY_INLINE_SYSTEM = saved;
+restoreInlineSystemEnv();
 
 console.log("scripts/test-inline-system.ts: all inline-system tests passed");

@@ -241,7 +241,7 @@ All primary environment variables start with `ANTIGRAVITY_`. The legacy `NOAGY_`
 | `ANTIGRAVITY_STREAM_HEADER_TIMEOUT_MS` | Response-header deadline; default `180000` ms. Set `0` to disable. |
 | `ANTIGRAVITY_NO_KEEPALIVE` | Set to `1` to skip the keep-alive connection pool. |
 | `ANTIGRAVITY_NO_PREWARM` | Set to `1` to skip the TLS pre-warm request made on the first Antigravity request. |
-| `ANTIGRAVITY_INLINE_SYSTEM` | Force (`1`) or suppress (`0`) folding the system prompt into the first user turn. Folding drops `systemInstruction`, which some endpoints answer with a generic 429 when a part reaches 127 characters. Left unset, a prompt that does not fit is folded automatically. |
+| `ANTIGRAVITY_INLINE_SYSTEM` | `1` force, `0` / `false` / `off` suppress, unset decides by length. Folding moves the system prompt into the first user turn and drops `systemInstruction`, which some endpoints answer with a generic 429 when any part reaches 127 characters. Unset, a part that does not fit is folded automatically. |
 | `ANTIGRAVITY_NO_EXTRA_TOOLS` | Set to `1` to stop registering the model-facing `google_search`, `read_url_content`, and `generate_image` tools. The `/antigravity.search`, `/antigravity.fetch`, and `/antigravity.image` commands stay available. |
 | `ANTIGRAVITY_USE_CREDITS` | Set to `1` (or `0`) to explicitly enable (or disable) automatic AI credit overages when standard quota is depleted. Defaults to inheriting `useG1Credits` from `~/.gemini/antigravity-cli/settings.json` only when that file sets the flag. Otherwise credit overages stay off. |
 | `ANTIGRAVITY_NO_SEARCH_TOOL` | Set to `1` to skip only the `google_search` tool, e.g. when another extension provides web search. |
@@ -260,7 +260,9 @@ By default, the provider tries `https://daily-cloudcode-pa.googleapis.com`, then
 
 Requests normally send the system prompt in the wire-native `request.systemInstruction` field. Some consumer endpoints cap what that field accepts: a part of 127 characters or more is answered with a generic 429 `RESOURCE_EXHAUSTED`, while 126 characters pass. The cap is per part and ignores content — 150 `x` characters fail and 126 characters of ordinary prose pass — and splitting the prompt across several shorter parts does not help, because the accepted total stays bounded. The same text inside `contents` is accepted at any length.
 
-A real Pi system prompt is far longer than 126 characters, so requests are folded into the first user turn automatically whenever the prompt does not fit: `systemInstruction` is omitted and the identical text travels at the head of `contents`. Tool declarations, thinking config, and multi-turn conversion are unaffected. Set `ANTIGRAVITY_INLINE_SYSTEM=1` to force the folded shape for short prompts too, or `0` to always keep `systemInstruction` even when its part exceeds the cap.
+Every assembled part is measured, including Skill blocks extracted from user messages. A real Pi system prompt is far longer than 126 characters, so requests are folded into the first user turn automatically whenever a part does not fit: `systemInstruction` is omitted and the identical text travels at the head of `contents`. Tool declarations, thinking config, and multi-turn conversion are unaffected.
+
+`ANTIGRAVITY_INLINE_SYSTEM` overrides the automatic decision: `1` forces the folded shape even for short prompts, and `0` (or `false` / `off`) always keeps `systemInstruction`, even when a part exceeds the cap — useful for pinning the wire-native shape, at the cost of the 429 on affected accounts.
 
 ### Latency
 

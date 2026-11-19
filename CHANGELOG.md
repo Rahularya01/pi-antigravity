@@ -6,7 +6,7 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
-- **System prompt over the per-part cap:** Endpoints that answer a `systemInstruction` part of 127 characters or more with a generic 429 `RESOURCE_EXHAUSTED` now work without configuration — the prompt is folded into the first user turn and the field is omitted. A Pi system prompt is always longer than the cap, so affected accounts previously could not send a single request. `ANTIGRAVITY_INLINE_SYSTEM=1` forces the folded shape, `0` always keeps `systemInstruction`. The model receives the same instructions; tool declarations, thinking config, and multi-turn conversion are unchanged.
+- **System prompt over the per-part cap:** Endpoints that answer a `systemInstruction` part of 127 characters or more with a generic 429 `RESOURCE_EXHAUSTED` now work without configuration — the system parts are folded into the first user turn and the field is omitted. A Pi system prompt is always longer than the cap, so affected accounts previously could not send a single request. Every part is measured, including Skill blocks appended after the prompt. `ANTIGRAVITY_INLINE_SYSTEM=1` forces the folded shape and `0` / `false` / `off` always keeps `systemInstruction`; leaving it unset decides by length. The model receives the same instructions; tool declarations, thinking config, and multi-turn conversion are unchanged.
 
 ## [0.14.0] - 2026-11-14
 

@@ -960,15 +960,23 @@ export function sanitizeSystemPrompt(text: string): string {
     .replace(/\bpractical,\s*and tool-aware\./gi, "practical, and tool aware.");
 }
 
+type InlineSystemPreference = "on" | "off" | "auto";
+
 /**
  * `ANTIGRAVITY_INLINE_SYSTEM=1` forces the folded shape (see `shouldInlineSystem`);
- * `0`, `false`, or `off` forces the wire-native `systemInstruction` shape.
- *
- * Exported for unit tests.
+ * `0`, `false`, or `off` forces the wire-native `systemInstruction` shape; leaving it
+ * unset (or empty) folds only when a part does not fit the per-part cap.
  */
-export function isInlineSystemEnabled(): boolean {
+export function inlineSystemPreference(): InlineSystemPreference {
   const raw = antigravityEnv("INLINE_SYSTEM")?.trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "on";
+  if (raw === "1" || raw === "true" || raw === "on") return "on";
+  if (raw === "0" || raw === "false" || raw === "off") return "off";
+  return "auto";
+}
+
+/** Whether the folded shape is explicitly forced. Exported for unit tests. */
+export function isInlineSystemEnabled(): boolean {
+  return inlineSystemPreference() === "on";
 }
 
 /**
@@ -980,34 +988,35 @@ export function isInlineSystemEnabled(): boolean {
  * parts does not help because the accepted total stays bounded, while the same text inside
  * `contents` is accepted at any length.
  *
- * Components after index 0 are the library's own short constants, so only the
- * caller-supplied prompt at index 0 is measured; it is always longer than the cap in
- * practice, so affected accounts get the folded shape with no configuration.
+ * Every part is measured: skill blocks extracted from user messages are appended after the
+ * prompt and can be arbitrarily long, so index 0 alone is not enough. A real Pi prompt
+ * exceeds the cap, so affected accounts get the folded shape with no configuration.
  */
 export function shouldInlineSystem(systemParts: { text: string }[]): boolean {
-  if (isInlineSystemEnabled()) return true;
-  return (systemParts[0]?.text.length ?? 0) > SYSTEM_INSTRUCTION_PART_LIMIT;
+  const preference = inlineSystemPreference();
+  if (preference === "on") return true;
+  if (preference === "off") return false;
+  return systemParts.some((part) => part.text.length > SYSTEM_INSTRUCTION_PART_LIMIT);
 }
 
 /**
  * Move the assembled system parts into the first user turn and drop them from the
  * request envelope.
  *
- * Also collapses the placeholder turn `buildRequest` injects when the conversation has
- * no user text of its own, so prompts and placeholder do not both land in the request.
+ * `dropPlaceholder` must be true only when `buildRequest` itself injected the placeholder
+ * turn; a user message that happens to read the same way is a real message and is kept.
  */
 export function inlineSystemInstruction(
   contents: GeminiContent[],
   systemParts: { text: string }[],
+  dropPlaceholder = false,
 ): void {
   if (systemParts.length === 0) return;
   const text = sanitizeText(systemParts.map((part) => part.text).join("\n\n"));
   if (!text) return;
   const first = contents[0];
   if (first && first.role === GeminiRole.User) {
-    const placeholder =
-      first.parts.length === 1 && "text" in first.parts[0] ? first.parts[0].text : undefined;
-    const rest = placeholder === PLACEHOLDER_SYSTEM_TURN_TEXT ? first.parts.slice(1) : first.parts;
+    const rest = dropPlaceholder ? first.parts.slice(1) : first.parts;
     first.parts = [{ text }, ...rest];
   } else {
     contents.unshift({ role: GeminiRole.User, parts: [{ text }] });
@@ -1058,7 +1067,9 @@ export function buildRequest(
       turn.role === GeminiRole.User &&
       turn.parts.some((part) => "text" in part && Boolean(part.text.trim())),
   );
-  if (!hasUserText && (injectedSkills.length > 0 || Boolean(systemPromptText))) {
+  const injectedPlaceholderTurn =
+    !hasUserText && (injectedSkills.length > 0 || Boolean(systemPromptText));
+  if (injectedPlaceholderTurn) {
     contents.unshift({
       role: GeminiRole.User,
       parts: [{ text: PLACEHOLDER_SYSTEM_TURN_TEXT }],
@@ -1066,11 +1077,10 @@ export function buildRequest(
   }
 
   const request: GeminiRequestBody = { contents };
-  // Workaround for endpoints that reject the `systemInstruction` field outright with a
-  // bogus 429 RESOURCE_EXHAUSTED (see isInlineSystemEnabled). Default keeps the
-  // wire-native shape.
+  // Fold the prompt into `contents` when it does not fit the per-part cap, or when the
+  // operator forces it (see shouldInlineSystem). Otherwise keep the wire-native shape.
   if (shouldInlineSystem(systemParts)) {
-    inlineSystemInstruction(contents, systemParts);
+    inlineSystemInstruction(contents, systemParts, injectedPlaceholderTurn);
   } else {
     request.systemInstruction = {
       role: GeminiRole.User,

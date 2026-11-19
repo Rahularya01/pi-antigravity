@@ -1293,11 +1293,16 @@ const degradedPromptReq = buildRequest(
   {},
   geminiRuntime,
 );
-assert.equal(degradedPromptReq.request.systemInstruction.parts.length, 2);
-assert.match(
-  degradedPromptReq.request.systemInstruction.parts[1]?.text || "",
-  /never simulate tool calls/i,
-);
+// The no-preamble guard is appended after the prompt, so the assembled parts can exceed
+// the per-part cap and travel inside `contents` instead.
+// Folding joins every system part into one block, so the guard still travels with the
+// prompt -- check the whole delivered instruction text either way.
+const degradedSystemText = (
+  degradedPromptReq.request.systemInstruction?.parts ?? degradedPromptReq.request.contents[0]?.parts ?? []
+)
+  .map((part) => ("text" in part ? part.text : ""))
+  .join("\n");
+assert.match(degradedSystemText, /never simulate tool calls/i);
 const lastDegradedTurn = degradedPromptReq.request.contents.at(-1);
 assert.equal(lastDegradedTurn?.role, "user");
 assert.match(JSON.stringify(lastDegradedTurn?.parts.at(-1)), /emit a real functionCall/);
