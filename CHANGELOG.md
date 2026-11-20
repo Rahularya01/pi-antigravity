@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- **New Antigravity model cold-start & metadata support:** Resolve grouped public model IDs (such as `gemini-4-neon`, `gemini-4-argon`, `gemini-4-hydrogen`, `claude-opus-5-5`, and `claude-sonnet-5-5`) to their effort-matched runtime tier during cold-start dynamic lookup before catalog discovery hydrates, allow `gemini-4-neon` beyond `agentModelSorts`, and add output token limits and `model_enum` entries for Gemini 4 Neon/Argon and Claude 5.5.
 - **Automatic system prompt folding over consumer cap:** Consumer endpoints that reject `systemInstruction` exceeding 126 characters with a generic 429 `RESOURCE_EXHAUSTED` now work out of the box — assembled system parts (including Skill blocks) exceeding 126 total characters are folded into the first user turn and `systemInstruction` is omitted. `ANTIGRAVITY_INLINE_SYSTEM=1|true|on` forces folding, `0|false|off` (or `ANTIGRAVITY_PROMPT_GUARD=off`) keeps wire-native `systemInstruction`, and unset decides automatically (#148, #152, #153, #160, #161).
 - **Live capacity route cache:** Remembers the responding `(runtimeModel, endpoint)` per account for 10 minutes (bounded to 64 entries) after a successful fallback stream so subsequent turns skip dead-tier hops and preserve prompt cache, with single-probe eviction on error and automatic bypass under enterprise or env overrides (#146).
 

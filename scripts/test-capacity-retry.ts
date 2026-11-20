@@ -24,6 +24,8 @@ const savedEnv = {
   NOAGY_CAPACITY_ATTEMPTS: process.env.NOAGY_CAPACITY_ATTEMPTS,
   ANTIGRAVITY_BASE_URL: process.env.ANTIGRAVITY_BASE_URL,
   NOAGY_BASE_URL: process.env.NOAGY_BASE_URL,
+  ANTIGRAVITY_RUNTIME_MODEL: process.env.ANTIGRAVITY_RUNTIME_MODEL,
+  NOAGY_RUNTIME_MODEL: process.env.NOAGY_RUNTIME_MODEL,
 };
 process.env.HOME = isolatedHome;
 process.env.USERPROFILE = isolatedHome;
@@ -32,6 +34,8 @@ delete process.env.NOAGY_CAPACITY_BACKOFF_MS;
 delete process.env.NOAGY_CAPACITY_ATTEMPTS;
 delete process.env.ANTIGRAVITY_BASE_URL;
 delete process.env.NOAGY_BASE_URL;
+delete process.env.ANTIGRAVITY_RUNTIME_MODEL;
+delete process.env.NOAGY_RUNTIME_MODEL;
 
 const model = {
   ...ANTIGRAVITY_MODELS.find((m) => m.id === "gemini-3.8-flash")!,
@@ -85,7 +89,7 @@ try {
   process.env.ANTIGRAVITY_CAPACITY_BACKOFF_MS = "5";
 
   // True outer retry + sibling tiers retried on pass 2:
-  // Pass 1 fails every endpoint (2) x every tier (high, medium, low = 3) -> 6 calls.
+  // Pass 1 fails every endpoint (2) x every tier + compatibility fallback (4) -> 8 calls.
   // Pass 2 fails high (2 endpoints) and then succeeds on medium, proving both that
   // the outer retry ladder runs AND that sibling tiers are walked again on pass 2.
   clearCapacityRouteCache();
@@ -98,8 +102,8 @@ try {
     calls++;
     const reqModel = String(body.model ?? "");
     modelsSeen.push(reqModel);
-    // Fail all 6 calls of pass 1 plus the 2 high-tier calls of pass 2; succeed on pass-2 medium.
-    if (calls <= 8 || reqModel !== "gemini-3.8-flash-medium") {
+    // Fail all 8 calls of pass 1 plus the 2 high-tier calls of pass 2; succeed on pass-2 medium.
+    if (calls <= 10 || reqModel !== "gemini-3.8-flash-medium") {
       return new Response(GENERIC_429, {
         status: 429,
         headers: { "content-type": "application/json" },
@@ -109,7 +113,11 @@ try {
   }) as typeof fetch;
   const recovered = await streamAntigravity(model, { messages: [] }, options).result();
   assert.equal(recovered.stopReason, "stop", recovered.errorMessage);
-  assert.ok(calls >= 9, `expected outer retry into pass-2 sibling tier (calls=${calls})`);
+  assert.ok(calls >= 11, `expected outer retry into pass-2 sibling tier (calls=${calls})`);
+  assert.ok(
+    modelsSeen.includes("gemini-3.7-flash-high"),
+    `expected queued compatibility fallback during pass 1, saw ${JSON.stringify(modelsSeen)}`,
+  );
   assert.equal(modelsSeen.at(-1), "gemini-3.8-flash-medium");
   assert.equal(firstPassBody?.requestType, "agent");
 
@@ -120,7 +128,7 @@ try {
   let abortTestCalls = 0;
   globalThis.fetch = (async () => {
     abortTestCalls++;
-    if (abortTestCalls === 6) {
+    if (abortTestCalls === 8) {
       // Trigger abort shortly after pass 1 finishes and enters the 60s sleep.
       setTimeout(() => controller.abort(new Error("user cancelled")), 25);
     }

@@ -383,6 +383,40 @@ try {
   assert.equal(sseErrTurn.stopReason, "error");
   assert.equal(rememberedCapacityRoute(transportRouteKey), undefined, "failed SSE stream is not cached");
 
+  // When a cached probe returns HTTP 200 and streamResponse throws before emitting any
+  // content (e.g. SSE error or premature EOF), evict the cached route and recover via the
+  // normal candidate chain in the same turn.
+  clearCapacityRouteCache();
+  const throwProbeKey = resolveCapacityCandidates(
+    { token: "test-token", projectId: "test-project" },
+    "test-project",
+    "gemini-3.8-flash-high",
+    "high",
+    true,
+  ).routeKey;
+  rememberCapacityRoute(
+    throwProbeKey,
+    "gemini-3.8-flash-medium",
+    "https://daily-cloudcode-pa.googleapis.com",
+  );
+  globalThis.fetch = (async (_url, init) => {
+    const payload = JSON.parse(String(init?.body)) as { model?: string };
+    if (payload.model === "gemini-3.8-flash-medium") {
+      return new Response(
+        'data: {"error":{"code":500,"message":"cached route stream failed"}}\n\n',
+        { status: 200 },
+      );
+    }
+    return payload.model === "gemini-3.8-flash-high" ? okSse("recovered-from-sse-throw") : generic429();
+  }) as typeof fetch;
+  const recoveredThrowTurn = await streamAntigravity(
+    model,
+    { messages: [{ role: "user", content: "hi", timestamp: 1 }] },
+    { ...options, sessionId: "sess-sse-throw-recover", reasoning: "high" as const },
+  ).result();
+  assert.equal(recoveredThrowTurn.stopReason, "stop", recoveredThrowTurn.errorMessage);
+  assert.equal(rememberedCapacityRoute(throwProbeKey), undefined, "throwing cached probe evicted");
+
   // Env-override turns must not pollute preferredCapacityRoutes.
   clearCapacityRouteCache();
   process.env.ANTIGRAVITY_BASE_URL = "https://custom-proxy.googleapis.com";

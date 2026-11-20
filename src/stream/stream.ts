@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   calculateCost,
   createAssistantMessageEventStream,
@@ -1881,10 +1880,14 @@ const preferredCapacityRoutes = new Map<
   string,
   { runtimeModel: string; endpoint: string; expiresAt: number }
 >();
+const accountTagIds = new Map<string, number>();
+let nextAccountTagId = 1;
 
 /** Exported for unit tests. */
 export function clearCapacityRouteCache(): void {
   preferredCapacityRoutes.clear();
+  accountTagIds.clear();
+  nextAccountTagId = 1;
 }
 
 export function rememberCapacityRoute(
@@ -1920,9 +1923,18 @@ export function rememberedCapacityRoute(
 }
 
 function accountTag(creds: AntigravityApiKey): string {
-  // parseApiKey yields no email/refresh field, so derive a stable,
-  // non-secret tag from the access token instead of keying on it raw.
-  return createHash("sha256").update(creds.token).digest("hex").slice(0, 16);
+  // parseApiKey yields no email/refresh field; assign an opaque in-process
+  // identifier per distinct access token instead of embedding or hashing it.
+  const existing = accountTagIds.get(creds.token);
+  if (existing !== undefined) return `acct-${existing}`;
+  const id = nextAccountTagId++;
+  accountTagIds.set(creds.token, id);
+  while (accountTagIds.size > 64) {
+    const oldest = accountTagIds.keys().next().value;
+    if (oldest === undefined) break;
+    accountTagIds.delete(oldest);
+  }
+  return `acct-${id}`;
 }
 
 /** Exported for unit tests. */
@@ -2003,7 +2015,12 @@ export function streamAntigravity(
       // Skip pre-flight model discovery for known static models to optimize TTFT latency.
       // Dynamic lookup is only needed for unmapped custom models.
       if (!isKnownModel && !antigravityEnv("RUNTIME_MODEL")) {
-        const dynamic = await fetchAvailableRuntimeModel(creds.token, projectId, baseRuntimeModel);
+        const dynamic = await fetchAvailableRuntimeModel(
+          creds.token,
+          projectId,
+          baseRuntimeModel,
+          effort,
+        );
         if (dynamic?.id && isUsableRuntimeModelId(dynamic.id)) {
           initialRuntimeModel = dynamic.id;
         }
@@ -2188,6 +2205,7 @@ export function streamAntigravity(
                   creds.token,
                   projectId,
                   baseRuntimeModel,
+                  effort,
                 );
                 if (
                   dynamic?.id &&
@@ -2208,6 +2226,7 @@ export function streamAntigravity(
                 runtimeCandidates.splice(candIdx + 1, 0, nextSibling);
                 continue;
               }
+              if (candIdx + 1 < runtimeCandidates.length) continue;
             }
             break;
           }
@@ -2264,6 +2283,7 @@ export function streamAntigravity(
                   creds.token,
                   projectId,
                   baseRuntimeModel,
+                  effort,
                 );
                 if (dynamic?.id && isUsableRuntimeModelId(dynamic.id)) {
                   initialRuntimeModel = dynamic.id;
@@ -2304,7 +2324,17 @@ export function streamAntigravity(
           stopReason: "stop" as const,
         });
 
-        received = await streamResponse(response, stream, output, model);
+        try {
+          received = await streamResponse(response, stream, output, model);
+        } catch (error) {
+          if (usedCachedProbe) {
+            preferredCapacityRoutes.delete(routeKey);
+            if (!opts.signal?.aborted && output.content.length === 0) {
+              continue;
+            }
+          }
+          throw error;
+        }
         if (received) {
           if (output.stopReason !== "error" && output.stopReason !== "aborted") {
             // Remember the live fallback route only after the SSE stream actually

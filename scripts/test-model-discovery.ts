@@ -6,6 +6,7 @@ import { join } from "node:path";
 import assert from "node:assert/strict";
 import {
   antigravityHeaders,
+  clearModelCache,
   defaultUserAgent,
   fetchAvailableRuntimeModel,
   mergeAvailableModelsResults,
@@ -851,5 +852,50 @@ assert.equal(
   extraAllowedCatalog.routing["gemini-4-oxygen"]?.routing?.xhigh,
   "gemini-4-oxygen-high",
 );
+
+// Gemini 4 Neon also passes extra-allowed filtering and cold-start dynamic lookup
+// resolves grouped public IDs (`gemini-4-neon`, `claude-opus-5-5`, etc.) to their
+// effort-matched runtime tier while skipping disabled entries.
+const neonExtraCatalog = buildAntigravityCatalog(
+  {
+    "gemini-4-neon-low": info("Gemini 4 Neon (Low)", { maxOutputTokens: 262144 }),
+    "gemini-4-neon-high": info("Gemini 4 Neon (High)", { maxOutputTokens: 262144 }),
+    "gemini-4-neon-xhigh": info("Gemini 4 Neon (XHigh)", { maxOutputTokens: 262144 }),
+  },
+  fallback,
+  [{ displayName: "Recommended", groups: [{ modelIds: ["gemini-3.8-flash-low"] }] }],
+);
+assert.equal(neonExtraCatalog.models[0]?.id, "gemini-4-neon");
+assert.equal(neonExtraCatalog.routing["gemini-4-neon"]?.routing?.xhigh, "gemini-4-neon-xhigh");
+assert.equal(getMaxOutputTokens("gemini-4-neon", "gemini-4-neon-high"), 262144);
+assert.equal(getMaxOutputTokens("claude-opus-5-5", "claude-opus-5-5-high"), 128000);
+
+const savedFetchForDynamic = globalThis.fetch;
+clearModelCache();
+try {
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        models: {
+          "gemini-4-neon-low": { displayName: "Gemini 4 Neon (Low)", model: "MODEL_PLACEHOLDER_M534" },
+          "gemini-4-neon-medium": { displayName: "Gemini 4 Neon (Medium)", model: "MODEL_PLACEHOLDER_M533" },
+          "gemini-4-neon-high": { displayName: "Gemini 4 Neon (High)", model: "MODEL_PLACEHOLDER_M532" },
+          "gemini-4-neon-xhigh": { displayName: "Gemini 4 Neon (XHigh)", model: "MODEL_PLACEHOLDER_M535" },
+          "claude-opus-5-5-high": { displayName: "Claude Opus 5.5 (High)", model: "MODEL_PLACEHOLDER_M402" },
+          "gemini-4-carbon-disabled": { displayName: "Gemini 4 Carbon", disabled: true },
+        },
+      }),
+      { status: 200 },
+    )) as typeof fetch;
+
+  assert.equal((await fetchAvailableRuntimeModel("tok", "proj", "gemini-4-neon", "high"))?.id, "gemini-4-neon-high");
+  assert.equal((await fetchAvailableRuntimeModel("tok", "proj", "gemini-4-neon", "xhigh"))?.id, "gemini-4-neon-xhigh");
+  assert.equal((await fetchAvailableRuntimeModel("tok", "proj", "gemini-4-neon", "off"))?.id, "gemini-4-neon-low");
+  assert.equal((await fetchAvailableRuntimeModel("tok", "proj", "claude-opus-5-5", "high"))?.id, "claude-opus-5-5-high");
+  assert.equal(await fetchAvailableRuntimeModel("tok", "proj", "gemini-4-carbon", "high"), undefined);
+} finally {
+  globalThis.fetch = savedFetchForDynamic;
+  clearModelCache();
+}
 
 console.log("model discovery: live metadata, routing, validation, persistence, and TTL passed");
