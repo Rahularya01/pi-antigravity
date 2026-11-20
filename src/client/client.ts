@@ -16,11 +16,7 @@ import { antigravityFetch } from "../utils/http.js";
 import { registerDiscoveredModelEnums, registerModelEnum } from "../models/models.js";
 
 export const DEFAULT_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com";
-export const ENDPOINT_FALLBACKS = [
-  DEFAULT_ENDPOINT,
-  "https://daily-cloudcode-pa.sandbox.googleapis.com",
-  "https://cloudcode-pa.googleapis.com",
-];
+export const ENDPOINT_FALLBACKS = [DEFAULT_ENDPOINT, "https://cloudcode-pa.googleapis.com"];
 
 const PROJECT_CACHE_TTL_MS = 30 * 60 * 1000;
 const projectCache = new Map<string, { projectId: string | undefined; expiresAt: number }>();

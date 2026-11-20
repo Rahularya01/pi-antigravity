@@ -286,7 +286,7 @@ try {
   assert.equal(probe.status, 1, "unsupported catalog is a probe failure");
   assert.match(probe.stdout, /FAIL .* supported chat catalog/);
   assert.match(probe.stdout, /PASS https:\/\/cloudcode-pa.googleapis.com supported chat catalog/);
-  assert.match(probe.stdout, /Live discovery probe: 9 passed, 1 failed/);
+  assert.match(probe.stdout, /Live discovery probe: 5 passed, 1 failed/);
 } finally {
   rmSync(probeDir, { recursive: true, force: true });
 }
