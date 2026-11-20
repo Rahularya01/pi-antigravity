@@ -112,7 +112,12 @@ export type GeminiGenerationConfig = {
 
 export type GeminiRequestBody = {
   contents: GeminiContent[];
-  systemInstruction: {
+  /**
+   * Optional: omitted when system parts are folded into the first user turn
+   * (automatically when assembled system parts exceed the consumer cap, or via
+   * `ANTIGRAVITY_INLINE_SYSTEM=1`).
+   */
+  systemInstruction?: {
     role: "user";
     parts: GeminiTextPart[];
   };

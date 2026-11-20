@@ -8,6 +8,10 @@ updates:
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
+    ignore:
+      # typescript-eslint does not yet support TypeScript 7.0.
+      - dependency-name: "typescript"
+        versions: [">=7.0.0"]
     groups:
       development-dependencies:
         dependency-type: development

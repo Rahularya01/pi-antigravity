@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **New Antigravity model cold-start & metadata support:** Resolve grouped public model IDs (such as `gemini-4-neon`, `gemini-4-argon`, `gemini-4-hydrogen`, `claude-opus-5-5`, and `claude-sonnet-5-5`) to their effort-matched runtime tier during cold-start dynamic lookup before catalog discovery hydrates, allow `gemini-4-neon` beyond `agentModelSorts`, and add output token limits and `model_enum` entries for Gemini 4 Neon/Argon and Claude 5.5.
+- **Automatic system prompt folding over consumer cap:** Consumer endpoints that reject `systemInstruction` exceeding 126 characters with a generic 429 `RESOURCE_EXHAUSTED` now work out of the box — assembled system parts (including Skill blocks) exceeding 126 total characters are folded into the first user turn and `systemInstruction` is omitted. `ANTIGRAVITY_INLINE_SYSTEM=1|true|on` forces folding, `0|false|off` (or `ANTIGRAVITY_PROMPT_GUARD=off`) keeps wire-native `systemInstruction`, and unset decides automatically (#148, #152, #153, #160, #161).
+- **Live capacity route cache:** Remembers the responding `(runtimeModel, endpoint)` per account for 10 minutes (bounded to 64 entries) after a successful fallback stream so subsequent turns skip dead-tier hops and preserve prompt cache, with single-probe eviction on error and automatic bypass under enterprise or env overrides (#146).
+
+### Changed
+
+- **Default endpoint fallbacks:** Removed the dead `daily-cloudcode-pa.sandbox.googleapis.com` fallback so failed consumer requests move directly from `daily-cloudcode-pa.googleapis.com` to `cloudcode-pa.googleapis.com` (#146).
+- **Documentation & dependencies:** Added a prominent Google Antigravity Additional ToS Section 6 account-suspension warning to `README.md` (#154); updated `undici` to `8.12.4` (fixing 6 CVEs, #150), `turndown` to `7.2.5` (#151), and compatible dev dependencies (`@types/node`, `eslint`, `globals`, `prettier`, `typebox`, `typescript-eslint`) while holding `typescript` on `6.x` until `typescript-eslint` supports TS 7 (#149).
+
+### Fixed
+
+- **Claude / GPT-OSS tool-result ordering & interrupted tool calls:** Keep all `functionResponse` parts contiguous ahead of `inlineData`/text parts in user turns following a `functionCall` turn, and synthesize an interrupted-execution error response for historical `functionCall` turns missing a recorded result, preventing HTTP 400 `tool_use ids were found without tool_result blocks` errors (#156, #157).
+- **Capacity retry ladder:** Load-shaped refusals (generic `429 RESOURCE_EXHAUSTED`, `503 No capacity available`) now retry across an abort-aware backoff ladder (`3s, 8s, 15s, 25s` by default; `ANTIGRAVITY_CAPACITY_BACKOFF_MS`, `ANTIGRAVITY_CAPACITY_ATTEMPTS`) walking all endpoints and sibling tiers on every pass, kept independent from empty-response retries (#158, #159).
+- **Pi / Pi-Bolt system prompt sanitization:** Neutralize stock Pi, already-sanitized Pi, and Pi-Bolt default preamble openers wholesale as well as Pi 1.5.2's `codemode scripts and non-LLM models` `<docs>` phrase while preserving `- codemode:`, `CodeModel`, `docs/codemode.md`, and `pi-bolt.js` when wire-native `systemInstruction` is used (#145, #147, #155).
+
 ## [0.14.0] - 2026-11-14
 
 ### Added

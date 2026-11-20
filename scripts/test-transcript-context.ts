@@ -8,6 +8,23 @@
 import type { Api, AssistantMessage, Context, Model, Tool } from "@earendil-works/pi-ai";
 import { buildRequest, convertMessages } from "../src/stream/stream.ts";
 
+const savedInlineEnv = {
+  ANTIGRAVITY_INLINE_SYSTEM: process.env.ANTIGRAVITY_INLINE_SYSTEM,
+  NOAGY_INLINE_SYSTEM: process.env.NOAGY_INLINE_SYSTEM,
+  ANTIGRAVITY_PROMPT_GUARD: process.env.ANTIGRAVITY_PROMPT_GUARD,
+  NOAGY_PROMPT_GUARD: process.env.NOAGY_PROMPT_GUARD,
+};
+delete process.env.ANTIGRAVITY_INLINE_SYSTEM;
+delete process.env.NOAGY_INLINE_SYSTEM;
+delete process.env.ANTIGRAVITY_PROMPT_GUARD;
+delete process.env.NOAGY_PROMPT_GUARD;
+process.on("exit", () => {
+  for (const [key, value] of Object.entries(savedInlineEnv)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+});
+
 function fail(message: string): never {
   throw new Error(message);
 }

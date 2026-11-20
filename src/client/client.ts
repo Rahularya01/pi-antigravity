@@ -16,11 +16,7 @@ import { antigravityFetch } from "../utils/http.js";
 import { registerDiscoveredModelEnums, registerModelEnum } from "../models/models.js";
 
 export const DEFAULT_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com";
-export const ENDPOINT_FALLBACKS = [
-  DEFAULT_ENDPOINT,
-  "https://daily-cloudcode-pa.sandbox.googleapis.com",
-  "https://cloudcode-pa.googleapis.com",
-];
+export const ENDPOINT_FALLBACKS = [DEFAULT_ENDPOINT, "https://cloudcode-pa.googleapis.com"];
 
 const PROJECT_CACHE_TTL_MS = 30 * 60 * 1000;
 const projectCache = new Map<string, { projectId: string | undefined; expiresAt: number }>();
@@ -226,33 +222,85 @@ function dynamicModelFromInfo(modelId: string, info: unknown): DynamicModelInfo 
   };
 }
 
+function effortSuffixOrder(effort: string | undefined): string[] {
+  const normalized = effort?.trim().toLowerCase();
+  if (normalized === "xhigh") {
+    return ["-xhigh", "-high", "-medium", "-low", "-thinking", "-minimal", "-extra-low"];
+  }
+  if (normalized === "high") {
+    return ["-high", "-xhigh", "-medium", "-low", "-thinking", "-minimal", "-extra-low"];
+  }
+  if (normalized === "medium") {
+    return ["-medium", "-low", "-high", "-xhigh", "-thinking", "-minimal", "-extra-low"];
+  }
+  return ["-low", "-minimal", "-extra-low", "-medium", "-high", "-xhigh", "-thinking"];
+}
+
+function isDisabledOrInternalModel(modelId: string, info: unknown): boolean {
+  if (modelId.toLowerCase().endsWith("-disabled")) return true;
+  if (!isRecord(info)) return false;
+  return (
+    info.disabled === true ||
+    info.isInternal === true ||
+    info.apiProvider === "API_PROVIDER_INTERNAL"
+  );
+}
+
 /**
  * Resolve a requested runtime model against fetchAvailableModels payload.
  * The real runtime ids are the keys of `data.models`; the nested `model` field is often
  * a MODEL_PLACEHOLDER_* enum that 404s on streamGenerateContent.
  *
- * Uses deterministic key lookup (exact or case-insensitive) and exact display name match.
- * Zero regexes, zero prefix wildcards, zero fuzzy guessing.
+ * Uses deterministic key lookup (exact or case-insensitive), exact display name match,
+ * and effort-ordered thinking-tier suffix resolution (e.g. `gemini-4-neon` + `high` ->
+ * `gemini-4-neon-high`) so newly launched grouped models work on cold start before
+ * catalog discovery hydrates.
  */
-function findDynamicModel(value: unknown, requestedId: string): DynamicModelInfo | undefined {
+function findDynamicModel(
+  value: unknown,
+  requestedId: string,
+  effort?: string,
+): DynamicModelInfo | undefined {
   if (!value) return undefined;
 
   if (isRecord(value) && isRecord(value.models)) {
     const modelsMap = value.models;
     // 1. Direct exact key lookup
-    if (isUsableRuntimeModelId(requestedId) && requestedId in modelsMap) {
+    if (
+      isUsableRuntimeModelId(requestedId) &&
+      requestedId in modelsMap &&
+      !isDisabledOrInternalModel(requestedId, modelsMap[requestedId])
+    ) {
       return dynamicModelFromInfo(requestedId, modelsMap[requestedId]);
     }
     // 2. Case-insensitive exact key lookup
     const lowerReq = requestedId.toLowerCase();
     for (const [modelId, info] of Object.entries(modelsMap)) {
-      if (modelId.toLowerCase() === lowerReq && isUsableRuntimeModelId(modelId)) {
+      if (
+        modelId.toLowerCase() === lowerReq &&
+        isUsableRuntimeModelId(modelId) &&
+        !isDisabledOrInternalModel(modelId, info)
+      ) {
         return dynamicModelFromInfo(modelId, info);
       }
     }
-    // 3. Exact display name lookup (for when a user references an exact model label)
+    // 3. Deterministic thinking-tier suffix resolution for grouped public IDs
+    // (e.g. `gemini-4-neon`, `gemini-4-argon`, `gemini-4-hydrogen`, `claude-opus-5-5`).
+    if (isUsableRuntimeModelId(requestedId)) {
+      const lowerKeys = new Map<string, [string, unknown]>();
+      for (const [modelId, info] of Object.entries(modelsMap)) {
+        if (isUsableRuntimeModelId(modelId) && !isDisabledOrInternalModel(modelId, info)) {
+          lowerKeys.set(modelId.toLowerCase(), [modelId, info]);
+        }
+      }
+      for (const suffix of effortSuffixOrder(effort)) {
+        const match = lowerKeys.get(`${lowerReq}${suffix}`);
+        if (match) return dynamicModelFromInfo(match[0], match[1]);
+      }
+    }
+    // 4. Exact display name lookup (for when a user references an exact model label)
     for (const [modelId, info] of Object.entries(modelsMap)) {
-      if (!isUsableRuntimeModelId(modelId)) continue;
+      if (!isUsableRuntimeModelId(modelId) || isDisabledOrInternalModel(modelId, info)) continue;
       if (isRecord(info)) {
         const label = info.label ?? info.displayName ?? info.name;
         if (typeof label === "string" && label.toLowerCase() === lowerReq) {
@@ -270,7 +318,7 @@ function findDynamicModel(value: unknown, requestedId: string): DynamicModelInfo
   }
   if (Array.isArray(value)) {
     for (const item of value) {
-      const found = findDynamicModel(item, requestedId);
+      const found = findDynamicModel(item, requestedId, effort);
       if (found) return found;
     }
     return undefined;
@@ -278,7 +326,7 @@ function findDynamicModel(value: unknown, requestedId: string): DynamicModelInfo
   if (isRecord(value)) {
     for (const nested of Object.values(value)) {
       if (nested && typeof nested === "object") {
-        const found = findDynamicModel(nested, requestedId);
+        const found = findDynamicModel(nested, requestedId, effort);
         if (found) return found;
       }
     }
@@ -290,13 +338,14 @@ async function fetchAvailableRuntimeModelUncached(
   token: string,
   projectId: string,
   requestedRuntimeModel: string,
+  effort?: string,
 ): Promise<DynamicModelInfo | undefined> {
   const body = JSON.stringify({ project: projectId });
   const endpoints = endpointCandidates();
   let lastLabels = "";
 
-  // Try endpoints in priority order (production first). If the primary endpoint
-  // resolves the model, return immediately without waiting on slower sandbox endpoints.
+  // Try endpoints in priority order (daily first). If the primary endpoint
+  // resolves the model, return immediately without waiting on fallback endpoints.
   for (const endpoint of endpoints) {
     try {
       const res = await antigravityFetch(`${endpoint}/v1internal:fetchAvailableModels`, {
@@ -314,7 +363,7 @@ async function fetchAvailableRuntimeModelUncached(
       }
       const labels = [...new Set(collectModelLabels(data))].slice(0, 16);
       if (labels.length) lastLabels = labels.join(",");
-      const found = findDynamicModel(data, requestedRuntimeModel);
+      const found = findDynamicModel(data, requestedRuntimeModel, effort);
       if (found) {
         if (lastLabels) setLastAvailableModels(lastLabels);
         return found;
@@ -332,8 +381,9 @@ export async function fetchAvailableRuntimeModel(
   token: string,
   projectId: string,
   requestedRuntimeModel: string,
+  effort?: string,
 ): Promise<DynamicModelInfo | undefined> {
-  const cacheKey = `${token}::${projectId}::${requestedRuntimeModel}`;
+  const cacheKey = `${token}::${projectId}::${requestedRuntimeModel}::${effort ?? ""}`;
   const cached = modelCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.result;
 
@@ -342,12 +392,15 @@ export async function fetchAvailableRuntimeModel(
   const inFlight = inFlightModelLookups.get(cacheKey);
   if (inFlight) return inFlight;
 
-  const promise = fetchAvailableRuntimeModelUncached(token, projectId, requestedRuntimeModel).then(
-    (result) => {
-      modelCache.set(cacheKey, { result, expiresAt: Date.now() + MODEL_CACHE_TTL_MS });
-      return result;
-    },
-  );
+  const promise = fetchAvailableRuntimeModelUncached(
+    token,
+    projectId,
+    requestedRuntimeModel,
+    effort,
+  ).then((result) => {
+    modelCache.set(cacheKey, { result, expiresAt: Date.now() + MODEL_CACHE_TTL_MS });
+    return result;
+  });
   inFlightModelLookups.set(cacheKey, promise);
   try {
     return await promise;

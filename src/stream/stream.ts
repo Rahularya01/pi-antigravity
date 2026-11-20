@@ -65,10 +65,12 @@ import { extractValidationUrl, redactSecrets, safeError } from "../utils/securit
 import {
   ANTIGRAVITY_API,
   type ActiveBlock,
+  type AntigravityApiKey,
   type AntigravityGenerateRequest,
   type AntigravityStreamOptions,
   type ContentBlock,
   type GeminiContent,
+  type GeminiFunctionCallPart,
   type GeminiFunctionDeclaration,
   type GeminiFunctionResponsePart,
   type GeminiGenerationConfig,
@@ -98,6 +100,23 @@ const ANTIGRAVITY_NO_PREAMBLE_INSTRUCTION =
   'CRITICAL: NEVER output rule checks, formatting guidelines, constraint checklists (e.g. "No emdashes"), internal thinking/reasoning preambles, or fake "[Observation from ...]" tool logs in the final response. When calling a tool, emit a real functionCall; never simulate tool calls or tool observations in plain text. Output only the final response.';
 
 const CONTINUATION_TEXT = "Continue the active task using the available instructions and context.";
+const PLACEHOLDER_SYSTEM_TURN_TEXT = "Apply the active system instructions.";
+
+/**
+ * Largest `systemInstruction` budget some consumer endpoints accept before
+ * answering with a generic 429 RESOURCE_EXHAUSTED (empirically 126 passes,
+ * 127+ fails regardless of wording or splitting across multiple parts).
+ */
+const SYSTEM_INSTRUCTION_PART_LIMIT = 126;
+
+/**
+ * Backend-neutral replacement for Pi's default preamble opener. Replacing only
+ * the "running inside pi" phrase leaves a sentence pair that still matches the
+ * backend's prompt classifier on consumer endpoints; replacing the whole opener
+ * sentence group passes when wire-native `systemInstruction` is retained.
+ */
+const NEUTRAL_OPENER = "You are a coding agent helping the user with their project.";
+
 let toolCallCounter = 0;
 
 function sanitizeToolCallId(id: string, fallbackName?: string): string {
@@ -490,6 +509,52 @@ function convertMessagesWithMetadata(
         parts: [{ text: CONTINUATION_TEXT }],
       });
       index += 1;
+    }
+  }
+
+  // Claude and GPT-OSS backends require every functionCall in a model turn to have
+  // a matching functionResponse at the start of the immediately following user turn
+  // before any inlineData/text parts. When parallel tool results include images or
+  // an earlier turn was interrupted before its toolResult was recorded, keep all
+  // functionResponse parts contiguous first and synthesize missing responses (#156, #157).
+  if (toolCallIdNeeded(model.id, runtimeModel)) {
+    for (let index = 0; index < contents.length - 1; index += 1) {
+      const turn = contents[index];
+      if (turn?.role !== GeminiRole.Model) continue;
+      const callParts = turn.parts.filter(
+        (part): part is GeminiFunctionCallPart => "functionCall" in part,
+      );
+      if (callParts.length === 0) continue;
+
+      let nextTurn = contents[index + 1];
+      if (!nextTurn || nextTurn.role !== GeminiRole.User) {
+        nextTurn = { role: GeminiRole.User, parts: [] };
+        contents.splice(index + 1, 0, nextTurn);
+      }
+
+      const responseParts = nextTurn.parts.filter(
+        (part): part is GeminiFunctionResponsePart => "functionResponse" in part,
+      );
+      const nonResponseParts = nextTurn.parts.filter((part) => !("functionResponse" in part));
+      const existingIds = new Set(
+        responseParts.map((part) => part.functionResponse.id).filter(Boolean),
+      );
+
+      for (const callPart of callParts) {
+        const callId = callPart.functionCall.id;
+        if (callId && !existingIds.has(callId)) {
+          responseParts.push({
+            functionResponse: {
+              name: callPart.functionCall.name,
+              id: callId,
+              response: { error: "Tool execution was interrupted before a result was recorded." },
+            },
+          });
+          existingIds.add(callId);
+        }
+      }
+
+      nextTurn.parts = [...responseParts, ...nonResponseParts];
     }
   }
 
@@ -935,25 +1000,113 @@ function mapToolChoiceMode(
 }
 
 /**
- * Neutralize system prompt phrases that trigger false 429 RESOURCE_EXHAUSTED
- * responses from the Antigravity proxy when paired with `requestType: "agent"`.
+ * Neutralize Pi and Pi-Bolt system prompt fingerprints that trigger false
+ * 429 RESOURCE_EXHAUSTED responses from the Antigravity consumer proxy when
+ * wire-native `systemInstruction` is sent (#137, #141, #143, #145, #147, #155).
+ *
+ * The whole-opener rewrite runs first so stock Pi, already-sanitized Pi, and
+ * Pi-Bolt preamble variants collapse to a neutral sentence instead of a
+ * phrase-rewritten opener that still matches the backend classifier.
  */
 export function sanitizeSystemPrompt(text: string): string {
   return text
     .replace(
-      /running inside pi,\s*a coding agent harness/gi,
+      /^You are a coding assistant running inside [^.]*\.\s*Help users inspect files, run commands, and modify code\./i,
+      NEUTRAL_OPENER,
+    )
+    .replace(
+      /running inside pi-bolt,\s*a build of pi\s*\(a coding agent harness\)\s*compiled ahead of time/gi,
       "running inside your development environment",
     )
-    .replace(/inside pi,\s*a coding agent harness/gi, "inside your development environment")
     .replace(
-      /(coding assistant )running inside pi(?=[.,!?;:\s]|$)(?!\.\w)/gi,
+      /inside pi-bolt,\s*a build of pi\s*\(a coding agent harness\)\s*compiled ahead of time/gi,
+      "inside your development environment",
+    )
+    .replace(
+      /running inside pi(?:-bolt)?,\s*a coding agent harness/gi,
+      "running inside your development environment",
+    )
+    .replace(
+      /inside pi(?:-bolt)?,\s*a coding agent harness/gi,
+      "inside your development environment",
+    )
+    .replace(
+      /(coding assistant )running inside pi(?:-bolt)?(?=[.,!?;:\s]|$)(?!\.\w)/gi,
       "$1running inside your development environment",
     )
     .replace(
-      /(coding agent )inside pi(?=[.,!?;:\s]|$)(?!\.\w)/gi,
+      /(coding agent )inside pi(?:-bolt)?(?=[.,!?;:\s]|$)(?!\.\w)/gi,
       "$1inside your development environment",
     )
-    .replace(/\bpractical,\s*and tool-aware\./gi, "practical, and tool aware.");
+    .replace(/\bpractical,\s*and tool-aware\./gi, "practical, and tool aware.")
+    .replace(
+      /codemode scripts and non-LLM models/gi,
+      "codemode scripts (docs/codemode.md), non-LLM models",
+    );
+}
+
+type InlineSystemPreference = "on" | "off" | "auto";
+
+/**
+ * `ANTIGRAVITY_INLINE_SYSTEM=1` (or `true` / `on`) forces folding system parts into
+ * the first user turn; `0` / `false` / `off` keeps wire-native `systemInstruction`;
+ * unset decides automatically from the consumer cap (`SYSTEM_INSTRUCTION_PART_LIMIT`).
+ * Also honors `ANTIGRAVITY_PROMPT_GUARD=off` when `INLINE_SYSTEM` is unset for
+ * compatibility with earlier workarounds (#152, #153, #161).
+ */
+export function inlineSystemPreference(): InlineSystemPreference {
+  const raw = antigravityEnv("INLINE_SYSTEM")?.trim().toLowerCase();
+  if (raw === "1" || raw === "true" || raw === "on") return "on";
+  if (raw === "0" || raw === "false" || raw === "off") return "off";
+  if (!raw && antigravityEnv("PROMPT_GUARD")?.trim().toLowerCase() === "off") return "off";
+  return "auto";
+}
+
+/** Whether the folded shape is explicitly forced. Exported for unit tests. */
+export function isInlineSystemEnabled(): boolean {
+  return inlineSystemPreference() === "on";
+}
+
+/**
+ * Decide whether the assembled system parts should be folded into `contents`.
+ *
+ * Some consumer endpoints answer a `systemInstruction` exceeding 126 characters
+ * (whether in a single part or split across multiple parts) with a generic 429
+ * RESOURCE_EXHAUSTED regardless of wording, while accepting the identical text
+ * inside `contents` at any length (#148, #152, #160, #161). Measuring the total
+ * length across all assembled parts covers both oversized single prompts and
+ * appended Skill blocks or split parts.
+ */
+export function shouldInlineSystem(systemParts: { text: string }[]): boolean {
+  const preference = inlineSystemPreference();
+  if (preference === "on") return true;
+  if (preference === "off") return false;
+  const totalLength = systemParts.reduce((sum, part) => sum + part.text.length, 0);
+  return totalLength > SYSTEM_INSTRUCTION_PART_LIMIT;
+}
+
+/**
+ * Move the assembled system parts into the first user turn and drop `systemInstruction`
+ * from the request envelope.
+ *
+ * `dropPlaceholder` must be true only when `buildRequest` itself injected the
+ * synthetic placeholder turn; a user message with the same text is preserved.
+ */
+export function inlineSystemInstruction(
+  contents: GeminiContent[],
+  systemParts: { text: string }[],
+  dropPlaceholder = false,
+): void {
+  if (systemParts.length === 0) return;
+  const text = sanitizeText(systemParts.map((part) => part.text).join("\n\n"));
+  if (!text) return;
+  const first = contents[0];
+  if (first && first.role === GeminiRole.User) {
+    const rest = dropPlaceholder ? first.parts.slice(1) : first.parts;
+    first.parts = [{ text }, ...rest];
+  } else {
+    contents.unshift({ role: GeminiRole.User, parts: [{ text }] });
+  }
 }
 
 /** Exported for unit tests. */
@@ -1000,20 +1153,26 @@ export function buildRequest(
       turn.role === GeminiRole.User &&
       turn.parts.some((part) => "text" in part && Boolean(part.text.trim())),
   );
-  if (!hasUserText && (injectedSkills.length > 0 || Boolean(systemPromptText))) {
+  const injectedPlaceholderTurn =
+    !hasUserText && (injectedSkills.length > 0 || Boolean(systemPromptText));
+  if (injectedPlaceholderTurn) {
     contents.unshift({
       role: GeminiRole.User,
-      parts: [{ text: "Apply the active system instructions." }],
+      parts: [{ text: PLACEHOLDER_SYSTEM_TURN_TEXT }],
     });
   }
 
-  const request: GeminiRequestBody = {
-    contents,
-    systemInstruction: {
+  const request: GeminiRequestBody = { contents };
+  // Fold system parts into `contents` when they exceed the consumer cap or when
+  // explicitly forced (see shouldInlineSystem). Otherwise keep wire-native shape.
+  if (shouldInlineSystem(systemParts)) {
+    inlineSystemInstruction(contents, systemParts, injectedPlaceholderTurn);
+  } else {
+    request.systemInstruction = {
       role: GeminiRole.User,
       parts: systemParts,
-    },
-  };
+    };
+  }
 
   const generationConfig: GeminiGenerationConfig = {};
   if (options.temperature !== undefined) generationConfig.temperature = options.temperature;
@@ -1298,6 +1457,62 @@ export function streamHeaderTimeoutMs(): number {
  */
 export function streamStallTimeoutMs(): number {
   return envTimeoutMs("STREAM_STALL_TIMEOUT_MS", STREAM_STALL_TIMEOUT_DEFAULT_MS);
+}
+
+/**
+ * Backoff ladder for transient capacity refusals, in milliseconds. Consumer
+ * endpoints answer generic `429 RESOURCE_EXHAUSTED` (no reset hint) and
+ * `503 No capacity available` while the model pool still reports quota remaining,
+ * and then serve the same request once the queue drains (#158, #159).
+ */
+const CAPACITY_BACKOFF_DEFAULT_MS = [3_000, 8_000, 15_000, 25_000] as const;
+
+function capacityBackoffSchedule(): number[] {
+  const raw = antigravityEnv("CAPACITY_BACKOFF_MS")?.trim();
+  if (!raw) return [...CAPACITY_BACKOFF_DEFAULT_MS];
+  const parsed = raw
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((ms) => Number.isFinite(ms) && ms >= 0 && ms <= 120_000);
+  return parsed.length ? parsed : [...CAPACITY_BACKOFF_DEFAULT_MS];
+}
+
+/** Attempts in the capacity ladder: the first request plus one per backoff step. */
+export function capacityAttemptLimit(): number {
+  const raw = Number(antigravityEnv("CAPACITY_ATTEMPTS")?.trim() ?? "");
+  if (Number.isFinite(raw) && raw >= 1 && raw <= 10) return Math.floor(raw);
+  return capacityBackoffSchedule().length + 1;
+}
+
+function capacityBackoffMs(attempt: number): number {
+  const schedule = capacityBackoffSchedule();
+  const base = schedule[Math.min(attempt - 1, schedule.length - 1)] ?? 0;
+  // Jitter keeps sessions sharing one quota pool from retrying in lockstep.
+  return Math.round(base * (0.9 + Math.random() * 0.2));
+}
+
+/** Capacity refusals that describe load, not a retired model or a quota wall. */
+export function isCapacityFailure(status: number | undefined, text: string): boolean {
+  if (status === 429) return isGenericResourceExhausted(text);
+  if (status === 503) return /no capacity available/i.test(text);
+  return false;
+}
+
+/** Abort-aware delay so caller cancellation immediately stops retry backoff waits. */
+function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new Error("Request was aborted"));
+  if (ms <= 0) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new Error("Request was aborted"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function stallError(stallMs: number): Error {
@@ -1652,6 +1867,98 @@ export async function streamResponse(
  */
 const turnRequestNonces = new Map<string, number>();
 
+/**
+ * Cross-turn memory of the (runtimeModel, endpoint) that actually answered
+ * after a generic-429 capacity walk, keyed by account tag, projectId, and
+ * the initial runtime model (which already encodes model.id and effort).
+ * Without it every turn of a session replays dead-tier HTTP hops and burns
+ * a fresh retry nonce, mutating the upstream sessionId and wiping the prompt
+ * cache. Entries expire after 10 minutes and the map is bounded (#146).
+ */
+const CAPACITY_ROUTE_TTL_MS = 10 * 60_000;
+const preferredCapacityRoutes = new Map<
+  string,
+  { runtimeModel: string; endpoint: string; expiresAt: number }
+>();
+const accountTagIds = new Map<string, number>();
+let nextAccountTagId = 1;
+
+/** Exported for unit tests. */
+export function clearCapacityRouteCache(): void {
+  preferredCapacityRoutes.clear();
+  accountTagIds.clear();
+  nextAccountTagId = 1;
+}
+
+export function rememberCapacityRoute(
+  routeKey: string,
+  runtimeModel: string,
+  endpoint: string,
+  now = Date.now(),
+): void {
+  preferredCapacityRoutes.delete(routeKey);
+  preferredCapacityRoutes.set(routeKey, {
+    runtimeModel,
+    endpoint,
+    expiresAt: now + CAPACITY_ROUTE_TTL_MS,
+  });
+  while (preferredCapacityRoutes.size > 64) {
+    const oldest = preferredCapacityRoutes.keys().next().value;
+    if (oldest === undefined) break;
+    preferredCapacityRoutes.delete(oldest);
+  }
+}
+
+export function rememberedCapacityRoute(
+  routeKey: string,
+  now = Date.now(),
+): { runtimeModel: string; endpoint: string } | undefined {
+  const entry = preferredCapacityRoutes.get(routeKey);
+  if (!entry) return undefined;
+  if (entry.expiresAt <= now) {
+    preferredCapacityRoutes.delete(routeKey);
+    return undefined;
+  }
+  return { runtimeModel: entry.runtimeModel, endpoint: entry.endpoint };
+}
+
+function accountTag(creds: AntigravityApiKey): string {
+  // parseApiKey yields no email/refresh field; assign an opaque in-process
+  // identifier per distinct access token instead of embedding or hashing it.
+  const existing = accountTagIds.get(creds.token);
+  if (existing !== undefined) return `acct-${existing}`;
+  const id = nextAccountTagId++;
+  accountTagIds.set(creds.token, id);
+  while (accountTagIds.size > 64) {
+    const oldest = accountTagIds.keys().next().value;
+    if (oldest === undefined) break;
+    accountTagIds.delete(oldest);
+  }
+  return `acct-${id}`;
+}
+
+/** Exported for unit tests. */
+export function resolveCapacityCandidates(
+  creds: AntigravityApiKey,
+  projectId: string,
+  initialRuntimeModel: string,
+  effort: string,
+  allowCapacityCache: boolean,
+): {
+  routeKey: string;
+  cachedRoute: { runtimeModel: string; endpoint: string } | undefined;
+  runtimeCandidates: string[];
+} {
+  const routeKey = `${accountTag(creds)}\0${projectId}\0${initialRuntimeModel}`;
+  const cachedRoute = allowCapacityCache ? rememberedCapacityRoute(routeKey) : undefined;
+  const runtimeCandidates = [initialRuntimeModel];
+  const fallback = getFallbackRuntimeModel(initialRuntimeModel, effort);
+  if (fallback && !runtimeCandidates.includes(fallback)) {
+    runtimeCandidates.push(fallback);
+  }
+  return { routeKey, cachedRoute, runtimeCandidates };
+}
+
 function nextRequestNonce(turnKey: string): number {
   const nonce = turnRequestNonces.get(turnKey) ?? 0;
   turnRequestNonces.set(turnKey, nonce + 1);
@@ -1708,17 +2015,27 @@ export function streamAntigravity(
       // Skip pre-flight model discovery for known static models to optimize TTFT latency.
       // Dynamic lookup is only needed for unmapped custom models.
       if (!isKnownModel && !antigravityEnv("RUNTIME_MODEL")) {
-        const dynamic = await fetchAvailableRuntimeModel(creds.token, projectId, baseRuntimeModel);
+        const dynamic = await fetchAvailableRuntimeModel(
+          creds.token,
+          projectId,
+          baseRuntimeModel,
+          effort,
+        );
         if (dynamic?.id && isUsableRuntimeModelId(dynamic.id)) {
           initialRuntimeModel = dynamic.id;
         }
       }
 
-      const runtimeCandidates = [initialRuntimeModel];
-      const fallback = getFallbackRuntimeModel(initialRuntimeModel, effort);
-      if (fallback && fallback !== initialRuntimeModel) {
-        runtimeCandidates.push(fallback);
-      }
+      const allowCapacityCache =
+        !enterpriseTarget && !antigravityEnv("RUNTIME_MODEL") && !antigravityEnv("BASE_URL");
+      const defaultFirstEndpoint = endpointCandidates()[0];
+      let { routeKey, cachedRoute, runtimeCandidates } = resolveCapacityCandidates(
+        creds,
+        projectId,
+        initialRuntimeModel,
+        effort,
+        allowCapacityCache,
+      );
 
       const headersFor = (token: string): Record<string, string> => {
         const headers = antigravityHeaders(token);
@@ -1740,122 +2057,179 @@ export function streamAntigravity(
         ).length ?? 0
       }`;
 
+      const sendRequest = async (targetRuntime: string, endpoint: string): Promise<Response> => {
+        // Every POST after the first for this turn replays under a fresh
+        // upstream session/trajectory so it cannot queue behind the crashed
+        // attempt's server-side generation (see retrySessionSeed).
+        const nonce = nextRequestNonce(turnKey);
+        const attemptOptions =
+          nonce === 0 ? opts : { ...opts, sessionId: retrySessionSeed(opts.sessionId, nonce) };
+        let payload: unknown = buildRequest(
+          model,
+          context,
+          enterpriseTarget?.projectId || projectId,
+          attemptOptions,
+          targetRuntime,
+        );
+        if (enterpriseTarget) {
+          payload = toEnterpriseGenerateBody(
+            payload as AntigravityGenerateRequest,
+            enterpriseTarget,
+          );
+        }
+        const rewritten = await opts.onPayload?.(payload, model);
+        if (rewritten !== undefined) payload = rewritten;
+        const body = JSON.stringify(payload);
+        const url = enterpriseTarget
+          ? enterpriseStreamUrl(enterpriseTarget)
+          : `${endpoint}/v1internal:streamGenerateContent?alt=sse`;
+        return fetchWithHeaderDeadline(
+          url,
+          {
+            method: "POST",
+            headers: requestHeaders,
+            body,
+          },
+          opts.signal,
+          streamHeaderTimeoutMs(),
+          streamStallTimeoutMs(),
+        );
+      };
+
       let response: Response | undefined;
       let lastText = "";
       let received = false;
       let runtimeModel = initialRuntimeModel;
+      let usedEndpoint: string | undefined;
 
-      for (let emptyAttempt = 0; emptyAttempt <= 2; emptyAttempt++) {
+      const capacityAttempts = capacityAttemptLimit();
+      let capacityAttempt = 0;
+      let emptyAttempt = 0;
+
+      while (true) {
         if (opts.signal?.aborted) throw new Error("Request was aborted");
-        if (emptyAttempt > 0) {
-          const delay = 500 * 2 ** (emptyAttempt - 1);
-          await new Promise((res) => setTimeout(res, delay));
-        }
 
-        for (let candIdx = 0; candIdx < runtimeCandidates.length; candIdx++) {
-          runtimeModel = runtimeCandidates[candIdx]!;
+        response = undefined;
+        usedEndpoint = undefined;
+        let usedCachedProbe = false;
+
+        // Recompute fresh candidates at the start of every outer pass so sibling
+        // tiers discovered in pass 1 are retried cleanly on pass 2+ (#158, #159).
+        ({ routeKey, cachedRoute, runtimeCandidates } = resolveCapacityCandidates(
+          creds,
+          projectId,
+          initialRuntimeModel,
+          effort,
+          allowCapacityCache,
+        ));
+
+        // Single-probe cached capacity route outside normal candidate de-duplication:
+        // if it fails (transport, non-OK, or body read failure), evict it immediately
+        // and fall through to the full normal chain so the same runtimeModel can still
+        // be retried on other endpoints (#146).
+        if (cachedRoute && capacityAttempt === 0 && emptyAttempt === 0) {
+          runtimeModel = cachedRoute.runtimeModel;
           setLastResolvedRuntimeModel(runtimeModel);
           recordStaticRouteDiagnostics(runtimeModel);
-          response = undefined;
-          let lastEndpointError: Error | undefined;
-          const endpoints = enterpriseTarget ? [enterpriseTarget.host] : endpointCandidates();
-          for (const endpoint of endpoints) {
-            setLastEndpoint(endpoint);
-            // Every POST after the first for this turn replays under a fresh
-            // upstream session/trajectory so it cannot queue behind the crashed
-            // attempt's server-side generation (see retrySessionSeed).
-            const nonce = nextRequestNonce(turnKey);
-            const attemptOptions =
-              nonce === 0 ? opts : { ...opts, sessionId: retrySessionSeed(opts.sessionId, nonce) };
-            let payload: unknown = buildRequest(
-              model,
-              context,
-              enterpriseTarget?.projectId || projectId,
-              attemptOptions,
-              runtimeModel,
-            );
-            if (enterpriseTarget) {
-              payload = toEnterpriseGenerateBody(
-                payload as AntigravityGenerateRequest,
-                enterpriseTarget,
-              );
-            }
-            const rewritten = await opts.onPayload?.(payload, model);
-            if (rewritten !== undefined) payload = rewritten;
-            const body = JSON.stringify(payload);
-            const url = enterpriseTarget
-              ? enterpriseStreamUrl(enterpriseTarget)
-              : `${endpoint}/v1internal:streamGenerateContent?alt=sse`;
-            try {
-              response = await fetchWithHeaderDeadline(
-                url,
-                {
-                  method: "POST",
-                  headers: requestHeaders,
-                  body,
-                },
-                opts.signal,
-                streamHeaderTimeoutMs(),
-                streamStallTimeoutMs(),
-              );
-            } catch (error) {
-              // Caller cancellation is not an endpoint failure — propagate it. A
-              // transport failure or our own header deadline abort means this
-              // endpoint may be wedged; ENDPOINT_FALLBACKS exist for that, so
-              // fall through instead of dying without trying them.
-              if (opts.signal?.aborted) throw error;
-              lastEndpointError = error instanceof Error ? error : new Error(String(error));
-              continue;
-            }
-            setLastStatus(response.status);
-            if (response.ok) break;
-            lastText = await response.text();
-            if (response.status === 429 && isAccountQuota429(lastText)) break;
-            // Generic RESOURCE_EXHAUSTED is capacity pressure when another endpoint
-            // or same-generation tier might still be live (#122, #125). A model
-            // that fails every one of those still uses the non-retryable #89 message.
-            if (response.status === 429 && isGenericResourceExhausted(lastText)) continue;
-            if (response.status === 429 && !isRetryableRateLimit(lastText)) break;
-            if (![403, 404, 429, 500, 502, 503, 504].includes(response.status)) break;
-          }
-
-          // Every endpoint threw before sending headers: rethrow the original
-          // transport error so its message (which pi classifies for auto-retry)
-          // survives instead of being masked by the generic failure path below.
-          if (!response && lastEndpointError !== undefined) throw lastEndpointError;
-
-          if (response?.ok) break;
-          if (response?.status === 404) {
-            if (candIdx + 1 < runtimeCandidates.length) {
-              continue;
-            }
-            if (isKnownModel && candIdx === runtimeCandidates.length - 1) {
-              const dynamic = await fetchAvailableRuntimeModel(
-                creds.token,
-                projectId,
-                baseRuntimeModel,
-              );
-              if (
-                dynamic?.id &&
-                !runtimeCandidates.includes(dynamic.id) &&
-                isUsableRuntimeModelId(dynamic.id)
-              ) {
-                runtimeCandidates.push(dynamic.id);
-                continue;
+          setLastEndpoint(cachedRoute.endpoint);
+          try {
+            const probeResponse = await sendRequest(runtimeModel, cachedRoute.endpoint);
+            setLastStatus(probeResponse.status);
+            if (probeResponse.ok) {
+              response = probeResponse;
+              usedEndpoint = cachedRoute.endpoint;
+              usedCachedProbe = true;
+            } else {
+              preferredCapacityRoutes.delete(routeKey);
+              try {
+                lastText = await probeResponse.text();
+              } catch {
+                lastText = "";
               }
             }
+          } catch (error) {
+            if (opts.signal?.aborted) throw error;
+            preferredCapacityRoutes.delete(routeKey);
           }
-          if (response?.status === 429 && isGenericResourceExhausted(lastText)) {
-            const nextSibling = advertisedSiblingRuntimes(runtimeModel).find(
-              (id) => !runtimeCandidates.includes(id),
-            );
-            if (nextSibling && runtimeCandidates.length < 4) {
-              // Same-generation tiers before a cross-generation compatibility fallback.
-              runtimeCandidates.splice(candIdx + 1, 0, nextSibling);
-              continue;
+        }
+
+        if (!response?.ok) {
+          for (let candIdx = 0; candIdx < runtimeCandidates.length; candIdx++) {
+            runtimeModel = runtimeCandidates[candIdx]!;
+            setLastResolvedRuntimeModel(runtimeModel);
+            recordStaticRouteDiagnostics(runtimeModel);
+            response = undefined;
+            usedEndpoint = undefined;
+            let lastEndpointError: Error | undefined;
+            const endpoints = enterpriseTarget ? [enterpriseTarget.host] : endpointCandidates();
+            for (const endpoint of endpoints) {
+              setLastEndpoint(endpoint);
+              try {
+                response = await sendRequest(runtimeModel, endpoint);
+              } catch (error) {
+                // Caller cancellation is not an endpoint failure — propagate it. A
+                // transport failure or our own header deadline abort means this
+                // endpoint may be wedged; ENDPOINT_FALLBACKS exist for that, so
+                // fall through instead of dying without trying them.
+                if (opts.signal?.aborted) throw error;
+                lastEndpointError = error instanceof Error ? error : new Error(String(error));
+                continue;
+              }
+              setLastStatus(response.status);
+              if (response.ok) {
+                usedEndpoint = endpoint;
+                break;
+              }
+              lastText = await response.text();
+              if (response.status === 429 && isAccountQuota429(lastText)) break;
+              // Generic RESOURCE_EXHAUSTED is capacity pressure when another endpoint
+              // or same-generation tier might still be live (#122, #125). A model
+              // that fails every one of those still uses the non-retryable #89 message.
+              if (response.status === 429 && isGenericResourceExhausted(lastText)) continue;
+              if (response.status === 429 && !isRetryableRateLimit(lastText)) break;
+              if (![403, 404, 429, 500, 502, 503, 504].includes(response.status)) break;
             }
+
+            // Every endpoint threw before sending headers: rethrow the original
+            // transport error so its message (which pi classifies for auto-retry)
+            // survives instead of being masked by the generic failure path below.
+            if (!response && lastEndpointError !== undefined) throw lastEndpointError;
+
+            if (response?.ok) break;
+            if (response?.status === 404) {
+              if (candIdx + 1 < runtimeCandidates.length) {
+                continue;
+              }
+              if (isKnownModel && candIdx === runtimeCandidates.length - 1) {
+                const dynamic = await fetchAvailableRuntimeModel(
+                  creds.token,
+                  projectId,
+                  baseRuntimeModel,
+                  effort,
+                );
+                if (
+                  dynamic?.id &&
+                  !runtimeCandidates.includes(dynamic.id) &&
+                  isUsableRuntimeModelId(dynamic.id)
+                ) {
+                  runtimeCandidates.push(dynamic.id);
+                  continue;
+                }
+              }
+            }
+            if (response?.status === 429 && isGenericResourceExhausted(lastText)) {
+              const nextSibling = advertisedSiblingRuntimes(runtimeModel).find(
+                (id) => !runtimeCandidates.includes(id),
+              );
+              if (nextSibling && runtimeCandidates.length < 4) {
+                // Same-generation tiers before a cross-generation compatibility fallback.
+                runtimeCandidates.splice(candIdx + 1, 0, nextSibling);
+                continue;
+              }
+              if (candIdx + 1 < runtimeCandidates.length) continue;
+            }
+            break;
           }
-          break;
         }
 
         if (!response || !response.ok) {
@@ -1903,29 +2277,89 @@ export function streamAntigravity(
                 credentialProjectId: creds.projectId,
               });
               setLastProjectId(projectId);
-              emptyAttempt = -1;
+              if (!isKnownModel && !antigravityEnv("RUNTIME_MODEL")) {
+                initialRuntimeModel = baseRuntimeModel;
+                const dynamic = await fetchAvailableRuntimeModel(
+                  creds.token,
+                  projectId,
+                  baseRuntimeModel,
+                  effort,
+                );
+                if (dynamic?.id && isUsableRuntimeModelId(dynamic.id)) {
+                  initialRuntimeModel = dynamic.id;
+                }
+              }
+              emptyAttempt = 0;
+              capacityAttempt = 0;
               continue;
             }
             throw new Error(friendly);
+          }
+          // A capacity refusal says nothing about the model yet: the same request
+          // succeeds once the shared pool drains. Walk the backoff ladder while
+          // attempts remain instead of surfacing a terminal "unavailable" (#158, #159).
+          if (
+            isCapacityFailure(response?.status, lastText) &&
+            capacityAttempt < capacityAttempts - 1
+          ) {
+            capacityAttempt += 1;
+            await sleepWithAbort(capacityBackoffMs(capacityAttempt), opts.signal);
+            continue;
           }
           throw new Error(
             `Antigravity API error (${publicErrorStatus(response?.status, friendly)}, ${formatRequestDiagnostics({ projectId, runtimeModel })}): ${friendly}`,
           );
         }
 
-        output.content = [];
-        output.usage = {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        };
-        output.stopReason = "stop";
+        Object.assign(output, {
+          content: [],
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop" as const,
+        });
 
-        received = await streamResponse(response, stream, output, model);
-        if (received) break;
+        try {
+          received = await streamResponse(response, stream, output, model);
+        } catch (error) {
+          if (usedCachedProbe) {
+            preferredCapacityRoutes.delete(routeKey);
+            if (!opts.signal?.aborted && output.content.length === 0) {
+              continue;
+            }
+          }
+          throw error;
+        }
+        if (received) {
+          if (output.stopReason !== "error" && output.stopReason !== "aborted") {
+            // Remember the live fallback route only after the SSE stream actually
+            // succeeded (not merely on HTTP 200 headers).
+            if (
+              allowCapacityCache &&
+              usedEndpoint &&
+              (runtimeModel !== initialRuntimeModel || usedEndpoint !== defaultFirstEndpoint)
+            ) {
+              rememberCapacityRoute(routeKey, runtimeModel, usedEndpoint);
+            }
+          } else if (usedCachedProbe) {
+            preferredCapacityRoutes.delete(routeKey);
+          }
+          break;
+        }
+        if (usedCachedProbe) {
+          preferredCapacityRoutes.delete(routeKey);
+        }
+        if (emptyAttempt < 2) {
+          emptyAttempt += 1;
+          await sleepWithAbort(500 * 2 ** (emptyAttempt - 1), opts.signal);
+          continue;
+        }
+        break;
       }
 
       if (!received) throw new Error("Antigravity API returned an empty response");

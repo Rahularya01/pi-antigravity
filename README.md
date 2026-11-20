@@ -12,7 +12,8 @@ Using [OpenCode](https://opencode.ai) instead of Pi? Install the companion plugi
 
 Want to equip Pi with MCP, web access, subagents, and todos? Install [`pi-essentials`](https://github.com/Rahularya01/pi-essentials) (currently in beta), an all-in-one companion extension designed for Pi.
 
-> **Unofficial integration.** This project is not affiliated with or endorsed by Google. Use it only with an account and services you are authorized to access, and review its source before granting OAuth permissions.
+> [!WARNING]
+> **Unofficial integration & Terms of Service risk.** This project is not affiliated with or endorsed by Google. Section 6 of the Google Antigravity Additional Terms of Service prohibits using third-party software, tools, or harnesses to access consumer Antigravity OAuth endpoints, and Google has suspended or disabled consumer accounts for doing so (see [#154](https://github.com/Rahularya01/pi-antigravity/issues/154)). Use this extension at your own risk only with accounts and services you are authorized to access, review the source before granting OAuth permissions, and consider the official `agy` CLI or a licensed Gemini Enterprise setup if account compliance is required.
 
 ## Contents
 
@@ -179,7 +180,7 @@ Gemini 4 Argon is advertised only when the client version is current and the acc
 
 Long sessions that switch providers are the highest-risk setup for tool-observation mimicry on Gemini 3.x. Foreign tool calls are flattened into `[Observation from ...]` text, and a model can imitate those logs instead of making a real tool call. Finish a task on one provider before switching.
 
-A tier that answers with a generic resource-exhausted error is retried on the other Antigravity endpoints and then on a sibling tier of the same generation (`-low` can move to `-high` or `-medium`). A hard quota message that includes a reset time does not do this.
+A tier that answers with a generic resource-exhausted error is retried on the other Antigravity endpoints and then on a sibling tier of the same generation (`-low` can move to `-high` or `-medium`). The live fallback `(runtimeModel, endpoint)` is cached per account for 10 minutes so later turns skip dead-tier hops and keep prompt cache warm. A hard quota message that includes a reset time does not do this. When every endpoint and tier answers with a load-shaped refusal — generic `429 RESOURCE_EXHAUSTED`, or `503 No capacity available` — the whole set is retried on an abort-aware backoff ladder (3 s, 8 s, 15 s, 25 s by default) before the turn fails. `ANTIGRAVITY_CAPACITY_BACKOFF_MS` and `ANTIGRAVITY_CAPACITY_ATTEMPTS` resize that ladder.
 
 A successful refresh replaces the catalog with advertised models and routes, removing entries absent from all responding endpoints. Live capabilities and token limits override static defaults; grouped variants use the smallest advertised limits. Known thinking variants such as `gemini-4-hydrogen-low` / `-medium` / `-high` / `-xhigh` become one public model. Unfamiliar suffixes and opaque IDs stay usable as exact runtime IDs when they pass the catalog filters.
 
@@ -238,9 +239,12 @@ All primary environment variables start with `ANTIGRAVITY_`. The legacy `NOAGY_`
 | `ANTIGRAVITY_CLIENT_ID` | Use a custom Google OAuth client ID. |
 | `ANTIGRAVITY_CLIENT_SECRET` | Use a custom Google OAuth client secret. Keep it out of source control and shell history. |
 | `ANTIGRAVITY_STREAM_STALL_TIMEOUT_MS` | Maximum silence between stream chunks; default `300000` ms. Set `0` to disable. |
+| `ANTIGRAVITY_CAPACITY_BACKOFF_MS` | Comma-separated backoff steps in ms for load-shaped refusals (generic `429`, `503 No capacity available`); default `3000,8000,15000,25000`. Invalid entries are ignored. |
+| `ANTIGRAVITY_CAPACITY_ATTEMPTS` | Total attempts across the capacity ladder, `1`–`10`; defaults to the number of backoff steps plus one. |
 | `ANTIGRAVITY_STREAM_HEADER_TIMEOUT_MS` | Response-header deadline; default `180000` ms. Set `0` to disable. |
 | `ANTIGRAVITY_NO_KEEPALIVE` | Set to `1` to skip the keep-alive connection pool. |
 | `ANTIGRAVITY_NO_PREWARM` | Set to `1` to skip the TLS pre-warm request made on the first Antigravity request. |
+| `ANTIGRAVITY_INLINE_SYSTEM` | `1` / `true` / `on` forces folding the system prompt into the first user turn; `0` / `false` / `off` keeps wire-native `systemInstruction`; unset folds automatically whenever the assembled system parts exceed 126 characters (also honors `ANTIGRAVITY_PROMPT_GUARD=off`). |
 | `ANTIGRAVITY_NO_EXTRA_TOOLS` | Set to `1` to stop registering the model-facing `google_search`, `read_url_content`, and `generate_image` tools. The `/antigravity.search`, `/antigravity.fetch`, and `/antigravity.image` commands stay available. |
 | `ANTIGRAVITY_USE_CREDITS` | Set to `1` (or `0`) to explicitly enable (or disable) automatic AI credit overages when standard quota is depleted. Defaults to inheriting `useG1Credits` from `~/.gemini/antigravity-cli/settings.json` only when that file sets the flag. Otherwise credit overages stay off. |
 | `ANTIGRAVITY_NO_SEARCH_TOOL` | Set to `1` to skip only the `google_search` tool, e.g. when another extension provides web search. |
@@ -253,7 +257,15 @@ All primary environment variables start with `ANTIGRAVITY_`. The legacy `NOAGY_`
 
 Environment variables still force a loaded tool off, including in scripts and headless runs. They cannot turn a resource back on after `pi config` disables it, because that file is not loaded. Either control is enough to hide the tool from the model. Run `/reload` after changing `pi config`.
 
-By default, the provider tries `https://daily-cloudcode-pa.googleapis.com`, then the sandbox host, then `https://cloudcode-pa.googleapis.com`. Prefer the built-in OAuth client unless you have a reason to use your own credentials.
+By default, the provider tries `https://daily-cloudcode-pa.googleapis.com` and then `https://cloudcode-pa.googleapis.com`. Prefer the built-in OAuth client unless you have a reason to use your own credentials.
+
+### System prompt placement
+
+Requests normally send short system prompts in the wire-native `request.systemInstruction` field. Some consumer endpoints reject `systemInstruction` exceeding 126 characters (whether in one part or split across multiple parts) with a generic 429 `RESOURCE_EXHAUSTED`, regardless of wording, while accepting the same text inside `contents` at any length.
+
+All assembled system parts (including extracted Skill blocks) are measured together. Whenever the total exceeds 126 characters, `buildRequest()` automatically folds the system prompt into the first user turn and omits `systemInstruction`. Tool declarations, thinking config, and multi-turn conversion are unaffected.
+
+`ANTIGRAVITY_INLINE_SYSTEM` overrides the automatic decision: `1` (or `true` / `on`) forces folding even for short prompts, while `0` (or `false` / `off`, or `ANTIGRAVITY_PROMPT_GUARD=off`) keeps wire-native `systemInstruction` (with Pi / Pi-Bolt opener and `<docs>` phrase sanitization still applied).
 
 ### Latency
 
