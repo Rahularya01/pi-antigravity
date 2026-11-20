@@ -894,6 +894,26 @@ assert.equal(getFallbackRuntimeModel("gemini-3.6-flash-low"), undefined);
 assert.equal(getFallbackRuntimeModel("claude-sonnet-4-6"), undefined);
 
 // Test buildRequest output token clamping
+/**
+ * `buildRequest()` decides where the system prompt travels (`systemInstruction` vs the
+ * first user turn) from `ANTIGRAVITY_INLINE_SYSTEM`, and `antigravityEnv()` also reads the
+ * legacy `NOAGY_` prefix. Inherited values would silently change the wire shape, so the
+ * placement cases below run with both cleared. `test-inline-system.ts` covers the flag
+ * itself; here we only need a deterministic default.
+ */
+const savedInlineSystem = {
+  ANTIGRAVITY_INLINE_SYSTEM: process.env.ANTIGRAVITY_INLINE_SYSTEM,
+  NOAGY_INLINE_SYSTEM: process.env.NOAGY_INLINE_SYSTEM,
+};
+delete process.env.ANTIGRAVITY_INLINE_SYSTEM;
+delete process.env.NOAGY_INLINE_SYSTEM;
+process.on("exit", () => {
+  for (const [key, value] of Object.entries(savedInlineSystem)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+});
+
 const dummyContext: Context = {
   messages: [{ role: "user", content: "hi", timestamp: Date.now() }],
 };

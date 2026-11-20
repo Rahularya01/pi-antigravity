@@ -8,6 +8,25 @@
 import type { Api, AssistantMessage, Context, Model, Tool } from "@earendil-works/pi-ai";
 import { buildRequest, convertMessages } from "../src/stream/stream.ts";
 
+/**
+ * `buildRequest()` places the system prompt according to `ANTIGRAVITY_INLINE_SYSTEM`
+ * (and the legacy `NOAGY_` prefix). These cases assert the default placement, so an
+ * inherited override would change what they observe. `test-inline-system.ts` covers the
+ * flag itself.
+ */
+const savedInlineSystem = {
+  ANTIGRAVITY_INLINE_SYSTEM: process.env.ANTIGRAVITY_INLINE_SYSTEM,
+  NOAGY_INLINE_SYSTEM: process.env.NOAGY_INLINE_SYSTEM,
+};
+delete process.env.ANTIGRAVITY_INLINE_SYSTEM;
+delete process.env.NOAGY_INLINE_SYSTEM;
+process.on("exit", () => {
+  for (const [key, value] of Object.entries(savedInlineSystem)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+});
+
 function fail(message: string): never {
   throw new Error(message);
 }
