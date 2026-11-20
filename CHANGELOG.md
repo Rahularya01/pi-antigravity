@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-21
+
 ### Added
 
 - **New Antigravity model cold-start & metadata support:** Resolve grouped public model IDs (such as `gemini-4-neon`, `gemini-4-argon`, `gemini-4-hydrogen`, `claude-opus-5-5`, and `claude-sonnet-5-5`) to their effort-matched runtime tier during cold-start dynamic lookup before catalog discovery hydrates, allow `gemini-4-neon` beyond `agentModelSorts`, and add output token limits and `model_enum` entries for Gemini 4 Neon/Argon and Claude 5.5.
