@@ -780,7 +780,7 @@ const hydrogenCatalog = buildAntigravityCatalog(hydrogenRawModels, fallback);
 assert.equal(hydrogenCatalog.models.length, 1);
 const hydrogen = hydrogenCatalog.models[0];
 assert.equal(hydrogen.id, "gemini-4-hydrogen");
-assert.equal(hydrogen.name, "Gemini 4 Hydrogen (Antigravity)");
+assert.equal(hydrogen.name, "Gemini 4 Hydrogen");
 assert.equal(hydrogen.thinkingLevelMap?.xhigh, "xhigh");
 assert.equal(hydrogen.thinkingLevelMap?.high, "high");
 assert.equal(hydrogen.thinkingLevelMap?.medium, "medium");

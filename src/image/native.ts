@@ -7,7 +7,7 @@ export const ANTIGRAVITY_IMAGE_MODELS = [
   {
     type: "image" as const,
     id: DEFAULT_IMAGE_MODEL,
-    name: "Gemini 3.1 Flash Image (Antigravity)",
+    name: "Gemini 3.1 Flash Image",
     api: ANTIGRAVITY_IMAGE_API,
     input: ["text", "image"] as ("text" | "image")[],
     output: ["text", "image"] as ("text" | "image")[],
