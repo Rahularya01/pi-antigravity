@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **Model names no longer repeat the provider:** Dropped the redundant ` (Antigravity)` suffix from every model `name` (static catalog, discovered groups, native image model). Pi already shows the provider next to the model in the model selector, footers, and status lines, so `Gemini 4 Hydrogen (Antigravity)` rendered as `antigravity/Gemini 4 Hydrogen (Antigravity)`. Model ids are unchanged.
+
 ## [0.15.0] - 2026-11-21
 
 ### Added
