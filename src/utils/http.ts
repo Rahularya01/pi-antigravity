@@ -1,3 +1,6 @@
+import { createRequire } from "node:module";
+import { dirname } from "node:path";
+import type * as Undici from "undici";
 import { antigravityEnv } from "./util.js";
 
 /**
@@ -61,11 +64,107 @@ async function getDispatcher(): Promise<unknown> {
   return dispatcherPromise;
 }
 
+/**
+ * Pi's Bun runtime aliases bare Undici imports to its built-in copy, which can
+ * ignore npm ProxyAgent dispatchers. Load the npm package explicitly only when
+ * ANTIGRAVITY_PROXY is used; the default native-fetch path stays unchanged.
+ */
+const nodeRequire = createRequire(import.meta.url);
+type UndiciRuntime = typeof Undici;
+let proxyRuntime: UndiciRuntime | undefined;
+
+interface ProxyAgentState {
+  agent: Undici.ProxyAgent;
+  activeRequests: number;
+  retired: boolean;
+  closePromise?: Promise<void>;
+}
+
+let proxyAgentState: ProxyAgentState | undefined;
+let proxyAgentUrl: string | undefined;
+
+function getProxyRuntime(): UndiciRuntime {
+  if (!proxyRuntime) {
+    const undiciDir = dirname(nodeRequire.resolve("undici/package.json"));
+    proxyRuntime = nodeRequire(undiciDir) as UndiciRuntime;
+  }
+  return proxyRuntime;
+}
+
+function closeRetiredProxyAgent(state: ProxyAgentState): void {
+  if (!state.retired || state.activeRequests > 0 || state.closePromise) return;
+  state.closePromise = state.agent.close().catch(() => {});
+}
+
+function retireProxyAgent(state: ProxyAgentState | undefined): void {
+  if (!state) return;
+  state.retired = true;
+  closeRetiredProxyAgent(state);
+}
+
+function getProxyAgentState(proxyUrl: string): ProxyAgentState {
+  if (proxyAgentState && proxyAgentUrl === proxyUrl) return proxyAgentState;
+
+  const { ProxyAgent } = getProxyRuntime();
+  const nextState: ProxyAgentState = {
+    agent: new ProxyAgent(proxyUrl),
+    activeRequests: 0,
+    retired: false,
+  };
+  const previousState = proxyAgentState;
+  proxyAgentState = nextState;
+  proxyAgentUrl = proxyUrl;
+  retireProxyAgent(previousState);
+  return nextState;
+}
+
+/** Return the current explicit proxy and retire the old agent when configuration is removed. */
+export function configuredAntigravityProxy(): string | undefined {
+  const proxyUrl = antigravityEnv("PROXY")?.trim();
+  if (proxyUrl) return proxyUrl;
+
+  const previousState = proxyAgentState;
+  proxyAgentState = undefined;
+  proxyAgentUrl = undefined;
+  retireProxyAgent(previousState);
+  return undefined;
+}
+
+/** Fetch through the explicit Antigravity proxy using one compatible npm Undici runtime. */
+export async function fetchWithAntigravityProxy(
+  input: string | URL,
+  init: RequestInit,
+  proxyUrl: string,
+): Promise<Response> {
+  const runtime = getProxyRuntime();
+  const proxyState = getProxyAgentState(proxyUrl);
+  proxyState.activeRequests += 1;
+  try {
+    const response = await runtime.fetch(input, {
+      ...init,
+      dispatcher: proxyState.agent,
+    } as Parameters<UndiciRuntime["fetch"]>[1]);
+    return response as unknown as Response;
+  } finally {
+    // Fetch resolves after the final redirect's response headers arrive. Graceful
+    // agent close still waits for the response body after this dispatch is released.
+    proxyState.activeRequests -= 1;
+    closeRetiredProxyAgent(proxyState);
+  }
+}
+
 /** fetch() bound to this provider's keep-alive connection pool when available. */
 export async function antigravityFetch(
   input: string | URL,
   init: RequestInit = {},
+  options: { external?: boolean } = {},
 ): Promise<Response> {
+  const explicitProxy = configuredAntigravityProxy();
+  const useExplicitProxy = options.external !== true || antigravityEnv("PROXY_EXTERNAL") === "1";
+  if (explicitProxy && useExplicitProxy) {
+    return fetchWithAntigravityProxy(input, init, explicitProxy);
+  }
+
   const dispatcher = await getDispatcher();
   if (!dispatcher) return fetch(input, init);
   return fetch(input, { ...init, dispatcher } as DispatcherInit);

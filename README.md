@@ -238,6 +238,8 @@ All primary environment variables start with `ANTIGRAVITY_`. The legacy `NOAGY_`
 | `ANTIGRAVITY_CATALOG_REFRESH_INTERVAL_MS` | Override catalog refresh TTL in ms. Defaults to 4 hours (`14400000`). Set to `0` to always refresh. |
 | `ANTIGRAVITY_CLIENT_ID` | Use a custom Google OAuth client ID. |
 | `ANTIGRAVITY_CLIENT_SECRET` | Use a custom Google OAuth client secret. Keep it out of source control and shell history. |
+| `ANTIGRAVITY_PROXY` | Route OAuth and Antigravity API requests through an explicit `http://`, `https://`, or experimental `socks5://` proxy URL using a request-local npm Undici `ProxyAgent`. Unset preserves the default networking behavior. |
+| `ANTIGRAVITY_PROXY_EXTERNAL` | Set to `1` to also route third-party search-source retrieval through `ANTIGRAVITY_PROXY`. Unset keeps those external requests on their original direct / standard-proxy path and has no effect when `ANTIGRAVITY_PROXY` is unset. |
 | `ANTIGRAVITY_STREAM_STALL_TIMEOUT_MS` | Maximum silence between stream chunks; default `300000` ms. Set `0` to disable. |
 | `ANTIGRAVITY_CAPACITY_BACKOFF_MS` | Comma-separated backoff steps in ms for load-shaped refusals (generic `429`, `503 No capacity available`); default `3000,8000,15000,25000`. Invalid entries are ignored. |
 | `ANTIGRAVITY_CAPACITY_ATTEMPTS` | Total attempts across the capacity ladder, `1`–`10`; defaults to the number of backoff steps plus one. |
@@ -259,6 +261,26 @@ Environment variables still force a loaded tool off, including in scripts and he
 
 By default, the provider tries `https://daily-cloudcode-pa.googleapis.com` and then `https://cloudcode-pa.googleapis.com`. Prefer the built-in OAuth client unless you have a reason to use your own credentials.
 
+### Explicit proxy
+
+Set `ANTIGRAVITY_PROXY` to route OAuth login/token refresh and Antigravity Google API traffic through one provider-local proxy. This includes model discovery, streaming, usage, search generation, and Google-side page retrieval. The proxy affects only these requests: it does not change the process-global dispatcher or rewrite `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY`.
+
+```sh
+# HTTP or HTTPS proxy
+export ANTIGRAVITY_PROXY="http://127.0.0.1:7890"
+
+# Alternatively, use a SOCKS5 proxy (experimental in Undici)
+export ANTIGRAVITY_PROXY="socks5://127.0.0.1:7890"
+```
+
+Third-party search-source requests, such as grounding redirects and public page-title lookups, keep their original direct / standard-proxy behavior by default. Opt them into the same explicit proxy only when that is what you want:
+
+```sh
+export ANTIGRAVITY_PROXY_EXTERNAL=1
+```
+
+`ANTIGRAVITY_PROXY_EXTERNAL` has no effect without `ANTIGRAVITY_PROXY`. Unset `ANTIGRAVITY_PROXY` to restore the default networking behavior; unsetting it also retires the provider's cached proxy agent after active requests finish.
+
 ### System prompt placement
 
 Requests normally send short system prompts in the wire-native `request.systemInstruction` field. Some consumer endpoints reject `systemInstruction` exceeding 126 characters (whether in one part or split across multiple parts) with a generic 429 `RESOURCE_EXHAUSTED`, regardless of wording, while accepting the same text inside `contents` at any length.
@@ -269,7 +291,7 @@ All assembled system parts (including extracted Skill blocks) are measured toget
 
 ### Latency
 
-Provider requests reuse a keep-alive connection pool when the runtime supports it, so consecutive turns do not repeat the DNS, TCP, and TLS handshake. When `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` is set, that pool is skipped so Pi's proxy-aware dispatcher is used instead. The connection is opened on the first Antigravity request rather than at Pi startup, so other extensions are not stalled by an unauthenticated handshake. For the lowest time-to-first-token, pick a fast runtime: `gemini-3.8-flash` with reasoning off routes to `gemini-3.8-flash-low` at thinking level `LOW`. Setting `ANTIGRAVITY_PROJECT_ID` also removes the project-discovery round-trip when credentials do not already carry a project ID.
+Provider requests reuse a keep-alive connection pool when the runtime supports it, so consecutive turns do not repeat the DNS, TCP, and TLS handshake. When `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` is set, that pool is skipped so Pi's proxy-aware dispatcher is used instead. The connection is opened on the first Antigravity request rather than at Pi startup, so other extensions are not stalled by an unauthenticated handshake. When `ANTIGRAVITY_PROXY` is set, OAuth and provider API requests instead use npm Undici fetch with a request-local `ProxyAgent`; this explicit provider proxy takes precedence for those requests without mutating the standard proxy environment variables or the process-global dispatcher. Third-party search-source requests keep their original networking path unless `ANTIGRAVITY_PROXY_EXTERNAL=1` explicitly opts them into the same proxy. For the lowest time-to-first-token, pick a fast runtime: `gemini-3.8-flash` with reasoning off routes to `gemini-3.8-flash-low` at thinking level `LOW`. Setting `ANTIGRAVITY_PROJECT_ID` also removes the project-discovery round-trip when credentials do not already carry a project ID.
 
 ## Troubleshooting
 
