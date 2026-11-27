@@ -314,7 +314,13 @@ clearModelEnumCache();
 registerModelEnum("gemini-9.9-flash-low", "MODEL_DYNAMIC_999");
 const stored = {
   [ANTIGRAVITY_PERSIST_KEY]: {
-    catalog: dynamicCatalog,
+    catalog: {
+      ...dynamicCatalog,
+      models: dynamicCatalog.models.map((model) => ({
+        ...model,
+        name: `${model.name} (Antigravity)`,
+      })),
+    },
     checkedAt: Date.now(),
     modelEnums: snapshotDynamicModelEnums(),
     schemaVersion: CATALOG_SCHEMA_VERSION,
@@ -341,9 +347,10 @@ try {
     signal: new AbortController().signal,
     publish: async () => true,
   });
-  assert(
-    offline.some((model) => model.id === "gemini-9.9-flash"),
-    "dynamic-only models survive an offline restart",
+  assert.equal(
+    offline.find((model) => model.id === "gemini-9.9-flash")?.name,
+    "Gemini 9.9 Flash",
+    "cached models survive offline restart and drop the old display-name suffix",
   );
   assert(
     getAntigravityRequestModelId("gemini-9.9-flash", "low") === "gemini-9.9-flash-low",
@@ -780,7 +787,7 @@ const hydrogenCatalog = buildAntigravityCatalog(hydrogenRawModels, fallback);
 assert.equal(hydrogenCatalog.models.length, 1);
 const hydrogen = hydrogenCatalog.models[0];
 assert.equal(hydrogen.id, "gemini-4-hydrogen");
-assert.equal(hydrogen.name, "Gemini 4 Hydrogen (Antigravity)");
+assert.equal(hydrogen.name, "Gemini 4 Hydrogen");
 assert.equal(hydrogen.thinkingLevelMap?.xhigh, "xhigh");
 assert.equal(hydrogen.thinkingLevelMap?.high, "high");
 assert.equal(hydrogen.thinkingLevelMap?.medium, "medium");

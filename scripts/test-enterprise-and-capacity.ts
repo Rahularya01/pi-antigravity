@@ -119,11 +119,13 @@ const options = {
   apiKey: JSON.stringify({ token: "test-token", projectId: "test-project" }),
   sessionId: "capacity-test",
 };
+const videoPart = { inlineData: { mimeType: "video/mp4", data: "AA==" } };
 try {
-  const seen: { url: string; model?: string; marker?: string }[] = [];
+  const seen: { url: string; model?: string }[] = [];
   globalThis.fetch = (async (url, init) => {
-    const payload = JSON.parse(String(init?.body)) as { model?: string; marker?: string };
-    seen.push({ url: String(url), model: payload.model, marker: payload.marker });
+    const payload = JSON.parse(String(init?.body)) as AntigravityGenerateRequest;
+    seen.push({ url: String(url), model: payload.model });
+    assert.deepEqual(payload.request.contents.at(-1)?.parts.at(-1), videoPart);
     if (payload.model !== "gemini-3.8-flash-high") {
       return new Response(
         JSON.stringify({
@@ -132,7 +134,6 @@ try {
         { status: 429 },
       );
     }
-    assert.equal(payload.marker, "from-extension");
     return new Response(
       'data: {"response":{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}]}}\n\ndata: [DONE]\n\n',
     );
@@ -143,7 +144,10 @@ try {
     {
       ...options,
       reasoning: "off",
-      onPayload: (payload) => ({ ...(payload as object), marker: "from-extension" }),
+      onPayload: (payload) => {
+        const { request } = payload as AntigravityGenerateRequest;
+        request.contents.at(-1)!.parts.push(videoPart);
+      },
     },
   ).result();
   assert.equal(result.stopReason, "stop", result.errorMessage);
@@ -152,11 +156,10 @@ try {
     `expected a low-tier attempt, saw ${JSON.stringify(seen)}`,
   );
   assert.ok(
-    seen.some((call) => call.model === "gemini-3.8-flash-high" && call.marker === "from-extension"),
+    seen.some((call) => call.model === "gemini-3.8-flash-high"),
     `expected a high-tier retry, saw ${JSON.stringify(seen)}`,
   );
   assert.ok(seen.every((call) => !String(call.url).includes("businessaicode")));
-  assert.ok(seen.every((call) => call.marker === "from-extension"));
 
   process.env.ANTIGRAVITY_LOCATION = "eu";
   process.env.ANTIGRAVITY_ENTERPRISE_PROJECT = "enterprise-project-1";
@@ -164,9 +167,14 @@ try {
   const enterpriseCalls: string[] = [];
   globalThis.fetch = (async (url, init) => {
     enterpriseCalls.push(String(url));
-    const payload = JSON.parse(String(init?.body)) as { aicode?: { experience?: string }; project?: string };
+    const payload = JSON.parse(String(init?.body)) as {
+      aicode?: { experience?: string };
+      project?: string;
+      contents: AntigravityGenerateRequest["request"]["contents"];
+    };
     assert.equal(payload.project, undefined);
     assert.equal(payload.aicode?.experience, "gemini-3.8-flash-high");
+    assert.deepEqual(payload.contents.at(-1)?.parts.at(-1), videoPart);
     const headers = new Headers(init?.headers);
     assert.match(headers.get("user-agent") || headers.get("User-Agent") || "", /auth_method=gcp/);
     return new Response(
@@ -176,7 +184,20 @@ try {
   const regional = await streamAntigravity(
     model,
     { messages: [{ role: "user", content: "hi", timestamp: 1 }] },
-    { ...options, reasoning: "high" },
+    {
+      ...options,
+      reasoning: "high",
+      onPayload: (payload) => {
+        const { contents } = payload as AntigravityGenerateRequest["request"];
+        return {
+          ...(payload as object),
+          contents: contents.map((content) => ({
+            ...content,
+            parts: [...content.parts, videoPart],
+          })),
+        };
+      },
+    },
   ).result();
   assert.equal(regional.stopReason, "stop", regional.errorMessage);
   assert.equal(enterpriseCalls.length, 1);

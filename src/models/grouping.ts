@@ -425,9 +425,9 @@ function familyTemplate(
 function publicModelName(group: RuntimeGroup): string {
   const family = group.displayNames.map((name) => displayFamily(name)).find(Boolean);
   if (family) {
-    return `${titleCase(family)} (Antigravity)`;
+    return `${titleCase(family)}`;
   }
-  return `${humanizePublicId(group.publicId)} (Antigravity)`;
+  return `${humanizePublicId(group.publicId)}`;
 }
 
 function titleCase(value: string): string {

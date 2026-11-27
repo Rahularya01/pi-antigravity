@@ -489,10 +489,14 @@ function isGroundingRedirectUrl(raw: string): boolean {
 async function resolveGroundingRedirect(url: string, signal?: AbortSignal): Promise<string> {
   if (!isGroundingRedirectUrl(url)) return "";
   try {
-    const response = await antigravityFetch(url, {
-      redirect: "manual",
-      signal: withDeadline(signal, SOURCE_ENRICH_TIMEOUT_MS),
-    });
+    const response = await antigravityFetch(
+      url,
+      {
+        redirect: "manual",
+        signal: withDeadline(signal, SOURCE_ENRICH_TIMEOUT_MS),
+      },
+      { external: true },
+    );
     const location = response.headers.get("location");
     if (response.status < 300 || response.status >= 400 || !location) return "";
     const next = new URL(location, url).toString();
@@ -563,11 +567,15 @@ async function fetchPageTitle(url: string, signal?: AbortSignal): Promise<string
     if (!(await isFetchablePageUrl(current))) return "";
     let response: Response;
     try {
-      response = await antigravityFetch(current, {
-        redirect: "manual",
-        signal: deadline,
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; pi-antigravity/1.0)" },
-      });
+      response = await antigravityFetch(
+        current,
+        {
+          redirect: "manual",
+          signal: deadline,
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; pi-antigravity/1.0)" },
+        },
+        { external: true },
+      );
     } catch {
       return "";
     }
