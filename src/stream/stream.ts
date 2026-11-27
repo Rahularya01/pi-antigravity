@@ -1272,6 +1272,13 @@ function isRetryableRateLimit(text: string): boolean {
   return /rate.?limit|too many requests/i.test(text);
 }
 
+function isTermsSuspension(status: number | undefined, text: string): boolean {
+  return (
+    status === 403 &&
+    /\bTOS_VIOLATION\b|disabled[^.]*for violation of (?:the )?terms of service/i.test(text)
+  );
+}
+
 /**
  * Generic capacity 429 with no reset hint. Dead tiers and live-but-throttled
  * tiers share this body (#89, #122, #125). Callers decide whether to walk
@@ -1332,6 +1339,9 @@ export function friendlyAntigravityError(status: number | undefined, text: strin
     return "Antigravity authentication failed. Next: run /login antigravity, then retry.";
   }
   if (status === 403) {
+    if (isTermsSuspension(status, text)) {
+      return "Google disabled Antigravity access for a Terms of Service violation. Stop using consumer Antigravity through this extension. Open the official Antigravity client with the affected account and follow Google's appeal instructions.";
+    }
     const verifyUrl = extractValidationUrl(text);
     const verifyHint = verifyUrl
       ? ` Open this link in a browser signed in to the same Google account to verify: ${verifyUrl}`
@@ -2143,6 +2153,7 @@ export function streamAntigravity(
               preferredCapacityRoutes.delete(routeKey);
               try {
                 lastText = await probeResponse.text();
+                if (isTermsSuspension(probeResponse.status, lastText)) response = probeResponse;
               } catch {
                 lastText = "";
               }
@@ -2153,7 +2164,7 @@ export function streamAntigravity(
           }
         }
 
-        if (!response?.ok) {
+        if (!response?.ok && !isTermsSuspension(response?.status, lastText)) {
           for (let candIdx = 0; candIdx < runtimeCandidates.length; candIdx++) {
             runtimeModel = runtimeCandidates[candIdx]!;
             setLastResolvedRuntimeModel(runtimeModel);
@@ -2181,6 +2192,7 @@ export function streamAntigravity(
                 break;
               }
               lastText = await response.text();
+              if (isTermsSuspension(response.status, lastText)) break;
               if (response.status === 429 && isAccountQuota429(lastText)) break;
               // Generic RESOURCE_EXHAUSTED is capacity pressure when another endpoint
               // or same-generation tier might still be live (#122, #125). A model

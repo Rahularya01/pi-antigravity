@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-27
+
+### Added
+
+- **Provider proxy:** Set `ANTIGRAVITY_PROXY` to route OAuth exchanges and Antigravity API calls through a dedicated proxy (#167).
+
+### Changed
+
+- **Model display names:** Removed the redundant ` (Antigravity)` suffix from static, discovered, cached, and native image models. Model IDs are unchanged (#165).
+
+### Fixed
+
+- **Google account suspensions:** Stop stream endpoint fallback on a Terms of Service refusal and show appeal guidance (#154).
+
 ## [0.15.0] - 2026-11-21
 
 ### Added

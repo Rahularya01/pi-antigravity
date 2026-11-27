@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import { fetch as oauthFetch } from "undici";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@earendil-works/pi-ai";
 import { defaultProjectId, loadCodeAssist } from "../client/client.js";
+import { configuredAntigravityProxy, fetchWithAntigravityProxy } from "../utils/http.js";
 import { escapeHtml, antigravityEnv } from "../utils/util.js";
 import { resolveCallbackHost, redactSecrets } from "../utils/security.js";
 import type { AntigravityOAuthCredentials, CallbackServer } from "../types/types.js";
@@ -34,6 +35,12 @@ export const CLIENT_SECRET =
   antigravityEnv("CLIENT_SECRET") || atob("R09DU1BYLUs1OEZXUjQ" + "4NkxkTEoxbUxCOHNYQzR6NnFEQWY=");
 
 export const CALLBACK_HOST = resolveCallbackHost();
+
+async function fetchWithOAuthProxy(input: string, init: RequestInit = {}) {
+  const explicitProxy = configuredAntigravityProxy();
+  if (explicitProxy) return fetchWithAntigravityProxy(input, init, explicitProxy);
+  return oauthFetch(input, init as Parameters<typeof oauthFetch>[1]);
+}
 
 function oauthCallbackHeaders(contentType = "text/html; charset=utf-8"): Record<string, string> {
   return {
@@ -75,9 +82,12 @@ function generatePKCE(): { verifier: string; challenge: string } {
 
 async function getUserEmail(token: string): Promise<string | undefined> {
   try {
-    const res = await oauthFetch("https://www.googleapis.com/oauth2/v1/userinfo?alt=json", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetchWithOAuthProxy(
+      "https://www.googleapis.com/oauth2/v1/userinfo?alt=json",
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
     if (!res.ok) return undefined;
     const data = (await res.json()) as { email?: string };
     return data.email;
@@ -349,7 +359,7 @@ export async function loginAntigravity(
     });
     if (returnedState !== state) throw new Error("OAuth state mismatch");
 
-    const tokenResponse = await oauthFetch(TOKEN_URL, {
+    const tokenResponse = await fetchWithOAuthProxy(TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -398,7 +408,7 @@ export async function refreshAntigravityToken(
 ): Promise<AntigravityOAuthCredentials> {
   // SDK hosts may use Node 26 built-in fetch with a separate Undici dispatcher.
   // Use Undici's fetch to keep response decompression on the same implementation.
-  const response = await oauthFetch(TOKEN_URL, {
+  const response = await fetchWithOAuthProxy(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({

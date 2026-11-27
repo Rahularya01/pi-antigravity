@@ -55,7 +55,16 @@ export function hydrateAntigravityCatalog(stored: unknown): number {
   if (!isRecord(persisted)) return 0;
 
   if (isStringMap(persisted.modelEnums)) restoreDynamicModelEnums(persisted.modelEnums);
-  if (isCatalog(persisted.catalog)) applyAntigravityCatalog(persisted.catalog);
+  if (isCatalog(persisted.catalog)) {
+    const { models, routing } = persisted.catalog;
+    applyAntigravityCatalog({
+      models: models.map((model) => ({
+        ...model,
+        name: model.name.replace(/ \(Antigravity\)$/, ""),
+      })),
+      routing,
+    });
+  }
   return typeof persisted.checkedAt === "number" && persisted.checkedAt > 0
     ? persisted.checkedAt
     : 0;
@@ -147,6 +156,7 @@ function isCatalog(value: unknown): value is AntigravityCatalog {
     isRecord(value) &&
     Array.isArray(value.models) &&
     value.models.length > 0 &&
+    value.models.every((model) => isRecord(model) && typeof model.name === "string") &&
     isRecord(value.routing)
   );
 }

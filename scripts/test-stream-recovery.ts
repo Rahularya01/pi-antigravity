@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { streamAntigravity } from "../src/stream/stream.js";
+import { clearCapacityRouteCache, streamAntigravity } from "../src/stream/stream.js";
 import { ANTIGRAVITY_MODELS } from "../src/models/index.js";
 
 const savedFetch = globalThis.fetch;
@@ -23,6 +23,36 @@ try {
   const second = await streamAntigravity(model, { messages: [] }, options).result();
   assert.equal(second.stopReason, "stop", second.errorMessage);
   assert.notEqual(bodies[1].request.sessionId, bodies[2].request.sessionId);
+
+  let suspensionCalls = 0;
+  globalThis.fetch = async () => {
+    suspensionCalls++;
+    return Response.json(
+      {
+        error: {
+          message: "Permission denied",
+          details: [{ reason: "TOS_VIOLATION" }],
+        },
+      },
+      { status: 403 },
+    );
+  };
+  const suspended = await streamAntigravity(model, { messages: [] }, options).result();
+  assert.equal(suspended.stopReason, "error");
+  assert.match(suspended.errorMessage ?? "", /follow Google's appeal instructions/);
+  assert.equal(suspensionCalls, 1, "account suspension is terminal on a cached route");
+
+  clearCapacityRouteCache();
+  suspensionCalls = 0;
+  globalThis.fetch = async () => {
+    suspensionCalls++;
+    return new Response("This service has been disabled on this account for violation of the Terms of Service.", {
+      status: 403,
+    });
+  };
+  const suspendedWithoutCache = await streamAntigravity(model, { messages: [] }, options).result();
+  assert.match(suspendedWithoutCache.errorMessage ?? "", /follow Google's appeal instructions/);
+  assert.equal(suspensionCalls, 1, "account suspension is terminal on the first endpoint");
 
   globalThis.fetch = (async () => { throw new Error("transport timed out"); }) as typeof fetch;
   const failed = await streamAntigravity(model, { messages: [] }, options).result();
